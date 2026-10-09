@@ -19,10 +19,12 @@ or experiments, and it is not intended for regulatory or design use. See
 [Limitations]({{< relref "/docs/limitations" >}}).
 {{< /callout >}}
 
-**New here.** Install the package and run a first scenario:
+**New here.** Install the package, run a first scenario, then work
+through a complete example:
 
 {{< cards >}}
   {{< card link="getting-started" title="Getting started" subtitle="Install, run one building, and check the result." >}}
+  {{< card link="examples/office-wing" title="Worked example" subtitle="An office wing from floor plan to bottleneck and one design change." >}}
 {{< /cards >}}
 
 **Building your own scenario.** Describe the building, the occupants and
