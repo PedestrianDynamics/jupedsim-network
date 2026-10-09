@@ -25,14 +25,22 @@ pip install git+https://github.com/PedestrianDynamics/jupedsim-network
 ## Development
 
 ```
-uv sync --group dev --group docs
+uv sync
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
-uv run --group docs sphinx-build -W -b html docs/source docs/build/html
 ```
 
-The figures and animations of the documentation are produced by
-`docs/source/_scripts/network/make_figures.py` and `make_gifs.py`.
+The documentation is a [Hugo](https://gohugo.io) site with the
+[Hextra](https://imfing.github.io/hextra/) theme in `site/`. Hugo
+(extended) and Go are needed to build it:
+
+```
+cd site && hugo server
+```
+
+Its figures and animations are produced by
+`scripts/figures/make_figures.py` and `make_gifs.py`
+(`uv run --group docs python scripts/figures/make_figures.py`).
 
 ## License
 

@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 build/
 dist/
-docs/build/
 .pytest_cache/
 .ruff_cache/
+site/public/
+site/resources/
+.hugo_build.lock

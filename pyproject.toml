@@ -19,12 +19,7 @@ JuPedSim = "https://www.jupedsim.org"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
-docs = [
-    "sphinx>=8.1",
-    "myst-parser>=4",
-    "sphinx-book-theme>=1.1",
-    "matplotlib==3.10.8",
-]
+docs = ["matplotlib==3.10.8"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jupedsim_network"]

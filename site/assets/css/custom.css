@@ -1,0 +1,6 @@
+/* Wide equations scroll inside their own box on narrow screens instead of
+   widening the page. KaTeX's hidden MathML copy is absolutely positioned;
+   anchoring it to its .katex keeps it inside a table's scroll box rather
+   than extending the page. */
+.katex { position: relative; }
+.katex-display { overflow-x: auto; overflow-y: hidden; }
