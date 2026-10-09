@@ -1,10 +1,10 @@
 """Static figures for the network model documentation.
 
-Writes PNGs to ``_static/network`` or to the directory given as the first
-argument. ``jupedsim_network`` must be importable::
+Writes PNGs to ``site/static/images/network`` or to the directory given as
+the first argument. ``jupedsim_network`` must be importable::
 
-    python docs/source/_scripts/network/make_figures.py
-    python docs/source/_scripts/network/make_gifs.py
+    uv run --group docs python scripts/figures/make_figures.py
+    uv run --group docs python scripts/figures/make_gifs.py
 """
 
 import sys
@@ -26,7 +26,8 @@ from jupedsim_network import (
     hydraulic,
 )
 
-DEFAULT_OUT = Path(__file__).resolve().parents[2] / "_static" / "network"
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUT = ROOT / "site" / "static" / "images" / "network"
 PAL = ["#90c1c6", "#72a5b4", "#58849f", "#446485", "#324465", "#1f253f"]
 RED = "#bd0c0c"
 ORANGE = "#fc8d59"

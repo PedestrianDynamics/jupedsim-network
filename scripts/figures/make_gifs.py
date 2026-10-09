@@ -1,8 +1,8 @@
 """Animations of the network model: agent mechanics and a building.
 
-Writes ``mechanics.gif`` and ``building.gif`` to ``_static/network`` or to
-the directory given as the first argument. ``jupedsim_network`` must be
-importable.
+Writes ``mechanics.gif`` and ``building.gif`` to
+``site/static/images/network`` or to the directory given as the first
+argument. ``jupedsim_network`` must be importable.
 """
 
 import sys

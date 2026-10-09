@@ -1,6 +1,10 @@
-# Network Model
+---
+title: Network model
+weight: 1
+math: true
+---
 
-The network model in {mod}`jupedsim_network` estimates the required safe
+The network model in `jupedsim_network` estimates the required safe
 egress time (RSET) of a building from a coarse graph instead of a
 continuous geometry. Spaces such as rooms, corridors and stair flights are
 **nodes** with an area. Doors, openings and stair entries are **links**
@@ -22,20 +26,16 @@ calculation and a microscopic simulation:
 
 The model follows the same approach as EvacuatioNZ
 [2, 3]. It differs in the update scheme
-and in how full nodes are handled. See {ref}`network-comparison`
+and in how full nodes are handled. See [Comparison with EvacuatioNZ](#comparison-with-evacuationz)
 below.
 
-```{figure} _static/network/mechanics.gif
-:alt: Agents in two rooms walk to their doors, queue, merge into a corridor and leave through an exit
-:width: 100%
-:align: center
+![Agents in two rooms walk to their doors, queue, merge into a corridor and leave through an exit](/images/network/mechanics.gif)
 
 Two rooms of 40 agents each empty into a corridor of 4 m², which holds at
 most 11 agents. The corridor is full most of the time. Its inflow is then
 reduced and shared 1 : 3 between the rooms, following the merge weights.
 Positions inside a node are drawn for illustration only, since the model
 tracks a remaining walking distance per agent.
-```
 
 ## Usage
 
@@ -61,26 +61,22 @@ runs = simulation.run_many(500, seed=1)
 print(runs.quantile([0.5, 0.95]))
 ```
 
-A {class}`~jupedsim_network.SimulationResult` holds the following:
+A `jupedsim_network.SimulationResult` holds the following:
 
 - the exit time and pre-movement time of each agent
 - the number of agents in each node at every time step
 - the number of agents that passed each link during every time step
 
-A {class}`~jupedsim_network.MonteCarloResult` holds the evacuation time of
+A `jupedsim_network.MonteCarloResult` holds the evacuation time of
 every run. Runs that did not finish before `t_max` are marked `nan`.
 
 ## Model elements
 
-```{figure} _static/network/schematic.png
-:alt: Schematic of nodes connected by directed links
-:width: 100%
-:align: center
+![Schematic of nodes connected by directed links](/images/network/schematic.png)
 
 Rooms, corridors and stair flights are nodes, and links connect them.
 An agent first walks the link length inside the source node, then joins
 the queue at the constriction.
-```
 
 ### Nodes
 
@@ -133,7 +129,7 @@ A link also has the following attributes:
 
 ### Agents
 
-A {class}`~jupedsim_network.Population` places agents in a start node.
+A `jupedsim_network.Population` places agents in a start node.
 Each agent $i$ has the following attributes, and every one except the area
 factor can be drawn from a distribution:
 
@@ -189,17 +185,13 @@ $v_i\,\Delta t$. Once the remaining distance reaches zero, the agent joins
 the queue of its link. The arrival time is interpolated within the step,
 and the queue is served in order of arrival.
 
-```{figure} _static/network/fundamental_diagram.png
-:alt: Speed, specific flow and supply factor plotted against density
-:width: 100%
-:align: center
+![Speed, specific flow and supply factor plotted against density](/images/network/fundamental_diagram.png)
 
 (a) SFPE speed–density relation for level ground and for an 18/28 cm
 stair. (b) Specific flow, with its peak at 1.88 m⁻². (c) Share of its
 inflow capacity that a node accepts. With supply reduction (solid line)
 the share falls linearly from the peak-flow density to `max_density`.
 The dashed line is a hard capacity limit.
-```
 
 ### 4. Passing links
 
@@ -259,7 +251,11 @@ same node. Over time each link's share approaches $m_\ell / \sum m$.
 **Carry update.**
 
 - If agents are still waiting at a link, the carry becomes
-  $c_\ell = \min\bigl(\beta_\ell - q_\ell,\ \max(C_\ell\,\Delta t, 1)\bigr)$.
+
+  $$
+  c_\ell = \min\bigl(\beta_\ell - q_\ell,\ \max(C_\ell\,\Delta t, 1)\bigr).
+  $$
+
 - If no one is waiting, it is reset to $c_\ell = 1$. An idle door
   therefore lets the first agent through at once, and the last of $N$
   agents passes after $(N-1)/C_\ell$, the usual hand-calculation result.
@@ -289,17 +285,13 @@ Further tests check pre-movement delays, route choice, conservation of
 agents, that `max_density` is never exceeded, reproducibility with a
 fixed seed, and the means of the distributions.
 
-```{figure} _static/network/door_and_merge.png
-:alt: Cumulative door flow against the hand calculation, and the cumulative merge flows
-:width: 100%
-:align: center
+![Cumulative door flow against the hand calculation, and the cumulative merge flows](/images/network/door_and_merge.png)
 
 (a) IMO test 4. The model follows the hand calculation $1 + C\,t$ to
 within one time step. (b) Two rooms feeding a full corridor with merge
 weights 1 : 3. Over 150 s the flows reach 3 : 1. At the start, room a
 stalls between 3 s and 17 s while room b catches up on the share it lost
-before the corridor filled (see {ref}`network-limitations`).
-```
+before the corridor filled (see [Limitations](#limitations)).
 
 ### Sensitivity to `max_density`
 
@@ -318,40 +310,27 @@ reduction, it stays almost constant. This comparison only shows that
 supply reduction removes the effect in this model. The building is not
 the one Tsai used, so it says nothing about EvacuatioNZ's own numbers.
 
-```{figure} _static/network/max_density_sweep.png
-:alt: RSET against max_density with and without supply reduction
-:width: 70%
-:align: center
+![RSET against max_density with and without supply reduction](/images/network/max_density_sweep.png)
 
 Ten floors of 60 agents each (400 m² per floor, pre-movement U(30, 120) s)
 and one stair of 1.2 m with 0.9 m doors, all connected one way. The
 line is the median of 30 runs and the band covers 5–95 %.
-```
 
 ### Monte Carlo
 
-```{figure} _static/network/monte_carlo.png
-:alt: Histogram of RSET over 300 runs
-:width: 70%
-:align: center
+![Histogram of RSET over 300 runs](/images/network/monte_carlo.png)
 
 The same building with two stairs and half of each floor sent to each
 stair. Pre-movement times are LogNormal with mean 120 s and standard
 deviation 60 s, truncated at 600 s. The 300 runs take about 30 s
 together.
-```
 
-```{figure} _static/network/building.gif
-:alt: Animation of node densities in a ten-storey building with two stairs
-:width: 100%
-:align: center
+![Animation of node densities in a ten-storey building with two stairs](/images/network/building.gif)
 
 One run of the two-stair building. Floors are shaded by density, and the
 stair flights fill to about 2.3 m⁻² while the doors from the floors
 compete with the stream from above.
-```
 
-(network-comparison)=
 ## Comparison with EvacuatioNZ
 
 EvacuatioNZ is a closed-source network model by M. Spearpoint. The table
@@ -379,7 +358,6 @@ thesis.
 | Validation | Jean Talon drill, 827 s against 863 s observed, with the pre-movement spread tuned to the drill [5] p. 88. A simple network of 61 nodes and a detailed one of 496 nodes gave similar RSET [5] pp. 53, 64 | none yet |
 | Source | closed. The licence forbids reverse engineering | open (LGPL-3.0) |
 
-(network-limitations)=
 ## Limitations
 
 - **Ties between equally distant exits are not split.** With two stairs
@@ -387,15 +365,11 @@ thesis.
   second stair stays empty. Until this is fixed, split the populations by
   hand with `target`.
 
-  ```{figure} _static/network/route_tie.png
-  :alt: Cumulative evacuation curves showing that a tie sends everyone down one stair
-  :width: 70%
-  :align: center
+  ![Cumulative evacuation curves showing that a tie sends everyone down one stair](/images/network/route_tie.png)
 
   Two equally distant stairs. Nearest-exit routing evacuates as slowly
   as a building with a single stair (702.5 s). Splitting the targets by
   hand cuts the time by 42 % (405.5 s).
-  ```
 
 - **Supply counts every incoming link.** The inflow capacity
   $\sum_{\ell \to n} C_\ell$ in the supply factor includes links that
@@ -439,7 +413,7 @@ thesis.
   factors other than 1 are present.
 
 The figures and animations on this page are produced by
-`docs/source/_scripts/network/make_figures.py` and `make_gifs.py`.
+`scripts/figures/make_figures.py` and `make_gifs.py`.
 
 ## References
 
