@@ -21,6 +21,7 @@ Each time step of length ``dt`` is processed synchronously:
 Space freed by agents leaving a node becomes available in the next step.
 """
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -88,18 +89,50 @@ class SimulationResult:
 
 @dataclass(frozen=True)
 class MonteCarloResult:
-    """Evacuation times of repeated realisations (``nan`` = incomplete)."""
+    """Evacuation times of repeated realisations (``nan`` = incomplete).
+
+    An incomplete run is right-censored at ``t_max``: its evacuation time is
+    only known to exceed ``t_max``. ``incomplete`` counts these runs.
+    """
 
     evacuation_times: np.ndarray
     agent_counts: np.ndarray
+    t_max: float | None = None
 
     @property
     def complete(self) -> np.ndarray:
         return self.evacuation_times[np.isfinite(self.evacuation_times)]
 
+    @property
+    def incomplete(self) -> int:
+        return int(self.evacuation_times.size - self.complete.size)
+
     def quantile(self, q):
-        """Quantile of completed runs; incomplete runs are excluded."""
-        return np.quantile(self.complete, q)
+        """Linear quantile (numpy default) over all runs.
+
+        Incomplete runs rank above every finished run. A quantile whose
+        interpolation involves an incomplete run is only bounded below and
+        is returned as ``inf``. Issues a ``RuntimeWarning`` when any run is
+        incomplete.
+        """
+        if self.incomplete == 0:
+            return np.quantile(self.complete, q)
+        times = self.evacuation_times
+        finished = np.isfinite(times)
+        sentinel = np.max(times, where=finished, initial=0.0)
+        value = np.quantile(np.where(finished, times, sentinel), q)
+        upper = np.ceil((times.size - 1) * np.asarray(q))
+        warnings.warn(self._censoring_message(), RuntimeWarning, stacklevel=2)
+        return np.where(upper >= self.complete.size, np.inf, value)[()]
+
+    def _censoring_message(self) -> str:
+        n, m = self.evacuation_times.size, self.incomplete
+        when = "" if self.t_max is None else f" before t_max = {self.t_max:g} s"
+        head = f"{m} of {n} runs did not finish{when}; "
+        if m == n:
+            return head + "all quantiles are inf."
+        boundary = (n - m - 1) / (n - 1)
+        return head + f"quantiles above q = {boundary:.3f} are inf."
 
 
 class NetworkSimulation:
@@ -160,6 +193,7 @@ class NetworkSimulation:
         return MonteCarloResult(
             evacuation_times=np.array([r.evacuation_time for r in results]),
             agent_counts=np.array([len(r.exit_times) for r in results]),
+            t_max=self.t_max,
         )
 
 
