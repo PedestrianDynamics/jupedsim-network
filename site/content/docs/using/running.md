@@ -35,7 +35,9 @@ runs = simulation.run_many(500, seed=1)  # 500 independent realisations
 ```
 
 - `seed` may be an integer, a `numpy.random.SeedSequence` or a
-  `numpy.random.Generator`. The same seed gives the same result.
+  `numpy.random.Generator`. An integer or a `SeedSequence` gives the
+  same result every time. A `Generator` is advanced by the run, so pass
+  a new one each time.
 - `run(..., record=False)` skips the time series of node occupancy and
   link flow. `run_many` uses it.
 - `run_many(runs, seed)` derives one seed per run with
@@ -93,9 +95,9 @@ Here the result changes by 0.4 s between 1.0 s and 0.1 s. Cases set by
 door queues on level ground behave like this. Walking times on short
 stair flights do not: the stair-speed test needs $\Delta t = 0.1$ s to
 match the hand calculation within 0.25 s
-([Verification]({{< relref "/docs/verification" >}})). Choose $\Delta t$ small
-compared with the shortest walk through a node, and halve it once to
-check.
+([Verification]({{< relref "/docs/verification" >}})). The rule this model
+recommends: choose $\Delta t$ small compared with the shortest walk
+through a node, and halve it once to check.
 
 ## Choosing max_density
 
@@ -103,9 +105,9 @@ check.
 area factor. A node never exceeds it.
 
 - The default of 2.75 m⁻² is the default maximum node density of
-  EvacuatioNZ {{< cite 3 "p. 3" >}}, where it was chosen because it gave
-  suitable results in earlier work {{< cite 8 "p. 165" 10 "p. 111" >}},
-  citing {{< cite 7 "" >}}.
+  EvacuatioNZ {{< cite 3 "p. 3" >}}. It "has been found to give
+  suitable results in previous work" {{< cite 10 "p. 111" >}}, namely
+  {{< cite 7 "" >}}; see also {{< cite 8 "p. 165" >}}.
 - SFPE states that densities above 1.9 m⁻² should not be assumed in
   engineering designs {{< cite 1 "p. 2175" >}}. Everything between the
   peak-flow density of 1.88 m⁻² and `max_density`, including the supply
@@ -163,3 +165,22 @@ percentile needs some of the 59 unfinished runs, so it is `inf`. Raise
 Runs close to the default `t_max` are realistic: in the
 [max_density sweep]({{< relref "/docs/verification#sensitivity-to-max_density" >}})
 with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2959 s.
+
+## Errors
+
+| Error | When |
+|-------|------|
+| `dt and t_max must be positive.` | `dt` or `t_max` is 0 or negative. |
+| `max_density must be in (0, 3.76).` | `max_density` is 0 or negative, or at least the jam density. |
+| `At least one population is required.` | The population list is empty. |
+| `Unknown node '...'.` | A population or `target` names a node that does not exist. |
+| `Target '...' is not a safe node.` | `target` names a room or stair. |
+| `The network has no safe node.` | No `add_safe` call. |
+| `Population starts in safe node '...'.` | The start node of a population is safe. |
+| `No route from '...' to safety.` | No chain of links from the start node to a safe node, or to the `target`. |
+| `runs must be at least 1.` | Raised by `run_many()` with fewer than one run. |
+| `Initial population exceeds max_density in [...]` | Raised by `run()`: too many agents (weighted by area factor) in a start node. |
+| `Agent speeds must be positive.` | Raised by `run()`: a speed distribution produced 0, or a negative value with `lower=None`. |
+
+The last three are raised by `run_many()` or `run()`, the others when
+the `NetworkSimulation` is created.

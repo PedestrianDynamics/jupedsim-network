@@ -30,12 +30,12 @@ table, for example [1, Eq. 67.3, p. 2174].
    hydraulic model, modelling tools and trials", *Proceedings of the Fire
    and Evacuation Modeling Technical Conference (FEMTC)*, 2022.
    [files.thunderheadeng.com/femtc/2022_d2-12-arnott-paper.pdf](https://files.thunderheadeng.com/femtc/2022_d2-12-arnott-paper.pdf)
-7. <a id="ref-7"></a>M. J. Spearpoint, "Verification exercises on a
-   probabilistic network model for building evacuation", *Journal of
+7. <a id="ref-7"></a>M. J. Spearpoint, "Comparative verification
+   exercises on a probabilistic network model for building evacuation", *Journal of
    Fire Sciences* 27(5), 409–430, 2009.
    [doi:10.1177/0734904109105373](https://doi.org/10.1177/0734904109105373)
-8. <a id="ref-8"></a>M. J. Spearpoint, "Network modelling of The Station
-   nightclub fire evacuation", *Journal of Fire Protection Engineering*
+8. <a id="ref-8"></a>M. J. Spearpoint, "Network modeling of The Station
+   Nightclub fire evacuation", *Journal of Fire Protection Engineering*
    22(3), 157–181, 2012. The paper uses EvacuatioNZ version 2.3.
    [doi:10.1177/1042391512447044](https://doi.org/10.1177/1042391512447044)
 9. <a id="ref-9"></a>M. J. Spearpoint and X. Xiang, "Calculating
@@ -43,7 +43,7 @@ table, for example [1, Eq. 67.3, p. 2174].
    model", *Fire Safety Science* 10, 599–612, 2011.
    [doi:10.3801/IAFSS.FSS.10-599](https://doi.org/10.3801/IAFSS.FSS.10-599)
 10. <a id="ref-10"></a>E. D. Kuligowski, R. D. Peacock, P. A. Reneke,
-    E. Wiess, C. R. Hagwood, K. J. Overholt, R. P. Elkin, J. D. Averill,
+    E. Weiss, C. R. Hagwood, K. J. Overholt, R. P. Elkin, J. D. Averill,
     E. Ronchi, B. L. Hoskins and M. Spearpoint, *Movement on stairs
     during building evacuations*, NIST Technical Note 1839, 2014. The
     report uses EvacuatioNZ version 2.8.

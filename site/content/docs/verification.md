@@ -21,7 +21,7 @@ The last line of the output reads `40 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
-is the evacuation time the current code gives in the test.
+is what the test measures with the current code.
 
 | Case | Expected | Result | Tolerance | Test |
 |------|----------|--------|-----------|------|
@@ -31,7 +31,7 @@ is the evacuation time the current code gives in the test.
 | 50 agents, 0.6 m opening | $(N-1)/C = 49/0.78 = 62.8$ s | 63.0 s | 0.5 s | `test_opening_has_no_boundary_layer` |
 | 200 agents at 2 m⁻² walk 20 m {{< cite 3 "p. 15" >}} | $20/(1.4\,(1-0.266\cdot2)) = 30.5$ s | 31.0 s | 0.6 s | `test_congested_walking_speed` |
 | Merge weights 1 : 3 over 150 s | flow ratio 3 | 3.0 | 15 % | `test_merge_weights_split_flow` |
-| Stair 7/11 in: $k$ and $F_s = k/(4a)$ | 1.08 m/s, 1.01 persons/s/m (SFPE Table 67.5 {{< cite 1 "p. 2176" >}}) | 1.081, 1.016 | 0.01 | `test_stair_specific_flow_follows_geometry` |
+| Stair 7/11 in: $k$ and $F_s = k/(4a)$ | 1.08 m/s (SFPE Table 67.2 {{< cite 1 "p. 2174" >}}), 1.01 persons/s/m (SFPE Table 67.5 {{< cite 1 "p. 2176" >}}) | 1.081, 1.016 | 0.01 | `test_stair_specific_flow_follows_geometry` |
 
 Further tests check pre-movement delays, route choice, conservation of
 agents, that `max_density` is never exceeded, reproducibility with a
@@ -47,12 +47,15 @@ The IMO test cases are in MSC.1/Circ.1533, Appendix 2, paragraphs 3–6
   as written.
 - **Test 3** as written asks that one person with a walking speed of
   1 m/s covers a 2 m wide stair of 10 m, measured along the incline, in
-  10 s {{< cite 4 "" >}}. **This model does not meet it, by design.** On
-  a stair the input speed only caps the walking speed, which comes from
-  the stair geometry: $k = 51.8\sqrt{T/R}$ gives 1.077 m/s for 18/28 cm
-  steps, and $k(1 - 0.266 \cdot 0.54) = 0.922$ m/s. A lone walker takes
-  10.84 s instead of 10 s. The test checks this adaptation, the same one
-  EvacuatioNZ uses for its stair verification {{< cite 2 "§2.1.3" >}}.
+  10 s {{< cite 4 "" >}}. **With 18/28 cm steps this model does not
+  meet it, by design.** On a stair the input speed only caps the walking
+  speed, which comes from the stair geometry: $k = 51.8\sqrt{T/R}$ gives
+  1.077 m/s for 18/28 cm steps, and $k(1 - 0.266 \cdot 0.54) = 0.922$
+  m/s. A lone walker takes 10.84 s by hand calculation (11.0 s in the
+  run at $\Delta t = 0.1$ s) instead of 10 s. Shallower steps with
+  $T/R \ge 1.83$ cap the stair speed at or above 1 m/s. The test checks
+  this adaptation, the same one EvacuatioNZ uses for its stair
+  verification {{< cite 2 "§2.1.3" >}}.
 - **Test 4** asks for 100 persons in an 8 m × 5 m room with a 1 m exit,
   and that the flow over the whole period does not exceed 1.33 persons/s
   {{< cite 4 "" >}}. The link capacity of 0.931 persons/s and the mean flow of

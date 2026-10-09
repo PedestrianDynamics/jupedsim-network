@@ -74,7 +74,8 @@ net.connect(
 
 A connection without capacity, for example a width no larger than
 $2b$, raises a `ValueError`. To close a passage, leave the connection
-out: `specific_flow=0` does not close it.
+out: `specific_flow=0` does not close it
+([issue #3](https://github.com/PedestrianDynamics/jupedsim-network/issues/3)).
 
 ### Length
 
@@ -83,18 +84,21 @@ the constriction. Both directions of a two-way connection use the same
 length, so a door in the middle of a long corridor needs one-way links
 or separate nodes.
 
-On a stair link, enter the distance along the incline. SFPE stair speeds
-apply along the line of travel {{< cite 1 "p. 2175" >}}. For 18/28 cm
-steps the incline is $\sqrt{1 + (R/T)^2} = 1.19$ times the horizontal
-run, so entering the horizontal run makes the walk about 16 % too
-short.
+This model applies SFPE stair speeds along the line of travel
+{{< cite 1 "p. 2175" >}}, so on a stair link enter the distance along the
+incline. This is the model's convention; whether the horizontal run
+would serve better is open in
+[issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5). For 18/28 cm steps the
+incline is $\sqrt{1 + (R/T)^2} = 1.19$ times the horizontal run, so
+entering the horizontal run makes the walk about 16 % too short.
 
 ### One-way and two-way links
 
 `bidirectional=True` is the default. It creates a second link from
 `target` to `source`, named `"target->source"` whatever `name` says. No
-link is created out of a safe node. The reverse link has two side
-effects:
+link is created out of a safe node, so `connect("street", "office",
+bidirectional=False)` with a safe `"street"` creates no link and does
+not raise. The reverse link has two side effects:
 
 - it adds its capacity to the inflow capacity of the source node, which
   sets how much a nearly full node accepts
@@ -103,8 +107,8 @@ effects:
   since counterflow is not modelled.
 
 For a pure egress network, where everyone walks towards the exits, use
-`bidirectional=False`. The figure scripts and the examples on this site
-do.
+`bidirectional=False`. The building scenarios and the Getting started
+example do.
 
 ## Routes
 
@@ -118,7 +122,8 @@ the run starts and is never updated.
   part.
 - Equal distances are not split. Zero-length links make ties likely,
   and every agent then takes the route found first
-  ([Limitations]({{< relref "/docs/limitations#routes" >}})).
+  ([Limitations]({{< relref "/docs/limitations#routes" >}}),
+  [issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
 - `start_distance` of a population is added to the walk but not to the
   route distance.
 
@@ -134,3 +139,8 @@ the run starts and is never updated.
 | `Width and merge weight must be positive, length non-negative.` | Invalid numbers. |
 | `A connection needs two different nodes.` | `source` and `target` are the same node. |
 | `Connection ...-... has no capacity.` | Effective width is zero, or `specific_flow` is negative. |
+| `Unknown node '...'.` | `connect` or `node()` names a node that does not exist. |
+| `Riser and tread must be positive.` | `add_stair` with a riser or tread of 0 or less. |
+
+Errors raised when the simulation is created or run are listed in
+[Running]({{< relref "/docs/using/running#errors" >}}).

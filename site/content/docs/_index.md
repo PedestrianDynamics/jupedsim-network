@@ -14,7 +14,7 @@ so a scenario can be sampled hundreds of times.
 
 {{< callout type="warning" >}}
 Version 0.1.0, a prototype. The model is verified against hand
-calculations and IMO component tests. It is not validated against drills
+calculations and adapted IMO component tests. It is not validated against drills
 or experiments, and it is not intended for regulatory or design use. See
 [Limitations]({{< relref "/docs/limitations" >}}).
 {{< /callout >}}

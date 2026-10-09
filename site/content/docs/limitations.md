@@ -27,7 +27,8 @@ validation {{< cite 1 "p. 2171" >}}.
 
 - **Ties between equally distant exits are not split.** With two stairs
   at the same distance, every agent takes the stair found first, and the
-  second stair stays empty. Split the populations by hand with `target`.
+  second stair stays empty. Split the populations by hand with `target`
+  ([issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
 
   ![Cumulative evacuation curves showing that a tie sends everyone down one stair](/images/network/route_tie.png)
 
@@ -50,6 +51,9 @@ validation {{< cite 1 "p. 2171" >}}.
   $\sqrt{T/R}$ law is supported for risers of 165–191 mm and treads of
   254–330 mm {{< cite 1 "p. 2175" >}}. The code accepts other values
   without a warning.
+- **Stair length is a convention.** Stair links take the walking
+  distance along the incline. Whether the horizontal run would serve
+  better is open ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
 - **Densities above 1.9 m⁻².** SFPE states that such densities should
   not be assumed in engineering designs {{< cite 1 "p. 2175" >}}. The
   model allows nodes up to `max_density`, 2.75 m⁻² by default, and its
@@ -63,13 +67,15 @@ validation {{< cite 1 "p. 2171" >}}.
   reverse direction of a two-way connection. A nearly full node then
   accepts more inflow than intended. Two-way links are the default
   (`bidirectional=True`); use `bidirectional=False` for egress networks
-  ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-links" >}})).
+  ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-links" >}}),
+  [issue #9](https://github.com/PedestrianDynamics/jupedsim-network/issues/9)).
 - **Counterflow isn't modelled.** The two directions of a two-way
   connection are separate links, each with the full capacity, so a door
   used both ways passes twice its capacity. In trials, the flow per
   direction under counterflow was about 13–20 % above half the
   one-way flow {{< cite 6 "pp. 6, 10–11" >}}, so the model overpredicts
-  it by about 1.7 times (our estimate from these trials).
+  it by about 1.7 times (our estimate from these trials)
+  ([issue #8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)).
 - **Doors are open and the data are old.** $F_s = 1.3$ persons/s/m
   assumes doors held open; for doors that are not, SFPE suggests
   50 persons/min per door leaf. SFPE also notes that the door data are
@@ -112,11 +118,12 @@ validation {{< cite 1 "p. 2171" >}}.
 - **Simultaneous arrivals are served in population order.** Agents that
   reach the same queue in the same step at the same interpolated time
   pass in the order of the populations, not at random. Individual exit
-  times can therefore depend on the order of the population list. In a
-  test with 20 agents of area factor 1 and 20 of area factor 2 in one
-  room, the evacuation time is 43.0 s in both orders, but the last
-  agent of the area-factor-1 group leaves at 21.0 s when that group is
-  listed first and at 43.0 s when it is listed second.
+  times can therefore depend on the order of the population list
+  ([issue #1](https://github.com/PedestrianDynamics/jupedsim-network/issues/1)). In a small test, a 100 m² room with two 1 m doors
+  of zero length to two safe nodes holds 20 agents of area factor 1 and
+  20 of area factor 2. The evacuation time is 43.0 s in both orders,
+  but the last agent of the area-factor-1 group leaves at 21.0 s when
+  that group is listed first and at 43.0 s when it is listed second.
 
 ## Monte Carlo
 

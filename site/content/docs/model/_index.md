@@ -14,7 +14,7 @@ graph by relations adapted from the SFPE hydraulic model {{< cite 1 "" >}}.
 ![Agents in two rooms walk to their doors, queue, merge into a corridor and leave through an exit](/images/network/mechanics.gif)
 
 Two rooms of 40 agents each empty into a corridor of 4 m², which holds
-at most 11 agents. The corridor is full most of the time. Its inflow is
+at most 11 agents. The corridor is close to its limit most of the time. Its inflow is
 then reduced and shared 1 : 3 between the rooms, following the merge
 weights. Positions inside a node are drawn for illustration only, since
 the model tracks a remaining walking distance per agent.

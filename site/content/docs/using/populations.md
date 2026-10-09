@@ -78,15 +78,15 @@ import numpy as np
 from jupedsim_network import Normal
 
 rng = np.random.default_rng(1)
-print(Normal(10.0, 20.0).sample(rng, 100_000).mean())
-print(Normal(10.0, 20.0, lower=None).sample(rng, 100_000).mean())
+print(round(Normal(10.0, 20.0).sample(rng, 100_000).mean(), 2))
+print(round(Normal(10.0, 20.0, lower=None).sample(rng, 100_000).mean(), 2))
 ```
 
 Output:
 
 ```
-20.11503119756863
-9.929343747246472
+20.12
+9.93
 ```
 
 Truncated at 0, `Normal(10, 20)` has a mean of about 20, not 10.

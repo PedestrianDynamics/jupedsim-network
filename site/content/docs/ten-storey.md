@@ -14,7 +14,9 @@ in `scripts/figures/`.
 - Ten floors of 400 m² with 60 agents each.
 - Two stairs, A and B. Each floor has a 0.9 m door to each stair, 25 m
   from the floor's occupants. Each flight is 1.2 m wide, with 18/28 cm
-  steps, an area of 1.2 × 9.0 m² and a stair link of 9 m.
+  steps, an area of 1.2 × 9.0 m² and a stair link of 9 m. The 9 m are
+  entered as the walking distance along the incline, the convention of
+  this model ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
 - All links are one way (`bidirectional=False`).
 - Half of each floor is sent to each stair with `target`, because the
   two stairs are at the same distance and nearest-exit routing would
@@ -23,7 +25,7 @@ in `scripts/figures/`.
 
 The network and populations are built by `building()` and
 `building_populations()` in `scripts/figures/scenarios.py`. One run
-takes about 0.07 s on a laptop (Apple M3 Pro).
+takes about 0.1 s on a laptop (Apple M3 Pro).
 
 ## Monte Carlo
 
@@ -33,7 +35,7 @@ Pre-movement times are log-normal with mean 120 s and standard deviation
 60 s, truncated at 600 s, and are sampled anew in each of the 300 runs
 (seed 11). The median evacuation time is 529 s and the 95th percentile
 647 s. All 300 runs finished; the fastest took 418.5 s and the slowest
-717.0 s. The 300 runs take about 20 s on the same laptop.
+717.0 s. The 300 runs take about 30 s on the same laptop.
 
 ## One run
 

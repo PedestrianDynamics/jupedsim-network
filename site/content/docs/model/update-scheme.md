@@ -97,8 +97,8 @@ accepts agents only up to two limits.
   only the free space counts.
 
   The node carry $\gamma_n$ keeps what was allowed but not used, so that
-  low inflow rates aren't rounded away. If some candidate was refused
-  in this step,
+  low inflow rates aren't rounded away. If the supply limit applied and
+  some candidate was refused in this step,
 
   $$
   \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\to n} C_\ell\,\Delta t,\ 1\bigr)\Bigr);

@@ -77,9 +77,10 @@ A link also has:
 
 - **a length $L_\ell$**, the walking distance inside the *source* node up
   to the constriction. Both directions of a two-way connection use the
-  same length. On a stair link it is measured along the incline, since
-  SFPE stair speeds apply along the line of travel
-  {{< cite 1 "p. 2175" >}};
+  same length. On a stair link this model takes it along the incline,
+  since SFPE stair speeds apply along the line of travel
+  {{< cite 1 "p. 2175" >}} (a convention of this model, see
+  [issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5));
 - **a merge weight $m_\ell$**, the relative share of the link when
   several links feed the same full node.
 
@@ -147,6 +148,8 @@ model adapts it as follows:
 - **Area factor.** See [Agents](#agents).
 - **Stair speed.** The closed form $51.8\sqrt{T/R}$ comes from
   EvacuatioNZ, not from the SFPE chapter, and is used for any step size.
+  The code docstrings still attribute it to SFPE
+  ([issue #4](https://github.com/PedestrianDynamics/jupedsim-network/issues/4)).
 - **Stair specific flow.** $k/(4a)$ is computed from the stair geometry
   instead of read from SFPE Table 67.5.
 - **Opening.** The zero boundary layer of `opening` follows EvacuatioNZ;

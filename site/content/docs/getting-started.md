@@ -56,7 +56,8 @@ Output:
 [383.25 550.05]
 ```
 
-The 500 runs take about 15 s on a laptop (Apple M3 Pro, version 0.1.0).
+The 500 runs take about half a minute on a laptop
+([run times]({{< relref "/docs/ten-storey#the-building" >}})).
 
 - `323.0` is the `evacuation_time` of the run with seed 1: the time in
   seconds at which the last agent reached the street, pre-movement
@@ -98,7 +99,7 @@ If the count is not zero, raise `t_max` and run again
 Does a wider door help? First look at the latest start:
 
 ```python
-print(result.pre_movement_times.max())
+print(round(result.pre_movement_times.max(), 1))
 
 for width in (0.9, 1.2):
     test = Network()
@@ -118,7 +119,7 @@ for width in (0.9, 1.2):
 Output:
 
 ```
-291.8809979894291
+291.9
 0.9 184.0
 1.2 139.0
 ```
@@ -147,6 +148,10 @@ speed and leaves through the stair link. The
 | `ValueError: Agent speeds must be positive.` | A speed distribution produced 0, or a negative value with `lower=None` | Set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
 | `evacuation_time` is `nan` | Some agents were still inside at `t_max` | Raise `t_max`, or look for a node that cannot empty |
 | `RuntimeWarning: ... runs did not finish before t_max ...`; `quantile` returns `inf` | Some runs were still running at `t_max` | Raise `t_max` until `runs.incomplete` is 0 |
+
+All error messages are listed in
+[Networks]({{< relref "/docs/using/networks#errors" >}}) and
+[Running]({{< relref "/docs/using/running#errors" >}}).
 
 ## Next steps
 
