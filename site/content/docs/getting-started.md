@@ -74,10 +74,10 @@ full nodes ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-link
 
 A run that still has agents inside at `t_max` (3600 s by default)
 returns `nan`: its evacuation time is only known to exceed `t_max`.
-`quantile` ranks such runs above every finished run. A quantile that
-depends on one of them is `inf`, and `quantile` issues a
-`RuntimeWarning`. Count the incomplete runs before you report a
-quantile:
+`quantile` ranks such runs above every finished run and returns `inf`
+for a quantile that depends on one of them. It issues a
+`RuntimeWarning` whenever any run is incomplete. Count the incomplete
+runs before you report a quantile:
 
 ```python
 print(result.evacuated, "of", len(result.exit_times), "agents are safe")
@@ -140,7 +140,8 @@ narrowest point.
 
 Each agent waits for its pre-movement time, walks 25 m to the door at a
 speed that falls with the density of the office, queues, and passes the
-door at most at the door's capacity. On the flight it walks 9 m at stair
+door at most at the door's capacity. On the flight it walks 9 m along
+the incline at stair
 speed and leaves through the stair link. The
 [model description]({{< relref "/docs/model" >}}) explains each step.
 

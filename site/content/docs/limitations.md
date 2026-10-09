@@ -130,8 +130,8 @@ validation {{< cite 1 "p. 2171" >}}.
 - **Incomplete runs make high quantiles infinite.** A run that still
   has agents inside at `t_max` (3600 s by default) returns `nan`; its
   evacuation time is only known to exceed `t_max`. `quantile` ranks such
-  runs above every finished run and returns `inf`, with a
-  `RuntimeWarning`, for every quantile that depends on one of them.
+  runs above every finished run and returns `inf` for every quantile
+  that depends on one of them. It warns whenever any run is incomplete.
   Raise `t_max` until `runs.incomplete` is 0
   ([Running]({{< relref "/docs/using/running#t_max-and-incomplete-runs" >}})).
 - **Quantiles describe the inputs.** They reflect the spread of the

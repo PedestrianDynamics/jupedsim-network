@@ -131,9 +131,9 @@ of every agent still inside is `nan` as well.
 
 `MonteCarloResult.quantile` ranks incomplete runs above every finished
 run. A quantile that depends on an incomplete run is only bounded from
-below and is returned as `inf`, and `quantile` issues a
-`RuntimeWarning`. `MonteCarloResult.complete` lists the finished runs
-only. With all runs finished, `quantile` is NumPy's default (linear)
+below and is returned as `inf`; a quantile that does not is exact.
+`quantile` issues a `RuntimeWarning` whenever any run is incomplete.
+`MonteCarloResult.complete` lists the finished runs only. With all runs finished, `quantile` is NumPy's default (linear)
 quantile of the evacuation times.
 
 The Getting started scenario with `t_max` cut to 500 s:
