@@ -73,9 +73,8 @@ net.connect(
   if both nodes are stairs, it comes from the source node.
 
 A connection without capacity, for example a width no larger than
-$2b$, raises a `ValueError`. `specific_flow` must be positive: 0, a negative
-value or NaN raises a `ValueError`. To close a passage, leave the
-connection out.
+$2b$, raises a `ValueError`, and so does a `specific_flow` of 0, a negative
+value or NaN. To close a passage, leave the connection out.
 
 ### Length
 
@@ -87,8 +86,7 @@ or separate nodes.
 This model applies SFPE stair speeds along the line of travel
 {{< cite 1 "p. 2175" >}}, so on a stair link enter the distance along the
 incline, as SFPE does in its Example 67.1 {{< cite 1 "p. 2178" >}}.
-The docstring of `Network.connect` states the same convention. For
-18/28 cm steps the
+For 18/28 cm steps the
 incline is $\sqrt{1 + (R/T)^2} = 1.19$ times the horizontal run, so
 entering the horizontal run makes the walk about 16 % too short.
 
