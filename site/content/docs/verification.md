@@ -4,21 +4,25 @@ weight: 4
 ---
 
 The model is verified: tests check that its components reproduce hand
-calculations and adapted IMO test cases. It is not validated: it has
-not been compared with evacuation drills, experiments, EvacuatioNZ runs
-or JuPedSim's microscopic models.
+calculations and adapted IMO test cases. It is also compared with the
+results published in the EvacuatioNZ verification report; no
+EvacuatioNZ runs were made. It is not validated: it has not been
+compared with evacuation drills, experiments or JuPedSim's microscopic
+models.
 
 ## Tests
 
-The tests are in `tests/test_network.py`. Run them from a clone of the
+The tests are in `tests/test_network.py` and
+`tests/test_evacuationz_verification.py`. Run them from a clone of the
 repository:
 
 ```
 uv run pytest -q
 ```
 
-The last line of the output reads `40 passed`, followed by the run
-time.
+The last line of the output reads `85 passed, 4 xfailed`, followed by
+the run time. The four expected failures are the capacity bounds of
+issue [#18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18) (see [EvacuatioNZ verification cases](#evacuationz-verification-cases)).
 
 The table lists the tests with a hand-calculated expectation. "Result"
 is what the test measures with the current code.
@@ -78,6 +82,143 @@ SFPE hand calculation is $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}:
 
 The SFPE value for IMO 4 lies 1.07 s from the test's expectation, more
 than its tolerance of 1 s. The model result lies 0.9 s below it.
+
+## EvacuatioNZ verification cases
+
+The cases of the EvacuatioNZ verification report version 2.11
+{{< cite 2 "" >}} are rebuilt with this model and compared three ways:
+the hand value, the result published in the report, and this model at
+$\Delta t = 0.5$ s. No EvacuatioNZ runs were made. Page numbers are the
+printed page numbers of the report; the PDF page is one higher. The
+tests are in `tests/test_evacuationz_verification.py`. Every expected
+value in them is a hand calculation; values read from figures of the
+report are never asserted.
+
+The report's inputs are mapped the same way in every case. These rules
+are accepted for the EvacuatioNZ cases only:
+
+- A door (`enz_door`) is a door with $b = 0.15$ m and $F_s = 1.33$
+  persons/s/m, EvacuatioNZ's value, passed explicitly in each case; the
+  model's default stays $F_s = 1.3$. An untyped connection is an opening
+  with $b = 0$ and $F_s = 1.33$, and stairs (`enz_stairs`) are a stair
+  node with $F_s = k/(4a)$ from the step geometry.
+- A connection that is both stair and door is one link with the lower
+  of the two capacities.
+- This model walks a link's length inside the source node, so stair
+  travel is put on the link leaving the stair node. The total distance
+  is unchanged.
+- A stair given by its height $H$ has the length
+  $L = H\sqrt{1 + (T/R)^2}$.
+- A random start distance is $U(0, L_{\max})$ with $L_{\max}$ stated per
+  case; the report does not give the range.
+
+| Case | Report | Hand value | EvacuatioNZ | This model | Explanation |
+|------|--------|------------|-------------|------------|-------------|
+| Travel speed, 40 m from a start distance at 1.0 m/s | §2.1.2, p. 7 | 40 s | 40.5 s | 40.0 s | `test_travel_speed_from_start_distance` |
+| Stair speed, 10 m of 180/280 mm steps | §2.1.3, p. 8 | 10.9 s (Eq. 2.1), 10.5 s (SFPE table) | 12 s | 11.0 s ($\Delta t = 0.1$ s), 11.5 s ($\Delta t = 0.5$ s) | At $\Delta t = 0.5$ s: 10.84 s, plus one step for the transfer into the stair, rounded up to the step. `test_stair_speed_imo_test_3`, `test_stair_flow_uncongested` |
+| Door flow, IMO 4 room, 100 agents, 1 m door | §2.2, p. 9 | 107.5 s ($N/C$ with $C = 0.93$) | 108 s | 106.5 s | This model's convention is $(N-1)/C = 106.3$ s, see above |
+| Door flow, 1–3 m doors and 1 m opening, 1–100 agents | §2.2, p. 10 | $(N-1)/C$ | Fig. 2.2, graph only | table below | `test_door_flow_widths` |
+| Stair flow, 1–1000 agents, stairs 10 × 1, 200 × 1 and 200 × 5 m | §2.3, pp. 12–13 | $L/S_0 + (N-1)/C$ | Fig. 2.6, graph only | table below | `test_stair_flow_*` |
+| Fire Engineering Design Guide, 90 agents, room over one stair | §2.4, pp. 13–15 | 186 s (FEDG) | 179 s; 168 s with random start | first exit 30.5 s; last exit 126.0 s (provisional, [#18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18)) | Capacity bound $30.5 + 89/0.911 = 128.2$ s, see below. `test_fedg_first_exit`, `test_fedg_last_exit_bound` (expected failure) |
+| SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE) | 1871 s | not reproduced | Pending the total occupant count of the source: the report gives neither the occupants per floor nor the ground-floor exit. Only the stair length 6.76 m from $H = 12$ ft is checked |
+| SFPE Guide on Human Behavior, example 1, 300 agents, start at the door | §2.6, pp. 18–20 | 246 s (Guide); 234.95 s in this model's conventions | 221.5 s | 235.5 s (stand-in) | $149/0.682 + 15.27/S_0$. `test_sfpe_guide_example_1` |
+| The same, start 200 ft from the door | §2.6, pp. 18–20 | 300 s (Guide); 285.8 s in this model's conventions | 283 s | 286.0 s (stand-in) | Plus 60.96 m at 1.199 m/s |
+| Distributions: fixed 45 and 120 s, $U(10, 100)$, $N(120, 30)$, log-normal mean 5, sd 2 | §3.1, pp. 21–25 | means 55, 120, 5; sd 25.98, 30, 2 | Figs. 3.1–3.3, graph only | means 54.88, 119.66, 4.97; sd 26.07, 29.82, 1.99 (20 000 samples) | `test_fixed_distribution_is_exact`, `test_distribution_moments` |
+| Room clearance, IMO 4 room, fixed delay 0, 30, 120 s | §3.2, p. 25 | $d + (N-1)/C$ | Fig. 3.4, graph only (≈ 114, 144, 234 s) | 106.5, 136.5, 226.5 s (start 0) | A fixed delay shifts the result by exactly $d$, also with a dispersed start $U(0, 8)$ m and the same seed. EvacuatioNZ's dispersed run without delay lies about 6 s above its own 108 s with the start at the door; this model gives 106.5 s at the door, and its dispersed values are provisional (see below). `test_room_clearance_*` |
+| Room clearance, triangular delay (0, $m$, $2m$), $m$ = 15, 30, 60 s, start at the door, seed 0 | §3.2, p. 25 | $\max_i(\tau_{(i)} + (N-1-i)/C)$: 107.84, 110.41, 128.01 s | Fig. 3.4, graph only | 108.5, 106.5, 128.5 s (provisional, [#18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18)) | 106.5 s lies below its bound. `test_room_clearance_triangular_bound` (expected failure for $m = 30$ s) |
+| Room clearance, fixed delay 0, dispersed start $U(0, 8)$ m, 20 seeds | §3.2, p. 25 | $(N-1)/C = 106.3$ s | Fig. 3.4, graph only (≈ 114 s) | 105.5–107.0 s, mean 106.4 s (provisional, [#18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18)) | 5 of 20 seeds lie below the hand value. `test_room_clearance_dispersed_without_delay` (expected failure) |
+| Exit choice, minimum distance | §5.1.1, p. 31 | Exit 5 | Exit 5 | Exit 5 | `test_exit_choice` |
+| Exit choice, specified exit | §5.1.5, p. 33 | Exit 6 | Exit 6 | Exit 6 | `test_exit_choice` |
+| Required connection | §5.2, pp. 34–35 | direct door | direct door | through Room 2 and Room 3 | Not modelled. `test_required_connection_is_not_modelled` |
+
+Door and opening flow with the IMO 4 room, $F_s = 1.33$, start at the
+door. Every result lies within one step above $(N-1)/C$:
+
+| Width | $N = 1$ | $N = 10$ | $N = 100$ |
+|-------|---------|----------|-----------|
+| 1 m door | 0.5 s | 10.0 s | 106.5 s |
+| 2 m door | 0.5 s | 4.0 s | 44.0 s |
+| 3 m door | 0.5 s | 3.0 s | 28.0 s |
+| 1 m opening | 0.5 s | 7.0 s | 74.5 s |
+
+Stair flow with 180/280 mm steps: $k = 1.0768$ m/s, free stair speed
+$S_0 = k(1 - 0.266 \cdot 0.54) = 0.9221$ m/s and $C = 1.012\,(w - 0.3)$.
+The text of §2.3 names two stairs; the caption of Fig. 2.7 names 200 m
+stairs of 1.0 m and 5.0 m. All three are run.
+
+| Stair | $N$ | This model | $L/S_0 + (N-1)/C$ | Peak on the stair |
+|-------|-----|------------|-------------------|-------------------|
+| 10 × 1 m | 1 | 11.5 s | 10.84 s | 1 |
+| 10 × 1 m | 10 | 26.0 s | 23.55 s | 10 |
+| 10 × 1 m | 100 | 168.5 s | 150.60 s | 27 (limit) |
+| 10 × 1 m | 1000 | 1439.0 s | 1421.07 s | 27 (limit) |
+| 200 × 1 m | 1 | 217.5 s | 216.90 s | 1 |
+| 200 × 1 m | 10 | 230.0 s | 229.60 s | 10 |
+| 200 × 1 m | 100 | 357.0 s | 356.65 s | 100 |
+| 200 × 1 m | 1000 | 1984.0 s | 1627.12 s | 550 (limit) |
+| 200 × 5 m | 1 | 217.5 s | 216.90 s | 1 |
+| 200 × 5 m | 10 | 219.0 s | 218.79 s | 10 |
+| 200 × 5 m | 100 | 238.0 s | 237.71 s | 100 |
+| 200 × 5 m | 1000 | 444.0 s | 426.93 s | 1000 |
+
+While fewer than $0.54\,L\,w$ agents are on the stair, everyone walks at
+$S_0$ and the result lies within two steps of the hand value. With more
+agents the stair fills and everyone on it walks at $k(1 - 0.266\,D)$, so
+the hand value is only a lower bound. On the 10 m stair the node stays
+at its limit of 27 agents (2.7 m⁻²), and the slower walk adds about
+18 s. On the 200 ×
+1 m stair the node holds 550 agents, its limit, and all walk at about
+0.29 m/s. The flow from the first to the last exit is 1.012 and 1.015
+persons/s per metre of effective width for the 1000-agent runs on the
+200 m stairs, the stair's $F_s = k/(4a) = 1.012$. Fig. 2.7 of the report
+shows 1.0 persons/s/m.
+
+**Fire Engineering Design Guide.** 90 agents (read from Fig. 2.8; the
+text gives no number) start 20 m from a 1.0 m door into a 10 × 1.2 m
+stair. The stair link, $1.012 \times 0.9 = 0.911$ persons/s, limits the
+exit, not the door with $1.33 \times 0.7 = 0.931$ persons/s. The first
+agent reaches the door at 19.0 s and leaves the stair at 30.5 s: 30.0 s
+at the free stair speed, slowed by the agents that follow onto the
+stair. The capacity bound for the last exit is $30.5 + 89/0.911 = 128.2$
+s; this model gives 126.0 s, which is provisional (see below).
+EvacuatioNZ's 179 s is about 50 s longer. In Fig. 2.8 its stair holds
+about 33 agents from about 80 s to 133 s, and its exits run at about 0.6
+agents/s, below both capacities. In this model the stair holds at most
+13 agents. The report does not say what limits the flow out of a full
+node in EvacuatioNZ, so the difference is unexplained.
+
+**Provisional values.** The last exit of the FEDG case and the room clearance with triangular
+delays or with a dispersed start and no delay are provisional until
+issue [#18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18) is fixed. In these runs agents reach a door about one
+per step, and a link that has served its whole queue starts the next
+step with its full allowance, so it can pass agents faster than its
+capacity $C$. For example, 40 agents released one per step through a
+0.931 persons/s door all leave within 20.0 s, while the capacity allows
+no less than $39/0.931 = 41.9$ s. The tests assert the hand bounds and
+are marked as expected failures; they are meant to pass once the defect
+is fixed, and the values above may move.
+
+**Stand-ins.** EvacuatioNZ splits the agents of §2.6 between the two
+stairs with a least-populated-connection rule. This model has no such
+rule and does not split tied routes
+([Limitations]({{< relref "/docs/limitations#routes" >}})). The rows above use
+an accepted stand-in, labelled as such: two populations of 150, each
+with its own exit. Without it
+all 300 agents take one stair and leave after 455.5 s (start at the
+door) and 506.0 s (start 200 ft away). The report's EvacuatioNZ result
+of 221.5 s lies within 1.6 s of $150/0.682 = 219.9$ s, although the
+last agent still has about 16 s of stair to descend; the Guide's 246 s
+does not match $N/C$ at the door or the stair with these constants.
+
+In §5.1 the report gives no node sizes or widths; the test assumes 25 m²
+nodes and 1 m doors and checks only the exit used. The report's
+distances of 5 m to Exit 5 and 15 m to Exit 3 leave out the 1 m link
+from Room 1 to Room 2; the full paths are 6 m and 16 m.
+
+Rules of the report that this model does not have: door leaves and door
+closers (§2.2), the maximum-distance, minimum-nodes and random single
+exit choices (§5.1.2–5.1.4), required connections (§5.2) and the
+least-populated connection (§2.6).
 
 ## Door flow and merging
 
