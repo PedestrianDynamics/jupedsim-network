@@ -14,7 +14,7 @@ on NumPy.
 
 The model is a prototype. It is verified against hand calculations but
 not validated against experiments; see the limitations in the
-documentation.
+[documentation](https://pedestriandynamics.org/jupedsim-network/).
 
 ## Install
 
