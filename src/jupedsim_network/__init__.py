@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Coarse network model for fast estimates of evacuation times (RSET).
+"""Coarse network egress model for fast evacuation-time estimates.
 
 Spaces are nodes with an area, doors and stair entries are links with a
 flow capacity, and individual agents move through them following the SFPE

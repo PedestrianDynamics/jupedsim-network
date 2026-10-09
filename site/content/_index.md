@@ -10,7 +10,7 @@ layout: hextra-home
 
 <div class="hx-mt-6 hx-mb-6">
 {{< hextra/hero-headline >}}
-  Network egress model <br class="sm:hx-block hx-hidden" />for fast RSET estimates
+  Network egress model <br class="sm:hx-block hx-hidden" />for fast evacuation-time estimates
 {{< /hextra/hero-headline >}}
 </div>
 

@@ -1,8 +1,9 @@
 # jupedsim-network
 
-A coarse network egress model for fast estimates of the required safe
-egress time (RSET). Rooms, corridors and stair flights are nodes with an
-area; doors and stair entries are links with a flow capacity. Agents move
+A coarse network egress model for fast estimates of evacuation times
+(pre-movement plus movement). Rooms, corridors and stair flights are
+nodes with an area; doors and stair entries are links with a flow
+capacity. Agents move
 through the graph by relations adapted from the SFPE hydraulic model. A run of a
 ten-storey building takes about 0.1 s, so scenarios can be sampled many
 times.
