@@ -24,6 +24,7 @@ from jupedsim_network import (
     NetworkSimulation,
     Normal,
     Population,
+    Triangular,
     Uniform,
 )
 
@@ -33,6 +34,15 @@ FT = 0.3048
 IN = 0.0254
 A = 0.266  # m², slope of S = k (1 - a D)
 K_LEVEL = 84 / 60  # m/s
+
+# A link that has served its whole queue starts the next step with a full
+# allowance, so arrivals about one per step pass faster than C. These
+# tests assert the hand bounds and flip when that is fixed.
+CAPACITY_DEFECT = pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="links exceed C when the queue empties between arrivals, #18",
+)
 
 
 def free_speed(k):
@@ -168,7 +178,8 @@ def test_stair_flow_congested_is_bounded(length, width, n):
 @pytest.mark.parametrize("width", [1, 5])
 def test_stair_throughput_is_stair_capacity(width):
     n = 1000
-    _, result = stair_flow(n, 200, width)
+    net, result = stair_flow(n, 200, width)
+    assert_invariants(result, net, n)
     exits = result.exit_times
     flow = (n - 1) / (exits.max() - exits.min())
     fs = stair_fs(STAIR_K)
@@ -177,8 +188,7 @@ def test_stair_throughput_is_stair_capacity(width):
 
 # §2.4, pp. 13-15: Fire Engineering Design Guide, a room over one stair.
 # The stair (1.012 x 0.9 = 0.911/s) limits stairs->exit, not the door
-# (1.33 x 0.7 = 0.931/s). The last-exit bound 30.5 + 89/0.911 s is held
-# until the link capacity decision is made.
+# (1.33 x 0.7 = 0.931/s).
 
 
 def fedg():
@@ -206,6 +216,17 @@ def test_fedg_first_exit():
     stair_speed = free_speed(STAIR_K)
     hand = steps(20.1, room_speed) + steps(10.0, stair_speed)
     assert hand <= np.min(result.exit_times) <= hand + 2 * DT
+    assert_invariants(result, net, 90)
+
+
+@CAPACITY_DEFECT
+def test_fedg_last_exit_bound():
+    net, result = fedg()
+    # After the first exit the stair link passes the other 89 at most at
+    # its capacity 1.012 x 0.9 = 0.911/s.
+    capacity = stair_fs(STAIR_K) * (1.2 - 0.3)
+    bound = np.min(result.exit_times) + 89 / capacity
+    assert bound <= result.evacuation_time <= bound + 4 * DT
     assert_invariants(result, net, 90)
 
 
@@ -298,9 +319,7 @@ def test_uniform_distribution_range():
     assert values.min() >= 10 and values.max() <= 100
 
 
-# §3.2, p. 25: clearance of the IMO 4 room with pre-movement delays. The
-# triangular series and the dispersed start without delay are held until
-# the link capacity decision is made.
+# §3.2, p. 25: clearance of the IMO 4 room with pre-movement delays.
 
 
 def room_clearance(pre_movement, start, seed):
@@ -329,10 +348,53 @@ def test_room_clearance_without_delay():
 def test_room_clearance_fixed_delay_shifts(delay):
     # Fixed draws no random numbers, so each seed gives the same starts.
     for seed in range(20):
-        _, base = room_clearance(Fixed(0.0), Uniform(0, 8.0), seed)
+        net, base = room_clearance(Fixed(0.0), Uniform(0, 8.0), seed)
         _, late = room_clearance(Fixed(delay), Uniform(0, 8.0), seed)
+        assert_invariants(base, net, 100)
+        assert_invariants(late, net, 100)
         shift = late.evacuation_time - base.evacuation_time
         assert shift == pytest.approx(delay, abs=1e-9)
+
+
+@CAPACITY_DEFECT
+def test_room_clearance_dispersed_without_delay():
+    hand = 99 / (FS * 0.7)
+    for seed in range(20):
+        net, result = room_clearance(Fixed(0.0), Uniform(0, 8.0), seed)
+        assert hand < result.evacuation_time <= hand + 2 * DT
+        assert_invariants(result, net, 100)
+
+
+@pytest.mark.parametrize(
+    "mode, upper",
+    [(15, 30), pytest.param(30, 60, marks=CAPACITY_DEFECT), (60, 120)],
+)
+def test_room_clearance_triangular_bound(mode, upper):
+    # Start at the door. The agent with the i-th smallest delay cannot
+    # leave before the N-1-i agents after it have passed at C. With seed 0
+    # only the (0, 30, 60) series breaks the bound.
+    net, result = room_clearance(Triangular(0, mode, upper), 0.0, seed=0)
+    tau = np.sort(result.pre_movement_times)
+    bound = max(tau[i] + (99 - i) / (FS * 0.7) for i in range(100))
+    assert bound <= result.evacuation_time <= bound + 2 * DT
+    assert_invariants(result, net, 100)
+
+
+@CAPACITY_DEFECT
+def test_one_arrival_per_step_respects_capacity():
+    # 40 agents released one per step through a 0.931/s door: the last
+    # cannot leave before 39/C after the first.
+    net = Network()
+    net.add_room("room", area=40.0)
+    net.add_safe("exit")
+    net.connect("room", "exit", width=1.0, specific_flow=FS)
+    pops = [
+        Population("room", 1, speed=1.0, pre_movement=Fixed(0.5 * i))
+        for i in range(40)
+    ]
+    result = NetworkSimulation(net, pops, dt=DT).run(seed=1)
+    assert result.evacuation_time >= 39 / (FS * 0.7)
+    assert_invariants(result, net, 40)
 
 
 # §5.1, pp. 29-33: exit choice. The report gives no node sizes or widths;
@@ -398,3 +460,4 @@ def test_required_connection_is_not_modelled():
     flow = dict(zip(result.link_names, result.link_flow.sum(axis=0)))
     assert flow["Room_3->Exit"] == 10
     assert flow["Room_1->Exit"] == 0
+    assert_invariants(result, net, 10)
