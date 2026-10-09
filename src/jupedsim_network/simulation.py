@@ -1,0 +1,448 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+"""Time-stepped agent network model for estimating evacuation times.
+
+Each time step of length ``dt`` is processed synchronously:
+
+1. Node densities are computed from the agents in each node at the start of
+   the step, weighted by each agent's area factor.
+2. Agents whose pre-movement time has elapsed start walking.
+3. Walking agents cover ``min(v_max, k (1 - 0.266 D)) * dt`` towards the
+   constriction of their next link; on arrival they join its queue.
+4. Each link passes up to ``capacity * dt`` agents from the front of its
+   queue, keeping the fractional remainder for the next step; an idle link
+   lets the first arriving agent through at once. Above the peak-flow
+   density the summed inflow a node accepts is reduced linearly to zero at
+   ``max_density``, which the node never exceeds. When several links compete
+   for what a node accepts, it is shared in proportion to their merge
+   weights.
+5. All transfers are applied at once, so the result does not depend on the
+   order in which agents are stored.
+
+Space freed by agents leaving a node becomes available in the next step.
+"""
+
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from jupedsim_network import hydraulic
+from jupedsim_network.network import SAFE, Network
+from jupedsim_network.sampling import Distribution, as_distribution
+
+_WAITING = 0
+_WALKING = 1
+_QUEUED = 2
+_SAFE = 3
+
+
+@dataclass(frozen=True)
+class Population:
+    """A group of agents placed in one node.
+
+    Plain numbers are accepted wherever a distribution is expected.
+
+    Attributes:
+        node: name of the start node
+        count: number of agents, rounded to an integer when sampled
+        speed: maximum (free-walking) speed in m/s
+        pre_movement: time in s before the agent starts moving
+        start_distance: extra distance in m walked in the start node
+        area_factor: space taken relative to an average adult; counts
+            towards node density and capacity
+        target: name of a safe node to head for; ``None`` for the nearest
+    """
+
+    node: str
+    count: Distribution | float
+    speed: Distribution | float = 1.2
+    pre_movement: Distribution | float = 0.0
+    start_distance: Distribution | float = 0.0
+    area_factor: float = 1.0
+    target: str | None = None
+
+
+@dataclass(frozen=True)
+class SimulationResult:
+    """Outcome of one realisation.
+
+    ``evacuation_time`` is ``nan`` if not all agents reached safety before
+    ``t_max``. ``exit_times`` is ``nan`` for agents that did not.
+    ``node_occupancy[i, n]`` counts agents in node ``n`` at ``times[i]``;
+    ``link_flow[i, l]`` counts agents that passed link ``l`` during the step
+    ending at ``times[i]``.
+    """
+
+    evacuation_time: float
+    exit_times: np.ndarray
+    pre_movement_times: np.ndarray
+    times: np.ndarray
+    node_occupancy: np.ndarray
+    link_flow: np.ndarray
+    node_names: tuple[str, ...]
+    link_names: tuple[str, ...]
+
+    @property
+    def evacuated(self) -> int:
+        return int(np.isfinite(self.exit_times).sum())
+
+
+@dataclass(frozen=True)
+class MonteCarloResult:
+    """Evacuation times of repeated realisations (``nan`` = incomplete)."""
+
+    evacuation_times: np.ndarray
+    agent_counts: np.ndarray
+
+    @property
+    def complete(self) -> np.ndarray:
+        return self.evacuation_times[np.isfinite(self.evacuation_times)]
+
+    def quantile(self, q):
+        """Quantile of completed runs; incomplete runs are excluded."""
+        return np.quantile(self.complete, q)
+
+
+class NetworkSimulation:
+    """Runs the network model for one scenario.
+
+    Arguments:
+        network: the node-link graph
+        populations: agent groups
+        dt: time step in s
+        t_max: time in s after which a run stops
+        max_density: hard limit of agents per m² in a node
+        supply_reduction: reduce link capacity when the target node is
+            above the peak-flow density
+    """
+
+    def __init__(
+        self,
+        network: Network,
+        populations: list[Population],
+        *,
+        dt: float = 0.5,
+        t_max: float = 3600.0,
+        max_density: float = 2.75,
+        supply_reduction: bool = True,
+    ) -> None:
+        if dt <= 0 or t_max <= 0:
+            raise ValueError("dt and t_max must be positive.")
+        if not 0 < max_density < hydraulic.JAM_DENSITY:
+            raise ValueError(
+                f"max_density must be in (0, {hydraulic.JAM_DENSITY:.2f})."
+            )
+        if not populations:
+            raise ValueError("At least one population is required.")
+        self.network = network
+        self.populations = list(populations)
+        self.dt = dt
+        self.t_max = t_max
+        self.max_density = max_density
+        self.supply_reduction = supply_reduction
+        self._routes = _route_tables(network, self.populations)
+
+    def run(self, seed=None, *, record: bool = True) -> SimulationResult:
+        """Run one realisation.
+
+        Arguments:
+            seed: seed or ``numpy.random.Generator``
+            record: keep node occupancy and link flow time series
+        """
+        rng = np.random.default_rng(seed)
+        return _Run(self, rng, record).execute()
+
+    def run_many(self, runs: int, seed=None) -> MonteCarloResult:
+        """Run independent realisations with seeds derived from ``seed``."""
+        if runs < 1:
+            raise ValueError("runs must be at least 1.")
+        seeds = np.random.SeedSequence(seed).spawn(runs)
+        results = [self.run(s, record=False) for s in seeds]
+        return MonteCarloResult(
+            evacuation_times=np.array([r.evacuation_time for r in results]),
+            agent_counts=np.array([len(r.exit_times) for r in results]),
+        )
+
+
+def _route_tables(network, populations) -> dict:
+    tables = {}
+    for pop in populations:
+        if pop.target in tables:
+            continue
+        tables[pop.target] = network.route_table(pop.target)
+        node = network.node(pop.node)
+        if node.kind == SAFE:
+            raise ValueError(f"Population starts in safe node '{pop.node}'.")
+        if tables[pop.target][node.index] is None:
+            raise ValueError(f"No route from '{pop.node}' to safety.")
+    return tables
+
+
+@dataclass
+class _Agents:
+    node: np.ndarray
+    link: np.ndarray
+    state: np.ndarray
+    distance: np.ndarray
+    speed: np.ndarray
+    pre_movement: np.ndarray
+    area: np.ndarray
+    route: np.ndarray
+    arrival: np.ndarray
+    exit_time: np.ndarray = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.exit_time = np.full(len(self.node), np.nan)
+
+
+class _Run:
+    def __init__(self, sim: NetworkSimulation, rng, record: bool) -> None:
+        net = sim.network
+        self.sim = sim
+        self.rng = rng
+        self.record = record
+        self.area = np.array([n.area for n in net.nodes])
+        self.safe = np.array([n.kind == SAFE for n in net.nodes])
+        self.k = np.array([n.speed_constant for n in net.nodes])
+        self.link_source = np.array([lk.source for lk in net.links], dtype=int)
+        self.link_target = np.array([lk.target for lk in net.links], dtype=int)
+        self.link_length = np.array([lk.length for lk in net.links])
+        self.link_rate = np.array([lk.capacity for lk in net.links]) * sim.dt
+        self.link_weight = np.array([lk.merge_weight for lk in net.links])
+        self.inflow_rate = np.bincount(
+            self.link_target, weights=self.link_rate, minlength=len(self.area)
+        )
+        # An idle link lets the first agent through without waiting.
+        self.carry = np.ones(len(net.links))
+        self.node_carry = np.zeros(len(self.area))
+        # Served agents per merge weight; keeps merge shares across steps.
+        self.virtual_time = np.zeros(len(net.links))
+        self.targets = list(sim._routes)
+        self.route_matrix = np.array(
+            [_as_index_array(sim._routes[t]) for t in self.targets]
+        )
+        self.agents = self._spawn()
+        self.occupancy_series: list[np.ndarray] = []
+        self.flow_series: list[np.ndarray] = []
+        self.times: list[float] = []
+
+    def execute(self) -> SimulationResult:
+        t = 0.0
+        self._record(t, np.zeros(len(self.link_rate), dtype=int))
+        while t < self.sim.t_max and (self.agents.state != _SAFE).any():
+            flow = self._step(t)
+            t = round(t + self.sim.dt, 9)
+            self._record(t, flow)
+        return self._result()
+
+    def _spawn(self) -> _Agents:
+        parts = [self._spawn_population(p) for p in self.sim.populations]
+        agents = _Agents(
+            *(np.concatenate([p[i] for p in parts]) for i in range(9))
+        )
+        self._check_capacity(agents)
+        return agents
+
+    def _spawn_population(self, pop: Population) -> list[np.ndarray]:
+        node = self.sim.network.node(pop.node).index
+        count = int(round(as_distribution(pop.count).sample(self.rng, 1)[0]))
+        route = self.targets.index(pop.target)
+        link = self.route_matrix[route, node]
+        start = as_distribution(pop.start_distance).sample(self.rng, count)
+        speed = as_distribution(pop.speed).sample(self.rng, count)
+        if (speed <= 0).any():
+            raise ValueError("Agent speeds must be positive.")
+        return [
+            np.full(count, node, dtype=int),
+            np.full(count, link, dtype=int),
+            np.full(count, _WAITING, dtype=int),
+            start + self.link_length[link],
+            speed,
+            as_distribution(pop.pre_movement).sample(self.rng, count),
+            np.full(count, pop.area_factor, dtype=float),
+            np.full(count, route, dtype=int),
+            np.zeros(count),
+        ]
+
+    def _check_capacity(self, agents: _Agents) -> None:
+        load = self._load(agents.node, agents.area)
+        over = np.flatnonzero(load > self.sim.max_density * self.area + 1e-9)
+        if over.size == 0:
+            return
+        names = [self.sim.network.nodes[i].name for i in over]
+        raise ValueError(f"Initial population exceeds max_density in {names}.")
+
+    def _load(self, nodes, weights) -> np.ndarray:
+        return np.bincount(nodes, weights=weights, minlength=len(self.area))
+
+    def _step(self, t: float) -> np.ndarray:
+        a = self.agents
+        inside = a.state != _SAFE
+        load = self._load(a.node[inside], a.area[inside])
+        density = np.where(self.safe, 0.0, load / self.area)
+        start = (a.state == _WAITING) & (a.pre_movement <= t)
+        a.state[start] = _WALKING
+        self._walk(density, t)
+        return self._transfer(load, density, t)
+
+    def _walk(self, density: np.ndarray, t: float) -> None:
+        a = self.agents
+        walking = np.flatnonzero(a.state == _WALKING)
+        congested = hydraulic.speed(
+            density[a.node[walking]], self.k[a.node[walking]]
+        )
+        step = np.minimum(a.speed[walking], congested) * self.sim.dt
+        a.distance[walking] -= step
+        reached = a.distance[walking] <= 0
+        arrived = walking[reached]
+        a.state[arrived] = _QUEUED
+        # Fraction of the step at which the constriction was reached.
+        fraction = 1.0 + a.distance[arrived] / np.maximum(step[reached], 1e-12)
+        a.arrival[arrived] = t + np.clip(fraction, 0.0, 1.0) * self.sim.dt
+
+    def _transfer(self, load, density, t) -> np.ndarray:
+        a = self.agents
+        queued = np.flatnonzero(a.state == _QUEUED)
+        queued = queued[np.lexsort((queued, a.arrival[queued], a.link[queued]))]
+        budget = self.carry + self.link_rate
+        wanted = self._wanted(queued, budget)
+        allowance = self._allowance(density)
+        free = self.sim.max_density * self.area - load
+        passed = self._admit(wanted, np.minimum(free, allowance))
+        flow = np.bincount(a.link[passed], minlength=len(budget))
+        self._update_carry(budget, flow, queued)
+        self._update_node_carry(allowance, passed, wanted)
+        self._update_virtual_time(flow, queued)
+        self._move(passed, t)
+        return flow
+
+    def _allowance(self, density: np.ndarray) -> np.ndarray:
+        """Agent area a node accepts this step beyond the space limit.
+
+        Above the peak-flow density the summed inflow capacity of a node is
+        reduced linearly to zero at ``max_density``.
+        """
+        allowance = np.full(len(self.area), np.inf)
+        peak, limit = hydraulic.PEAK_FLOW_DENSITY, self.sim.max_density
+        if not self.sim.supply_reduction or limit <= peak:
+            return allowance
+        factor = np.clip((limit - density) / (limit - peak), 0.0, 1.0)
+        reduced = (factor < 1.0) & ~self.safe
+        allowance[reduced] = (
+            self.node_carry[reduced]
+            + factor[reduced] * self.inflow_rate[reduced]
+        )
+        return allowance
+
+    def _update_node_carry(self, allowance, passed, wanted) -> None:
+        a = self.agents
+        candidates = np.concatenate(wanted) if wanted else passed
+        demand = self._load(
+            self.link_target[a.link[candidates]], a.area[candidates]
+        )
+        admitted = self._load(self.link_target[a.link[passed]], a.area[passed])
+        blocked = np.isfinite(allowance) & (demand > admitted)
+        cap = np.maximum(self.inflow_rate, 1.0)
+        rest = np.clip(allowance - admitted, 0.0, cap)
+        self.node_carry = np.where(blocked, rest, 0.0)
+
+    def _wanted(
+        self, queued: np.ndarray, budget: np.ndarray
+    ) -> list[np.ndarray]:
+        links = self.agents.link[queued]
+        wanted = []
+        for link in np.unique(links):
+            members = queued[links == link]
+            wanted.append(members[: int(budget[link] + 1e-9)])
+        return wanted
+
+    def _admit(self, wanted: list[np.ndarray], free: np.ndarray) -> np.ndarray:
+        if not wanted:
+            return np.empty(0, dtype=int)
+        candidates = np.concatenate(wanted)
+        if candidates.size == 0:
+            return candidates
+        a = self.agents
+        target = self.link_target[a.link[candidates]]
+        rank = np.concatenate([np.arange(len(w)) for w in wanted])
+        # Interleave queues in proportion to merge weight; random tie-break.
+        links = a.link[candidates]
+        key = self.virtual_time[links] + (rank + 1.0) / self.link_weight[links]
+        order = np.lexsort((self.rng.random(candidates.size), key, target))
+        candidates, target = candidates[order], target[order]
+        return candidates[self._fits(candidates, target, free)]
+
+    def _fits(self, candidates, target, free) -> np.ndarray:
+        weights = self.agents.area[candidates]
+        fits = np.ones(candidates.size, dtype=bool)
+        for node in np.unique(target):
+            if self.safe[node]:
+                continue
+            mask = target == node
+            used = np.cumsum(weights[mask])
+            fits[mask] = used <= free[node] + 1e-9
+        return fits
+
+    def _update_carry(self, budget, flow, queued) -> None:
+        waiting = (
+            np.bincount(self.agents.link[queued], minlength=len(budget)) > flow
+        )
+        rest = np.minimum(budget - flow, np.maximum(self.link_rate, 1.0))
+        self.carry = np.where(waiting, np.maximum(rest, 0.0), 1.0)
+
+    def _update_virtual_time(self, flow, queued) -> None:
+        """Advance served links; idle links catch up to avoid banking."""
+        self.virtual_time += flow / self.link_weight
+        active = np.bincount(self.agents.link[queued], minlength=len(flow)) > 0
+        floor = np.full(len(self.area), np.inf)
+        np.minimum.at(
+            floor, self.link_target[active], self.virtual_time[active]
+        )
+        catch_up = ~active & np.isfinite(floor[self.link_target])
+        self.virtual_time[catch_up] = np.maximum(
+            self.virtual_time[catch_up], floor[self.link_target[catch_up]]
+        )
+
+    def _move(self, passed: np.ndarray, t: float) -> None:
+        a = self.agents
+        target = self.link_target[a.link[passed]]
+        a.node[passed] = target
+        done = passed[self.safe[target]]
+        a.state[done] = _SAFE
+        a.exit_time[done] = t + self.sim.dt
+        onward = passed[~self.safe[target]]
+        next_link = self.route_matrix[a.route[onward], a.node[onward]]
+        a.link[onward] = next_link
+        a.distance[onward] = self.link_length[next_link]
+        a.state[onward] = _WALKING
+
+    def _record(self, t: float, flow: np.ndarray) -> None:
+        if not self.record:
+            return
+        a = self.agents
+        inside = a.state != _SAFE
+        self.times.append(t)
+        self.occupancy_series.append(
+            np.bincount(a.node[inside], minlength=len(self.area))
+        )
+        self.flow_series.append(flow)
+
+    def _result(self) -> SimulationResult:
+        a = self.agents
+        complete = np.isfinite(a.exit_time).all()
+        net = self.sim.network
+        return SimulationResult(
+            evacuation_time=float(np.max(a.exit_time, initial=0.0))
+            if complete
+            else float("nan"),
+            exit_times=a.exit_time,
+            pre_movement_times=a.pre_movement,
+            times=np.array(self.times),
+            node_occupancy=np.array(self.occupancy_series, dtype=int),
+            link_flow=np.array(self.flow_series, dtype=int),
+            node_names=tuple(n.name for n in net.nodes),
+            link_names=tuple(lk.name for lk in net.links),
+        )
+
+
+def _as_index_array(table: list[int | None]) -> np.ndarray:
+    return np.array([-1 if i is None else i for i in table], dtype=int)
