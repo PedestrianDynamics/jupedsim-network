@@ -35,8 +35,14 @@ with a `kind="stair"` link. SFPE applies stair speed to landings as well
 
 The stair speed grows with $\sqrt{T/R}$ (tread over riser). SFPE
 supports this only for risers of 165–191 mm and treads of 254–330 mm
-{{< cite 1 "p. 2175" >}}. The code accepts any positive values and does
-not warn, so other step sizes are an extrapolation.
+{{< cite 1 "Table 67.2, p. 2174; p. 2175" >}}. Other step sizes are an
+extrapolation. `add_stair` accepts any positive riser and tread, computes
+the speed as usual, and issues a `UserWarning` when either lies outside
+this range. For a riser of 0.20 m:
+
+```
+UserWarning: Stair 'flight': riser 200.0 mm and tread 280.0 mm lie outside the SFPE range (risers 165-191 mm, treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant k = 51.8 sqrt(T/R) m/min is extrapolated.
+```
 
 ## Links
 

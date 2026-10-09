@@ -6,7 +6,7 @@ weight: 5
 
 A ten-storey building with two stairs, sampled 300 times. The building
 is invented to show the workflow; the result is not a design value for
-any real building. All numbers come from version 0.1.0 and the scripts
+any real building. All numbers come from the current version and the scripts
 in `scripts/figures/`.
 
 ## The building
@@ -34,7 +34,7 @@ takes about 0.1 s on a laptop (Apple M3 Pro).
 Pre-movement times are log-normal with mean 120 s and standard deviation
 60 s, truncated at 600 s, and are sampled anew in each of the 300 runs
 (seed 11). The median evacuation time is 529 s and the 95th percentile
-647 s. All 300 runs finished; the fastest took 418.5 s and the slowest
+647 s. All 300 runs finished; the fastest took 419.5 s and the slowest
 717.0 s. The 300 runs take about 30 s on the same laptop.
 
 ## One run
