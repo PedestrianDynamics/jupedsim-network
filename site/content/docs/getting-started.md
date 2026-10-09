@@ -145,7 +145,7 @@ speed and leaves through the stair link. The
 |--------------------|-------|-----|
 | `ValueError: Initial population exceeds max_density in [...]`, raised by `run()` | More agents (weighted by area factor) than `max_density` × area in a start node | Enlarge the node, split the population, or check `count` |
 | `ValueError: No route from '...' to safety.`, raised by `NetworkSimulation(...)` | No chain of links from the start node to a safe node, or to the `target` | Add the missing `connect` call; check the link direction |
-| `ValueError: Agent speeds must be positive.` | A speed distribution produced 0 | Set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
+| `ValueError: Agent speeds must be positive.` | A speed distribution produced 0, or a negative value with `lower=None` | Set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
 | `evacuation_time` is `nan` | Some agents were still inside at `t_max` | Raise `t_max`, or look for a node that cannot empty |
 
 ## Next steps

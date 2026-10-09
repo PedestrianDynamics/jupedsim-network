@@ -69,7 +69,7 @@ validation {{< cite 1 "p. 2171" >}}.
   used both ways passes twice its capacity. In trials, the flow per
   direction under counterflow was about 13–20 % above half the
   one-way flow {{< cite 6 "pp. 6, 10–11" >}}, so the model overpredicts
-  it by about 1.7 times.
+  it by about 1.7 times (our estimate from these trials).
 - **Doors are open and the data are old.** $F_s = 1.3$ persons/s/m
   assumes doors held open; for doors that are not, SFPE suggests
   50 persons/min per door leaf. SFPE also notes that the door data are

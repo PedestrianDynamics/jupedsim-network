@@ -27,5 +27,5 @@ layout: hextra-home
 </div>
 
 <div class="content hx-mb-6">
-A companion to <a href="https://www.jupedsim.org">JuPedSim</a>. Research software, verified against hand calculations but not validated against experiments. Not intended for regulatory or design use.
+A companion to <a href="https://www.jupedsim.org">JuPedSim</a>. The evacuation time covers pre-movement and movement; detection and alarm count only if added to the pre-movement time. Research software, verified against hand calculations but not validated against experiments. Not intended for regulatory or design use.
 </div>

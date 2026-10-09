@@ -17,11 +17,8 @@ repository:
 uv run pytest -q
 ```
 
-Output (last line):
-
-```
-25 passed in 0.45s
-```
+The last line of the output reads `25 passed`, followed by the run
+time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
 is the evacuation time the current code gives in the test.
@@ -58,7 +55,8 @@ The IMO test cases are in MSC.1/Circ.1533, Appendix 2, paragraphs 3–6
   EvacuatioNZ uses for its stair verification {{< cite 2 "§2.1.3" >}}.
 - **Test 4** asks for 100 persons in an 8 m × 5 m room with a 1 m exit,
   and that the flow over the whole period does not exceed 1.33 persons/s
-  {{< cite 4 "" >}}. The model's 0.931 persons/s meets this criterion.
+  {{< cite 4 "" >}}. The link capacity of 0.931 persons/s and the mean flow of
+  100/106.5 s = 0.94 persons/s both meet this criterion.
   Specific flow, boundary layers and a target time are not part of the
   test; the construction $1.33 \times 0.7$ m is EvacuatioNZ's
   {{< cite 2 "§2.2" >}}.

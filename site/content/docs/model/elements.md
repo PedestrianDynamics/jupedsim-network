@@ -28,7 +28,7 @@ A node $n$ has an area $A_n$ and a speed constant $k_n$.
   the closed form used by EvacuatioNZ {{< cite 2 "§2.1.3, Eq. 2.1" 3 "p. 17" >}},
   which takes it from the New Zealand Fire Engineering Design Guide. It
   reproduces the SFPE stair constants of Table 67.2
-  {{< cite 1 "p. 2174" >}} to within about 1 %. SFPE supports the
+  {{< cite 1 "p. 2174" >}} to within about 1 % (our comparison). SFPE supports the
   $\sqrt{T/R}$ dependence only for risers of 165–191 mm and treads of
   254–330 mm {{< cite 1 "p. 2175" >}}. For 18/28 cm steps,
   $k_\text{stair} = 1.077$ m/s.
