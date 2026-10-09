@@ -113,53 +113,53 @@ def arrow(ax, a, b, text=None, offset=(0, 0.12)):
 
 def schematic(out):
     fig, ax = plt.subplots(figsize=(10, 3.6))
-    box(ax, (0.0, 1.6), 2.2, 1.1, "", "#e8f1f2")
+    box(ax, (0.0, 1.4), 2.6, 1.8, "", "#e8f1f2")
     ax.text(
-        1.1,
-        2.48,
+        1.3,
+        2.95,
         "room a, area $A_a$",
         ha="center",
+        va="center",
         fontsize=9,
         color="#1f253f",
     )
-    box(ax, (0.0, 0.0), 2.2, 1.1, "room b\narea $A_b$", "#e8f1f2")
-    box(ax, (3.6, 0.8), 1.8, 1.1, "corridor\narea $A_c$", "#e8f1f2")
-    box(ax, (6.8, 0.8), 1.8, 1.1, "stair flight\n$k(R,T)$, area", "#d5e5ea")
-    box(ax, (9.8, 0.8), 1.4, 1.1, "safe", "#e9f4e4")
-    arrow(ax, (2.2, 2.15), (3.6, 1.55), "door, $w_a$")
-    arrow(ax, (2.2, 0.55), (3.6, 1.15), "door, $w_b$", offset=(0, -0.35))
-    arrow(ax, (5.4, 1.35), (6.8, 1.35), "stair entry")
-    arrow(ax, (8.6, 1.35), (9.8, 1.35), "door")
+    box(ax, (0.0, 0.0), 2.6, 1.0, "room b\narea $A_b$", "#e8f1f2")
+    box(ax, (4.0, 0.7), 1.8, 1.1, "corridor\narea $A_c$", "#e8f1f2")
+    box(ax, (7.2, 0.7), 1.8, 1.1, "stair flight\n$k(R,T)$, area", "#d5e5ea")
+    box(ax, (10.2, 0.7), 1.4, 1.1, "safe", "#e9f4e4")
+    arrow(ax, (2.6, 2.45), (4.0, 1.5), "door, $w_a$", offset=(0.3, 0.12))
+    arrow(ax, (2.6, 0.5), (4.0, 1.0), "door, $w_b$", offset=(0.25, -0.42))
+    arrow(ax, (5.8, 1.25), (7.2, 1.25), "stair entry")
+    arrow(ax, (9.0, 1.25), (10.2, 1.25), "door")
     for x in range(5):
-        ax.add_patch(Circle((1.75 - 0.18 * x, 2.15), 0.06, color=RED))
+        ax.add_patch(Circle((2.38 - 0.18 * x, 2.45), 0.06, color=RED))
+    ax.text(1.5, 2.45, "queue", fontsize=8, color=RED, ha="right", va="center")
     ax.annotate(
         "",
-        xy=(0.15, 1.92),
-        xytext=(2.05, 1.92),
+        xy=(0.15, 2.08),
+        xytext=(2.45, 2.08),
         arrowprops=dict(arrowstyle="<->", color=GREY, lw=0.8),
     )
     ax.text(
-        1.1,
-        1.7,
-        "link length $L$ (walked in source)",
+        1.3,
+        1.68,
+        "link length $L$\nwalked in the source",
         ha="center",
-        fontsize=7.5,
+        va="center",
+        fontsize=8,
         color=GREY,
     )
     ax.text(
-        1.0, 2.15, "queue →", fontsize=7.5, color=RED, ha="right", va="center"
-    )
-    ax.text(
-        5.6,
-        -0.25,
+        5.8,
+        -0.35,
         r"link capacity $C = F_s\,(w - 2b)$   ·   node density "
         r"$D = \sum_i a_i / A$",
         ha="center",
         fontsize=9,
         color=GREY,
     )
-    ax.set_xlim(-0.2, 11.4)
-    ax.set_ylim(-0.5, 2.9)
+    ax.set_xlim(-0.2, 11.8)
+    ax.set_ylim(-0.65, 3.4)
     ax.set_aspect("equal")
     ax.axis("off")
     fig.savefig(out / "schematic.png")

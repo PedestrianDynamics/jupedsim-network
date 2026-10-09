@@ -126,14 +126,14 @@ Output:
 ```
 291.9
 0.9 184.0
-1.2 139.0
+1.2 162.5
 ```
 
 In the first run the last agent starts at 291.9 s and leaves at 323.0 s.
 The pre-movement times set the evacuation time, and a wider door changes
 nothing. When everyone starts at once, the door decides: the 0.9 m door
 passes 0.78 persons/s, and widening it to 1.2 m cuts the time from
-184.0 s to 139.0 s. The stair link, at 0.91 persons/s, is then the
+184.0 s to 162.5 s. The stair link, at 0.91 persons/s, is then the
 narrowest point.
 
 ## What happened

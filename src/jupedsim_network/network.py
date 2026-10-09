@@ -3,6 +3,7 @@
 
 import heapq
 import math
+import warnings
 from dataclasses import dataclass
 
 from jupedsim_network import hydraulic
@@ -37,7 +38,8 @@ class Link:
     """Directed passage from ``source`` to ``target`` node.
 
     ``length`` is walked inside the source node before the constriction is
-    reached. ``capacity`` is the maximum flow in persons/s.
+    reached, along the incline on stair links. ``capacity`` is the maximum
+    flow in persons/s.
     """
 
     name: str
@@ -103,8 +105,15 @@ class Network:
         length: float | None = None,
         width: float | None = None,
     ) -> Node:
-        """Add a stair flight; its area holds the agents on the flight."""
+        """Add a stair flight; its area holds the agents on the flight.
+
+        Stair links from this node take their ``length`` along the incline.
+        A ``UserWarning`` is issued if ``riser`` lies outside 165-191 mm or
+        ``tread`` outside 254-330 mm, the range of SFPE Handbook Table 67.2
+        (6th ed., pp. 2174-2175); the speed constant is then extrapolated.
+        """
         k = hydraulic.stair_speed_constant(riser, tread)
+        _warn_outside_sfpe_range(name, riser, tread)
         return self._add(name, STAIR, _area(area, length, width), k)
 
     def add_safe(self, name: str) -> Node:
@@ -131,10 +140,12 @@ class Network:
             width: clear width in m
             kind: ``"door"``, ``"opening"`` or ``"stair"``
             length: distance in m walked inside the source node to reach
-                the constriction; used in both directions
-            specific_flow: persons/s/m effective width. Defaults to 1.3 for
-                doors and openings, and to the maximum flow of the adjacent
-                stair node for stairs.
+                the constriction; used in both directions. On a ``stair``
+                link, the distance along the incline (line of travel),
+                including landings, not the horizontal run.
+            specific_flow: persons/s/m effective width, must be positive.
+                Defaults to 1.3 for doors and openings, and to the maximum
+                flow of the adjacent stair node for stairs.
             boundary_layer: per side in m. Defaults to 0.15 for doors and
                 stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
@@ -145,7 +156,11 @@ class Network:
         """
         src, dst = self.node(source), self.node(target)
         _validate_connection(src, dst, width, kind, length, merge_weight)
-        fs = specific_flow or _default_specific_flow(kind, src, dst)
+        fs = specific_flow
+        if fs is None:
+            fs = _default_specific_flow(kind, src, dst)
+        if not fs > 0:
+            raise ValueError(f"specific_flow must be positive, got {fs}.")
         layer = (
             _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
         )
@@ -265,3 +280,21 @@ def _default_specific_flow(kind, src, dst) -> float:
     if not stairs:
         raise ValueError("A stair connection needs an adjacent stair node.")
     return hydraulic.max_specific_flow(stairs[0].speed_constant)
+
+
+def _warn_outside_sfpe_range(name, riser, tread) -> None:
+    risers, treads = hydraulic.STAIR_RISER_RANGE, hydraulic.STAIR_TREAD_RANGE
+    if _within(riser, risers) and _within(tread, treads):
+        return
+    warnings.warn(
+        f"Stair '{name}': riser {riser * 1000:.1f} mm and tread "
+        f"{tread * 1000:.1f} mm lie outside the SFPE range (risers 165-191 mm, "
+        "treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant "
+        "k = 51.8 sqrt(T/R) m/min is extrapolated.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _within(value, bounds) -> bool:
+    return bounds[0] - 1e-9 <= value <= bounds[1] + 1e-9

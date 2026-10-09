@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Hydraulic movement relations from the SFPE Handbook.
+"""Hydraulic movement relations adapted from the SFPE Handbook.
+
+The relations follow SFPE Handbook Chap. 67 (6th ed.). The stair speed
+constant ``k = 51.8 sqrt(T/R)`` m/min follows EvacuatioNZ and the Fire
+Engineering Design Guide (EvacuatioNZ Verification v2.11, Sect. 2.1.3,
+Eq. 2.1), not SFPE.
 
 Speeds are in m/s, densities in persons/m², specific flows in persons/s per
 metre of effective width.
@@ -27,9 +32,22 @@ JAM_DENSITY = 1.0 / SPEED_DENSITY_SLOPE
 #: Density at which the specific flow ``S * D`` reaches its maximum.
 PEAK_FLOW_DENSITY = 1.0 / (2.0 * SPEED_DENSITY_SLOPE)
 
+#: Riser range in m of the stairs in SFPE Table 67.2 (6.5-7.5 in).
+STAIR_RISER_RANGE = (6.5 * 0.0254, 7.5 * 0.0254)
+
+#: Tread range in m of the stairs in SFPE Table 67.2 (10-13 in).
+STAIR_TREAD_RANGE = (10.0 * 0.0254, 13.0 * 0.0254)
+
 
 def stair_speed_constant(riser: float, tread: float) -> float:
     """Speed constant k for stairs, ``51.8 * sqrt(tread / riser)`` m/min.
+
+    The closed form is taken from EvacuatioNZ and the Fire Engineering Design
+    Guide (Spearpoint, EvacuatioNZ verification v2.11, Sect. 2.1.3, Eq. 2.1).
+    SFPE tabulates k only (Table 67.2) and states that stair speed varies
+    approximately with ``sqrt(tread / riser)`` for risers of 165-191 mm and
+    treads of 254-330 mm (6th ed., p. 2175). This function does not restrict
+    riser or tread to that range.
 
     Arguments:
         riser: riser height in m

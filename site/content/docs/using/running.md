@@ -164,7 +164,7 @@ percentile needs some of the 59 unfinished runs, so it is `inf`. Raise
 
 Runs close to the default `t_max` are realistic: in the
 [max_density sweep]({{< relref "/docs/verification#sensitivity-to-max_density" >}})
-with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2959 s.
+with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
 
 ## Errors
 
