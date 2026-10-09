@@ -23,7 +23,7 @@ regulatory or design use; see the
 Python 3.10 or later:
 
 ```
-pip install git+https://github.com/PedestrianDynamics/jupedsim-network
+pip install jupedsim-network
 ```
 
 ## Development

@@ -3,8 +3,8 @@ title: jupedsim-network
 layout: hextra-home
 ---
 
-{{< hextra/hero-badge link="https://github.com/PedestrianDynamics/jupedsim-network" >}}
-  <span>Prototype, LGPL-3.0 licence</span>
+{{< hextra/hero-badge link="https://pypi.org/project/jupedsim-network/" >}}
+  <span>Version {{< param "version" >}} · prototype · LGPL-3.0 licence</span>
   {{< icon name="arrow-circle-right" attributes="height=14" >}}
 {{< /hextra/hero-badge >}}
 

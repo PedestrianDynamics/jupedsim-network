@@ -42,6 +42,8 @@ jobs:
         run: |
           uv run --group docs python scripts/figures/make_figures.py
           uv run --group docs python scripts/figures/make_gifs.py
+      - name: Read the package version
+        run: echo "HUGO_PARAMS_VERSION=$(uv version --short)" >> "$GITHUB_ENV"
       - name: Build with Hugo
         env:
           HUGO_ENVIRONMENT: production
