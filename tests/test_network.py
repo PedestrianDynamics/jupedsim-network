@@ -303,6 +303,28 @@ def test_default_specific_flow_is_used_when_none():
     assert net.links[0].capacity == pytest.approx(0.91, abs=1e-12)
 
 
+def two_doors_two_groups(first_area_factor):
+    net = Network()
+    net.add_room("room", area=100.0)
+    net.add_safe("s1")
+    net.add_safe("s2")
+    net.connect("room", "s1", width=1.0)
+    net.connect("room", "s2", width=1.0)
+    factors = [first_area_factor, 3 - first_area_factor]
+    pops = [Population("room", 20, area_factor=f) for f in factors]
+    return NetworkSimulation(net, pops).run(seed=1)
+
+
+@pytest.mark.parametrize("first, last_exit", [(1, 21.0), (2, 43.0)])
+def test_simultaneous_arrivals_are_served_in_population_order(first, last_exit):
+    # Route tie: only one door is used, C dt = 0.455. Agent k passes in the
+    # first step m with 1 + 0.455 m >= k: k = 20 at 21.0 s, k = 40 at 43.0 s.
+    result = two_doors_two_groups(first)
+    group = slice(0, 20) if first == 1 else slice(20, 40)
+    assert result.exit_times[group].max() == last_exit
+    assert result.evacuation_time == 43.0
+
+
 @pytest.mark.parametrize(
     "dist, mean",
     [
