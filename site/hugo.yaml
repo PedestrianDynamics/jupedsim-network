@@ -36,6 +36,10 @@ menu:
         icon: github
 
 params:
+  # Package version shown on the home page; CI sets it from pyproject.toml
+  # through HUGO_PARAMS_VERSION.
+  version: "0.1.0"
+
   navbar:
     displayTitle: true
     displayLogo: false

@@ -10,10 +10,10 @@ output you should see.
 ## Install
 
 You need Python 3.10 or later. The only dependency is NumPy 1.26 or
-later. The package is not on PyPI, so install it from GitHub:
+later. Install it from PyPI:
 
 ```
-pip install git+https://github.com/PedestrianDynamics/jupedsim-network
+pip install jupedsim-network
 ```
 
 **Check:** `python -c "import jupedsim_network"` returns without an
