@@ -34,8 +34,8 @@ validation {{< cite 1 "p. 2171" >}}.
 
   The ten-storey building of the [case study]({{< relref "/docs/ten-storey" >}})
   with pre-movement U(30, 120) s, seed 1. Nearest-exit routing evacuates
-  as slowly as a building with a single stair (702.5 s). Splitting the
-  targets by hand cuts the time by 42 % (405.5 s).
+  as slowly as a building with a single stair (725.5 s). Splitting the
+  targets by hand cuts the time by 44 % (407.5 s).
 
 - **Routes are static and use distance only.** They are computed once
   from link lengths. Agents don't react to queues, blocked exits, signs
@@ -49,8 +49,9 @@ validation {{< cite 1 "p. 2171" >}}.
   ([Populations]({{< relref "/docs/using/populations#speeds-above-12-ms-have-no-effect-on-level-ground" >}})).
 - **Stair speed outside the SFPE range is extrapolated.** The
   $\sqrt{T/R}$ law is supported for risers of 165–191 mm and treads of
-  254–330 mm {{< cite 1 "p. 2175" >}}. The code accepts other values
-  without a warning.
+  254–330 mm {{< cite 1 "p. 2175" >}}. `add_stair` warns for other
+  values but still computes the speed
+  ([Networks]({{< relref "/docs/using/networks#stairs" >}})).
 - **Stair length is taken along the incline.** Stair links take the
   walking distance along the line of travel, as SFPE does in its
   Example 67.1 {{< cite 1 "p. 2178" >}}. Entering the horizontal run
@@ -114,8 +115,8 @@ validation {{< cite 1 "p. 2171" >}}.
   least one step: six zero-length links in a row take 3.0 s at
   $\Delta t = 0.5$ s. Stair speeds need $\Delta t \approx 0.1$ s to
   match a hand calculation within 0.25 s.
-- **Passage time is one headway shorter than SFPE.** An idle link lets
-  the first agent through at once, so $N$ agents need $(N-1)/C$ instead
+- **Passage time is one headway shorter than SFPE.** A link idle for at
+  least $1/C_\ell$ lets the first agent through at once, so $N$ agents need $(N-1)/C$ instead
   of the SFPE $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}
   ([Verification]({{< relref "/docs/verification#passage-time-n1c-and-nc" >}})).
 - **Simultaneous arrivals are served in population order.** Agents that

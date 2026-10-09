@@ -159,8 +159,9 @@ model adapts it as follows:
   {{< cite 1 "p. 2175" >}}. The whole range between the peak-flow
   density and `max_density`, including the supply reduction, is a
   choice of this model.
-- **Passage time.** An idle link lets the first agent through at once,
-  so the last of $N$ agents passes after $(N-1)/C$. SFPE gives
+- **Passage time.** A fresh link, or one idle for at least $1/C$, lets
+  the first agent through at once, so the last of $N$ agents passes
+  after $(N-1)/C$. SFPE gives
   $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}
   ([update scheme]({{< relref "/docs/model/update-scheme#carry-update" >}})).
 {{< /details >}}

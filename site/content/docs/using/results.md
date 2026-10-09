@@ -39,12 +39,12 @@ print(result.times[1] - result.times[0], result.times[-1])
 Output:
 
 ```
-10
+9
 120
 0.5 323.0
 ```
 
-At most 10 agents are on the flight at once, all 120 pass the door,
+At most 9 agents are on the flight at once, all 120 pass the door,
 and the run ends at 323.0 s in steps of 0.5 s.
 
 ## Many runs: MonteCarloResult

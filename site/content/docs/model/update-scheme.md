@@ -128,16 +128,22 @@ This interleaving rule is an implementation choice of this model.
 
 ### Carry update
 
-- If agents are still waiting at a link, the carry becomes
+After $q_\ell$ agents have passed, the link keeps its unused budget, but
+never more than one agent:
 
-  $$
-  c_\ell = \min\bigl(\beta_\ell - q_\ell,\ \max(C_\ell\,\Delta t, 1)\bigr).
-  $$
+$$
+c_\ell = \min\bigl(\beta_\ell - q_\ell,\ 1\bigr).
+$$
 
-- If no one is waiting, it is reset to $c_\ell = 1$.
+The carry starts at $c_\ell = 1$. A fresh link, or one idle for at least
+$1/C_\ell$, therefore lets the first agent through at once. After a
+passage, the next credit builds up at rate $C_\ell$. Unused capacity is
+never kept beyond one agent, whether the link was idle or blocked
+downstream. As a result, no link passes more than $1 + C_\ell\,t$ agents
+in any interval $t$.
 
-An idle door therefore lets the first agent through at once, and the
-last of $N$ agents passes after $(N-1)/C_\ell$. This is the convention
+When $N$ agents queue at a fresh link, the first passes at once and the
+last after $(N-1)/C_\ell$. This is the convention
 of this model. The SFPE hand calculation gives the passage time
 $t_p = N/C_\ell$ {{< cite 1 "Eq. 67.9, p. 2177" >}}, one headway
 $1/C_\ell$ longer. For 100 agents through a 1 m door at

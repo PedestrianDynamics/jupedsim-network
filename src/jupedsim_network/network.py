@@ -3,6 +3,7 @@
 
 import heapq
 import math
+import warnings
 from dataclasses import dataclass
 
 from jupedsim_network import hydraulic
@@ -107,8 +108,12 @@ class Network:
         """Add a stair flight; its area holds the agents on the flight.
 
         Stair links from this node take their ``length`` along the incline.
+        A ``UserWarning`` is issued if ``riser`` lies outside 165-191 mm or
+        ``tread`` outside 254-330 mm, the range of SFPE Handbook Table 67.2
+        (6th ed., pp. 2174-2175); the speed constant is then extrapolated.
         """
         k = hydraulic.stair_speed_constant(riser, tread)
+        _warn_outside_sfpe_range(name, riser, tread)
         return self._add(name, STAIR, _area(area, length, width), k)
 
     def add_safe(self, name: str) -> Node:
@@ -275,3 +280,21 @@ def _default_specific_flow(kind, src, dst) -> float:
     if not stairs:
         raise ValueError("A stair connection needs an adjacent stair node.")
     return hydraulic.max_specific_flow(stairs[0].speed_constant)
+
+
+def _warn_outside_sfpe_range(name, riser, tread) -> None:
+    risers, treads = hydraulic.STAIR_RISER_RANGE, hydraulic.STAIR_TREAD_RANGE
+    if _within(riser, risers) and _within(tread, treads):
+        return
+    warnings.warn(
+        f"Stair '{name}': riser {riser * 1000:.1f} mm and tread "
+        f"{tread * 1000:.1f} mm lie outside the SFPE range (risers 165-191 mm, "
+        "treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant "
+        "k = 51.8 sqrt(T/R) m/min is extrapolated.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _within(value, bounds) -> bool:
+    return bounds[0] - 1e-9 <= value <= bounds[1] + 1e-9
