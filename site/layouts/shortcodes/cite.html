@@ -1,0 +1,20 @@
+{{- /* Numbered citation linking to the references page.
+
+     Arguments come in pairs: reference number, then locator ("" for none).
+     {{< cite 1 "p. 2174" >}}             -> [1, p. 2174]
+     {{< cite 2 "§2.1.3" 3 "p. 17" >}}    -> [2, §2.1.3; 3, p. 17] */ -}}
+{{- $refs := site.GetPage "/docs/references" -}}
+{{- if not $refs -}}{{- errorf "cite: no /docs/references page (%s)" .Position -}}{{- end -}}
+{{- $out := slice -}}
+{{- $params := .Params -}}
+{{- range $i, $num := $params -}}
+  {{- if modBool $i 2 -}}
+    {{- $loc := "" -}}
+    {{- if lt (add $i 1) (len $params) -}}{{- $loc = index $params (add $i 1) -}}{{- end -}}
+    {{- $s := printf `<a href="%s#ref-%v">%v</a>` $refs.RelPermalink $num $num -}}
+    {{- with $loc -}}{{- $s = printf "%s, %s" $s . -}}{{- end -}}
+    {{- $out = $out | append $s -}}
+  {{- end -}}
+{{- end -}}
+[{{ delimit $out "; " | safeHTML }}]
+{{- /* no trailing newline */ -}}

@@ -3,7 +3,7 @@
 A coarse network egress model for fast estimates of the required safe
 egress time (RSET). Rooms, corridors and stair flights are nodes with an
 area; doors and stair entries are links with a flow capacity. Agents move
-through the graph following the SFPE hydraulic relations. A run of a
+through the graph by relations adapted from the SFPE hydraulic model. A run of a
 ten-storey building takes about 0.1 s, so scenarios can be sampled many
 times.
 
@@ -13,10 +13,13 @@ microscopic models of JuPedSim to check geometry details. It depends only
 on NumPy.
 
 The model is a prototype. It is verified against hand calculations but
-not validated against experiments; see the limitations in the
-[documentation](https://pedestriandynamics.org/jupedsim-network/).
+not validated against experiments, and it is not intended for
+regulatory or design use; see the
+[limitations](https://pedestriandynamics.org/jupedsim-network/docs/limitations/).
 
 ## Install
+
+Python 3.10 or later:
 
 ```
 pip install git+https://github.com/PedestrianDynamics/jupedsim-network
