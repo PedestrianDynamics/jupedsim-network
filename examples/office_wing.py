@@ -158,7 +158,7 @@ def report_run(result, net):
     print(f"agents safe: {result.evacuated} of {len(result.exit_times)}")
     print(f"main door: {agents_through(result, 'GW->main')} agents")
     print(f"side door: {agents_through(result, 'GE->side')} agents")
-    for link in ("TR->UE", "GE->side", "GW->main"):
+    for link in ("TR->UE", "UE->stair", "GE->side", "GW->main"):
         first, last = passage_times(result, link)
         print(f"{link}: first agent at {first:.1f} s, last at {last:.1f} s")
     for node in ("UE", "stair", "GE"):

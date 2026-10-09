@@ -11,7 +11,8 @@ read [Getting started]({{< relref "/docs/getting-started" >}}) first.
 
 {{< callout type="info" >}}
 The building and its occupants are invented to show the workflow. Every
-number on this page comes from running the script with version 0.1.0.
+number on this page comes from running the script with the current
+version.
 The result is not a design value
 ([Limits of this example](#limits-of-this-example)).
 {{< /callout >}}
@@ -63,22 +64,33 @@ door.
 
 ### Links
 
-All links are one way, in the walking direction. The length is the
-distance walked inside the source node, measured from the node's centre
-to the door.
+All links are one way, in the walking direction.
 
-| From → to | Kind | Width (m) | Length (m) | Measured as |
-|-----------|------|-----------|------------|-------------|
-| office → corridor | door | 0.9 | 3.5 | half the room depth |
-| TR → UE | door | 0.9 | 3.5 | half the room depth |
-| GW → GE, GE → GW, UW → UE | door | 2.0 | 9.0 | corridor width; centre to the split |
-| GW → main | door | 1.8 | 9.0 | centre to the west end |
-| GE → side | door | 0.9 | 9.0 | centre to the east end |
-| UE → stair | door | 0.9 | 7.0 | centre to the stair door |
-| stair → GE | stair | 1.2 | 8.3 | flight width; along the incline (below) |
+| From → to | Kind | Width (m) | Length (m) |
+|-----------|------|-----------|------------|
+| office → corridor | door | 0.9 | 3.5 |
+| TR → UE | door | 0.9 | 3.5 |
+| GW → GE, GE → GW | door | 2.0 | 9.0 |
+| UW → UE | door | 2.0 | 9.0 |
+| GW → main | door | 1.8 | 9.0 |
+| GE → side | door | 0.9 | 9.0 |
+| UE → stair | door | 0.9 | 7.0 |
+| stair → GE | stair | 1.2 | 8.3 |
+
+- **Width.** The clear width of the door, the corridor width at the
+  split between two corridor halves, and the flight width for the stair.
+- **Length.** The distance walked inside the source node, from its
+  centre to the door: half the room depth from an office or TR, half the
+  length of a corridor half to the split or to the corridor end, and
+  from the centre of UE to the stair door. The stair link takes the length along
+  the incline (below).
 
 GW → GE and GE → GW together are the ground-floor corridor, which agents
-could walk in either direction.
+could walk in either direction. The corridor split has no door. It is
+entered as a door so that the 0.15 m boundary layer along each corridor
+wall applies; `kind="opening"` has none. No agent crosses the split in
+this example ([One run](#one-run)), so the choice does not change the
+results.
 
 **Stair length.** This model applies the SFPE stair speed along the line
 of travel, so the stair link takes the walking distance along the
@@ -235,21 +247,26 @@ def simulation(side_door=0.9, dt=0.1):
 - **`t_max=900.0`.** Far above the expected evacuation time of a few
   minutes. The output counts the runs that did not finish, so a too
   small `t_max` would show.
-- **`max_density=2.75`.** The default. In this building no node gets
-  near it (see [One run](#one-run)).
+- **`max_density=2.75`.** The default. In the run with seed 1 no node
+  gets near it (see [One run](#one-run)).
 
 ## Run it
 
-Clone the repository, install the package and run the script from the
-repository root. It takes up to a minute on a laptop, most of it for the
-400 Monte Carlo runs.
+Clone the repository, install the package from the clone and run the
+script from the repository root. It takes up to a minute on a laptop,
+most of it for the 400 Monte Carlo runs.
 
 ```
 git clone https://github.com/PedestrianDynamics/jupedsim-network.git
 cd jupedsim-network
-pip install jupedsim-network
+pip install .
 python examples/office_wing.py
 ```
+
+`pip install .` installs the model from the same checkout as the script.
+Release 0.1.0 on PyPI predates the link capacity fix
+([issue #18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18))
+and prints other numbers.
 
 The script runs these steps:
 
@@ -324,7 +341,7 @@ def report_run(result, net):
     print(f"agents safe: {result.evacuated} of {len(result.exit_times)}")
     print(f"main door: {agents_through(result, 'GW->main')} agents")
     print(f"side door: {agents_through(result, 'GE->side')} agents")
-    for link in ("TR->UE", "GE->side", "GW->main"):
+    for link in ("TR->UE", "UE->stair", "GE->side", "GW->main"):
         first, last = passage_times(result, link)
         print(f"{link}: first agent at {first:.1f} s, last at {last:.1f} s")
     for node in ("UE", "stair", "GE"):
@@ -411,18 +428,19 @@ the side door.
 ## One run
 
 ```text
-evacuation time: 155.1 s
+evacuation time: 156.5 s
 agents safe: 96 of 96
 main door: 12 agents
 side door: 84 agents
-TR->UE: first agent at 24.0 s, last at 94.1 s
-GE->side: first agent at 48.6 s, last at 155.1 s
+TR->UE: first agent at 24.0 s, last at 99.6 s
+UE->stair: first agent at 31.2 s, last at 123.3 s
+GE->side: first agent at 48.6 s, last at 156.5 s
 GW->main: first agent at 42.4 s, last at 102.0 s
-peak in UE: 10 agents, 0.28 per m²
-peak in stair: 13 agents, 1.46 per m²
-peak in GE: 29 agents, 0.81 per m²
+peak in UE: 19 agents, 0.53 per m²
+peak in stair: 9 agents, 1.01 per m²
+peak in GE: 19 agents, 0.53 per m²
 agents between the corridor halves: 0
-last agent from TR out: 153.8 s
+last agent from TR out: 156.5 s
 ```
 
 **Check:** all 96 agents are safe. If fewer were, `evacuation_time`
@@ -430,33 +448,44 @@ would be `nan`; raise `t_max`.
 
 ![Cumulative number of agents safe over time: all agents, through the side door and through the main door for a 0.9 m side door, and all agents for a 1.2 m side door](/images/network/office_evacuated.png)
 
-The side door takes 84 of the 96 agents. Its curve rises in a straight
-line at its capacity of 0.78 persons/s until the end: the side door is
-the bottleneck. Its first agent passes at 48.6 s and its last at
-155.1 s, 106.5 s later. That matches $(84 - 1)/0.78 = 106.4$ s, the
-passage time of 84 agents in this model, where the first agent passes
-an idle door at once; SFPE's $N/C$ gives 107.7 s
+[Open the chart at full size](../../../images/network/office_evacuated.png).
+
+The side door takes 84 of the 96 agents. After a few gaps in the first
+seconds, its curve rises in a straight line at its capacity of 0.78
+persons/s until the end. Its first agent passes at 48.6 s and its last at
+156.5 s, 107.9 s later. A door that never runs empty passes 84 agents in
+$(84 - 1)/0.78 = 106.4$ s in this model, where the first agent passes an
+idle door at once; SFPE's $N/C$ gives 107.7 s
 ([Limitations]({{< relref "/docs/limitations#numerics" >}})). The main
 door, 1.8 m wide, takes the 12 people from G1 and G2 and is idle after
 102.0 s.
 
 ![Number of agents over time in the training room, the upper corridor east, the stair and the ground corridor east](/images/network/office_occupancy.png)
 
-Two queues form, one after the other:
+[Open the chart at full size](../../../images/network/office_occupancy.png).
+
+Everyone upstairs passes three 0.9 m doors in a row, each with a
+capacity of 0.78 persons/s. A queue forms at each of them, and the
+three queues overlap in time:
 
 1. **At the training-room door.** The 60 people of TR start between
-   20 and 40 s and leave through a 0.78 persons/s door. The first
-   passes at 24.0 s, the last at 94.1 s.
-2. **At the side door.** From 48.6 s, the stair and the offices G3 and
-   G4 feed GE faster than the side door lets agents out. GE holds up to
-   29 agents.
+   20 and 40 s. The door passes the first at 24.0 s and the last at
+   99.6 s, 75.6 s later. That is $(60 - 1)/0.78 = 75.6$ s: the door
+   runs at capacity from the first agent to the last.
+2. **At the stair door.** UE receives the 60 people from TR and the 12
+   from U1 and U2, more than the stair door lets through. UE holds up
+   to 19 agents. The stair door passes its 72 agents from 31.2 to
+   123.3 s, 92.1 s, close to $(72 - 1)/0.78 = 91.0$ s.
+3. **At the side door.** GE receives the 72 agents from the stair and
+   the 12 from G3 and G4. GE holds up to 19 agents.
 
-The stair and the upper corridor hold no lasting queue: the stair door
-admits 0.78 persons/s and the stair link passes 0.92 persons/s.
+The stair itself holds no lasting queue. Its link passes 0.92 persons/s,
+more than the 0.78 persons/s the stair door admits, and it holds at most
+9 agents.
 
-The densities stay low. The highest, 1.46 per m² on the stair, is below
-the 1.88 per m² at which the model starts to reduce inflow, so
-`max_density` and the supply reduction play no part in this run
+In this run the densities stay low. The highest, 1.01 per m² on the
+stair, is below the 1.88 per m² at which the model starts to reduce
+inflow, so `max_density` and the supply reduction play no part
 ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
 No agent walks between the corridor halves, so the two-way corridor
 links carry no counterflow.
@@ -464,45 +493,53 @@ links carry no counterflow.
 ## 100 runs
 
 ```text
-median 143.2 s, 95th percentile 153.9 s
+median 155.1 s, 95th percentile 158.3 s
 incomplete runs: 0 of 100
-fastest 121.0 s, slowest 157.6 s
-seed 1 is slower than 96% of the runs
+fastest 150.2 s, slowest 159.3 s
+seed 1 is slower than 75% of the runs
 ```
 
 - All 100 runs finished, so the quantiles are finite and `t_max` is
   large enough.
-- Half of the runs end within 143.2 s and 95 % within 153.9 s.
-- The run with seed 1 above is one of the slow ones; a single run is
-  one sample, not a typical result.
+- Half of the runs end within 155.1 s and 95&nbsp;% within 158.3 s.
+- The runs differ by at most 9.1 s, from 150.2 to 159.3 s. The three
+  queues set the pace, and they change little when the sampled speeds
+  and pre-movement times change.
+- The run with seed 1 is one sample. It happens to be slower than
+  75&nbsp;% of the runs.
 
 The spread comes only from the sampled speeds and pre-movement times
 ([Limitations]({{< relref "/docs/limitations#monte-carlo" >}})).
 
 ## What if the side door were wider?
 
-The side door is the bottleneck, so widen it. The script runs the same
-seeds with a side door of 0.9, 1.2 and 1.8 m and changes nothing else:
+The side door limits the last agents, so widen it. The script runs the
+same seeds with a side door of 0.9, 1.2 and 1.8 m and changes nothing
+else:
 
 ```text
 side door  seed 1    median   95th pct  peak in GE
-0.9 m      155.1 s  143.2 s  153.9 s   29
-1.2 m      127.8 s  132.3 s  141.0 s   15
-1.8 m      127.8 s  132.3 s  140.9 s   15
+0.9 m      156.5 s  155.1 s  158.3 s   19
+1.2 m      143.9 s  143.3 s  144.9 s   13
+1.8 m      143.9 s  143.2 s  144.9 s   13
 same pre-movement times in every variant: True
 ```
 
-With the same seed, every variant samples the same pre-movement times
-(last line), so the differences come from the door alone.
+With seed 1, every variant samples the same pre-movement times (last
+line), so the differences in that run come from the door alone. The
+`peak in GE` column is also from the run with seed 1.
 
-- **From 0.9 to 1.2 m** the median falls by 10.9 s, from 143.2 to
-  132.3 s, and the queue in GE halves. The 1.2 m side door passes
-  $1.3 \times 0.9 = 1.17$ persons/s, more than the 0.92 persons/s the
-  stair can deliver.
-- **From 1.2 to 1.8 m** the median stays at 132.3 s and the run with
-  seed 1 at 127.8 s. The bottleneck has moved upstream: the upper floor now drains at the pace of the training-room
-  door and the stair door, 0.78 persons/s each. A wider side door
-  cannot help; a wider training-room or stair door might.
+- **From 0.9 to 1.2 m** the median falls by 11.8 s, from 155.1 to
+  143.3 s, and the peak in GE from 19 to 13 agents. The side door must
+  pass 84 agents, 12 more than come down the stair. At 0.78 persons/s it
+  could not keep up; at 1.2 m it passes $1.3 \times 0.9 = 1.17$
+  persons/s, more than the 0.78 persons/s that the stair door lets
+  down.
+- **From 1.2 to 1.8 m** the median changes by 0.1 s and the run with
+  seed 1 stays at 143.9 s. The side door no longer limits. The upper
+  floor drains at the pace of the stair door, which passes all 72
+  people from upstairs at its capacity (see [One run](#one-run)). A
+  wider side door cannot help; the door to widen next is the stair door.
 
 In the model, the main door stays almost unused in every variant.
 Routes use distance only, so nobody from upstairs walks the extra 9 m to
@@ -525,24 +562,26 @@ known limitation of the model. The ones that matter here:
   ([Limitations]({{< relref "/docs/limitations#routes" >}})).
 - **Nodes are well mixed and have one length per link.** Every agent in
   a room walks the same 3.5 m to its door, whether it sits by the door
-  or in a far corner. Splitting the corridor into halves reduces this
-  error; it does not remove it
+  or in a far corner. Agents coming off the stair land about 1 m from
+  the side door but still walk the 9 m of GE. Splitting the corridor
+  into halves reduces this error; it does not remove it
   ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 - **Stair length is a convention.** The 8.3 m along the incline would
   be 7.4 m as horizontal run plus landing
   ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
 - **Doors are open and have no leaves.** The door capacities assume
   doors held open ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
-- **No counterflow and no supply reduction here.** The corridor links
-  carry no agent, and no node exceeds 1.88 per m², so issues
+- **No counterflow and no supply reduction in the run with seed 1.**
+  The corridor links carry no agent, and no node exceeds 1.88 per m².
+  Issues
   [#8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)
   and [#9](https://github.com/PedestrianDynamics/jupedsim-network/issues/9)
-  do not affect these numbers.
+  therefore do not affect that run.
 
 ## Next steps
 
 - Change one input in `examples/office_wing.py`, for example the
-  training-room door, and run it again.
+  width of the stair door, and run it again.
 - [Networks]({{< relref "/docs/using/networks" >}}): all options of
   rooms, stairs and links.
 - [Results]({{< relref "/docs/using/results" >}}): what else a run
