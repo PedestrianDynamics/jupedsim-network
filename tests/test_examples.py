@@ -145,7 +145,7 @@ def test_office_wing_page_tables_match_script():
 
 
 def test_office_wing_prose_matches_output(outputs):
-    """Every number the prose quotes or derives from the output."""
+    """The main prose numbers derived from the output (first occurrence)."""
     out = outputs["office_wing.py"]
     page = _office_wing_page()
     cap = {
