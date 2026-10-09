@@ -78,10 +78,11 @@ than its tolerance of 1 s. The model result lies 0.9 s below it.
 
 ## Door flow and merging
 
-![Cumulative door flow against the hand calculation, and the cumulative merge flows](/images/network/door_and_merge.png)
+![Cumulative door flow against the model convention and the SFPE hand calculation, and the cumulative merge flows](/images/network/door_and_merge.png)
 
 (a) IMO test 4 geometry. The model follows $1 + C\,t$, the
-$(N-1)/C$ convention, to within one time step. (b) Two rooms feeding a
+$(N-1)/C$ convention, to within one time step. The SFPE hand
+calculation $C\,t$ lies one agent lower and ends at $N/C = 107.4$ s. (b) Two rooms feeding a
 full corridor with merge weights 1 : 3. Over 150 s the flows reach
 3 : 1. At the start, room a passes no one from 2.5 s to 17.5 s while
 room b catches up on the share it lost before the corridor filled
