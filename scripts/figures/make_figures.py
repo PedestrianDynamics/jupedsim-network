@@ -477,7 +477,7 @@ OFFICE_DOORS = {
         ("G4", "GE"): ((31.5, 7.0), "h", (32.2, 6.3, "left")),
         ("GW", "main"): ((0.0, 8.0), "v", (-0.6, 9.7, "center")),
         ("GE", "side"): ((36.0, 8.0), "v", (36.4, 9.6, "left")),
-        ("stair", "GE"): ((35.0, 9.0), "h", (33.1, 9.7, "right")),
+        ("stair", "GE"): ((35.0, 9.0), "h", (33.1, 11.4, "right")),
     },
 }
 SAFE_XY = {"main": (-3.6, 8.0), "side": (39.6, 8.0)}
@@ -646,7 +646,7 @@ def office_link_path(floor, link, door):
     (x, y), wall, _ = door
     src, dst = (node_xy(floor, n) for n in link)
     if link[0] == "stair":
-        return [src, (x, y + 0.4), (x, 8.3)]
+        return [src, (x, y + 0.4), (x, 7.3)]
     if wall == "v":
         return [src, (x, y), dst]
     if link[1] == "stair":
@@ -808,12 +808,23 @@ def office_occupancy(out):
         y = r.node_occupancy[:, r.node_names.index(node)]
         ax.plot(r.times, y, color=color, ls=ls, lw=2, label=label)
     ge = r.node_occupancy[:, r.node_names.index("GE")]
+    ue = r.node_occupancy[:, r.node_names.index("UE")]
     tr = r.node_occupancy[:, r.node_names.index("TR")]
-    top, half = int(np.argmax(ge)), int(np.argmin(np.abs(tr - 40)))
+    late = int(np.argmin(np.abs(r.times - 135.0)))
+    top, half = int(np.argmax(ue)), int(np.argmin(np.abs(tr - 40)))
     ax.annotate(
-        "queue at the side door",
-        (r.times[top], ge[top]),
-        (r.times[top] + 10, ge[top] + 11),
+        "queue at the\nstair door",
+        (r.times[top], ue[top]),
+        (r.times[top] + 2, ue[top] + 10),
+        fontsize=9,
+        color=PAL[4],
+        ha="center",
+        arrowprops=dict(arrowstyle="-", color=PAL[4], lw=0.8),
+    )
+    ax.annotate(
+        "queue at the\nside door",
+        (r.times[late], ge[late]),
+        (r.times[late] + 6, ge[late] + 10),
         fontsize=9,
         color=RED,
         ha="center",
