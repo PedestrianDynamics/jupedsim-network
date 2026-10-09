@@ -287,6 +287,44 @@ def test_stair_specific_flow_follows_geometry():
     assert hydraulic.max_specific_flow(k) == pytest.approx(1.01, abs=0.01)
 
 
+@pytest.mark.parametrize("value", [0, 0.0, -1.0, math.nan])
+def test_non_positive_specific_flow_is_rejected(value):
+    net = Network()
+    net.add_room("room", area=10.0)
+    net.add_safe("exit")
+    with pytest.raises(ValueError, match="specific_flow"):
+        net.connect("room", "exit", width=1.0, specific_flow=value)
+    assert len(net.links) == 0
+
+
+def test_default_specific_flow_is_used_when_none():
+    net = single_room(specific_flow=None)
+    # 1.3 p/s/m over 1 m - 2 * 0.15 m.
+    assert net.links[0].capacity == pytest.approx(0.91, abs=1e-12)
+
+
+def two_doors_two_groups(first_area_factor):
+    net = Network()
+    net.add_room("room", area=100.0)
+    net.add_safe("s1")
+    net.add_safe("s2")
+    net.connect("room", "s1", width=1.0)
+    net.connect("room", "s2", width=1.0)
+    factors = [first_area_factor, 3 - first_area_factor]
+    pops = [Population("room", 20, area_factor=f) for f in factors]
+    return NetworkSimulation(net, pops).run(seed=1)
+
+
+@pytest.mark.parametrize("first, last_exit", [(1, 21.0), (2, 43.0)])
+def test_simultaneous_arrivals_are_served_in_population_order(first, last_exit):
+    # Route tie: only one door is used, C dt = 0.455. Agent k passes in the
+    # first step m with 1 + 0.455 m >= k: k = 20 at 21.0 s, k = 40 at 43.0 s.
+    result = two_doors_two_groups(first)
+    group = slice(0, 20) if first == 1 else slice(20, 40)
+    assert result.exit_times[group].max() == last_exit
+    assert result.evacuation_time == 43.0
+
+
 @pytest.mark.parametrize(
     "dist, mean",
     [

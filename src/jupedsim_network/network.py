@@ -37,7 +37,8 @@ class Link:
     """Directed passage from ``source`` to ``target`` node.
 
     ``length`` is walked inside the source node before the constriction is
-    reached. ``capacity`` is the maximum flow in persons/s.
+    reached, along the incline on stair links. ``capacity`` is the maximum
+    flow in persons/s.
     """
 
     name: str
@@ -103,7 +104,10 @@ class Network:
         length: float | None = None,
         width: float | None = None,
     ) -> Node:
-        """Add a stair flight; its area holds the agents on the flight."""
+        """Add a stair flight; its area holds the agents on the flight.
+
+        Stair links from this node take their ``length`` along the incline.
+        """
         k = hydraulic.stair_speed_constant(riser, tread)
         return self._add(name, STAIR, _area(area, length, width), k)
 
@@ -131,10 +135,12 @@ class Network:
             width: clear width in m
             kind: ``"door"``, ``"opening"`` or ``"stair"``
             length: distance in m walked inside the source node to reach
-                the constriction; used in both directions
-            specific_flow: persons/s/m effective width. Defaults to 1.3 for
-                doors and openings, and to the maximum flow of the adjacent
-                stair node for stairs.
+                the constriction; used in both directions. On a ``stair``
+                link, the distance along the incline (line of travel),
+                including landings, not the horizontal run.
+            specific_flow: persons/s/m effective width, must be positive.
+                Defaults to 1.3 for doors and openings, and to the maximum
+                flow of the adjacent stair node for stairs.
             boundary_layer: per side in m. Defaults to 0.15 for doors and
                 stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
@@ -145,7 +151,11 @@ class Network:
         """
         src, dst = self.node(source), self.node(target)
         _validate_connection(src, dst, width, kind, length, merge_weight)
-        fs = specific_flow or _default_specific_flow(kind, src, dst)
+        fs = specific_flow
+        if fs is None:
+            fs = _default_specific_flow(kind, src, dst)
+        if not fs > 0:
+            raise ValueError(f"specific_flow must be positive, got {fs}.")
         layer = (
             _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
         )

@@ -2,9 +2,9 @@
 """Coarse network egress model for fast evacuation-time estimates.
 
 Spaces are nodes with an area, doors and stair entries are links with a
-flow capacity, and individual agents move through them following the SFPE
-hydraulic relations. A run takes milliseconds, so scenarios can be sampled
-many times with :meth:`NetworkSimulation.run_many`.
+flow capacity, and individual agents move through them by relations adapted
+from the SFPE hydraulic relations. A run takes milliseconds, so scenarios can
+be sampled many times with :meth:`NetworkSimulation.run_many`.
 """
 
 from jupedsim_network.network import Link, Network, Node

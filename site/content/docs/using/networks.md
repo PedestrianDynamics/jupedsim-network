@@ -73,9 +73,8 @@ net.connect(
   if both nodes are stairs, it comes from the source node.
 
 A connection without capacity, for example a width no larger than
-$2b$, raises a `ValueError`. To close a passage, leave the connection
-out: `specific_flow=0` does not close it
-([issue #3](https://github.com/PedestrianDynamics/jupedsim-network/issues/3)).
+$2b$, raises a `ValueError`, and so does a `specific_flow` of 0, a negative
+value or NaN. To close a passage, leave the connection out.
 
 ### Length
 
@@ -86,9 +85,8 @@ or separate nodes.
 
 This model applies SFPE stair speeds along the line of travel
 {{< cite 1 "p. 2175" >}}, so on a stair link enter the distance along the
-incline. This is the model's convention; whether the horizontal run
-would serve better is open in
-[issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5). For 18/28 cm steps the
+incline, as SFPE does in its Example 67.1 {{< cite 1 "p. 2178" >}}.
+For 18/28 cm steps the
 incline is $\sqrt{1 + (R/T)^2} = 1.19$ times the horizontal run, so
 entering the horizontal run makes the walk about 16 % too short.
 
@@ -138,7 +136,8 @@ the run starts and is never updated.
 | `Cannot connect two safe nodes.` | Both nodes are safe. |
 | `Width and merge weight must be positive, length non-negative.` | Invalid numbers. |
 | `A connection needs two different nodes.` | `source` and `target` are the same node. |
-| `Connection ...-... has no capacity.` | Effective width is zero, or `specific_flow` is negative. |
+| `Connection ...-... has no capacity.` | Effective width is zero. |
+| `specific_flow must be positive, got ...` | `specific_flow` is 0, negative or NaN. |
 | `Unknown node '...'.` | `connect` or `node()` names a node that does not exist. |
 | `Riser and tread must be positive.` | `add_stair` with a riser or tread of 0 or less. |
 

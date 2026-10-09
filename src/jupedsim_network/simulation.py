@@ -16,7 +16,12 @@ Each time step of length ``dt`` is processed synchronously:
    for what a node accepts, it is shared in proportion to their merge
    weights.
 5. All transfers are applied at once, so the result does not depend on the
-   order in which agents are stored.
+   order in which links or nodes are processed. Agents that join the same
+   queue at the same interpolated time are served in the order in which they
+   were created, that is, in population order. Individual exit times
+   therefore depend on the order of the population list. Aggregate results
+   can depend on it too, when tied agents differ in speed, area factor or
+   target.
 
 Space freed by agents leaving a node becomes available in the next step.
 """
