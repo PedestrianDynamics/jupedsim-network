@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from make_figures import DEFAULT_OUT, GREY, ORANGE, PAL, RED, style
 from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.colors import Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
 from matplotlib.patches import Rectangle
 from scenarios import building, building_populations, merge_corridor, trace
 
@@ -28,6 +28,10 @@ STATE_COLOR = {
     _QUEUED: RED,
     _SAFE: "#33a02c",
 }
+
+# Density ramp: light grey for empty cells, then the house blues (cubehelix,
+# monotone in lightness, so it reads in greyscale and for colour-blind eyes).
+DENSITY_CMAP = LinearSegmentedColormap.from_list("density", ["#eef1f3", *PAL])
 
 # Drawing layout of the merge scenario (illustrative positions only).
 ROOMS = {"a": (0, 4.2, 6, 3), "b": (0, 0, 6, 3), "corridor": (7.6, 2.1, 3, 3)}
@@ -181,15 +185,24 @@ def building_cells(ax, floors):
             "",
             ha="center",
             va="center",
-            fontsize=7,
+            fontsize=12,
+            weight="bold",
         )
     return cells, labels
+
+
+def luminance(color):
+    r, g, b = (
+        c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        for c in to_rgb(color)
+    )
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def shade_cell(rect, label, density, count, color):
     rect.set_facecolor(color)
     label.set_text(str(count) if count else "")
-    label.set_color("white" if density > 1.2 else "#1f253f")
+    label.set_color("white" if luminance(color) < 0.22 else "#1f253f")
 
 
 def shade_cells(cells, labels, names, density, occupancy, color):
@@ -210,29 +223,33 @@ def building_gif(out, floors=10, every=5):
     density = r.node_occupancy / np.where(np.isfinite(area), area, 1)
     exits = np.sort(r.exit_times)
     fig = plt.figure(figsize=(9.5, 5.2))
-    ax = fig.add_axes([0.02, 0.05, 0.42, 0.85])
+    ax = fig.add_axes([0.02, 0.21, 0.42, 0.71])
+    cax = fig.add_axes([0.05, 0.13, 0.36, 0.03])
     cur = fig.add_axes([0.55, 0.14, 0.42, 0.72])
     norm = Normalize(0, 2.75)
-    cmap = plt.get_cmap("magma_r")
+    cmap = DENSITY_CMAP
     cells, labels = building_cells(ax, floors)
-    ax.text(0.5, -0.5, "stair A", ha="center", fontsize=8, color=GREY)
-    ax.text(4.9, -0.5, "stair B", ha="center", fontsize=8, color=GREY)
+    ax.text(0.5, -0.5, "stair A", ha="center", fontsize=10, color=GREY)
+    ax.text(4.9, -0.5, "stair B", ha="center", fontsize=10, color=GREY)
     ax.text(
         2.7,
         -0.5,
         "floors (60 agents each)",
         ha="center",
-        fontsize=8,
+        fontsize=10,
         color=GREY,
     )
     ax.set(xlim=(-0.1, 5.5), ylim=(-0.8, floors + 0.2))
     ax.axis("off")
     sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-    cb = fig.colorbar(
-        sm, ax=ax, orientation="horizontal", fraction=0.04, pad=0.0, aspect=30
+    cb = fig.colorbar(sm, cax=cax, orientation="horizontal")
+    cb.set_label("density (1/m²)", color=GREY, fontsize=10, labelpad=2)
+    cb.set_ticks(
+        [0, 1, 1.88, 2.75], labels=["0", "1", "1.88\npeak flow", "2.75\nmax"]
     )
-    cb.set_label("density (1/m²)", color=GREY, fontsize=8)
-    cb.ax.tick_params(labelsize=7, length=0, labelcolor=GREY)
+    cb.ax.tick_params(labelsize=9, length=0, labelcolor=GREY)
+    cb.ax.axvline(1.88, color=ORANGE, lw=2.5)
+    cb.outline.set_edgecolor("lightgrey")
     cur.step(
         exits,
         np.arange(1, len(exits) + 1),
@@ -247,11 +264,26 @@ def building_gif(out, floors=10, every=5):
         ylabel="agents evacuated",
         title="evacuated over time",
     )
+    cur.title.set_fontsize(12)
+    cur.xaxis.label.set_fontsize(11)
+    cur.yaxis.label.set_fontsize(11)
+    cur.tick_params(labelsize=10)
     cur.grid(alpha=0.4)
-    title = fig.text(0.02, 0.95, "", fontsize=11, weight="semibold")
+    count = cur.text(
+        0.04,
+        0.95,
+        "",
+        transform=cur.transAxes,
+        va="top",
+        fontsize=11,
+        weight="bold",
+        color=PAL[4],
+        bbox=dict(fc="white", ec="none", pad=2),
+    )
+    title = fig.text(0.02, 0.95, "", fontsize=12, weight="semibold")
 
     def update(k):
-        i = k * every
+        i = min(k * every, len(r.times) - 1)
         t = r.times[i]
         shade_cells(
             cells,
@@ -267,15 +299,16 @@ def building_gif(out, floors=10, every=5):
             np.append(np.arange(1, len(done) + 1), len(done)),
         )
         marker.set_xdata([t, t])
+        count.set_text(f"{len(done)} / {len(exits)} out")
         title.set_text(
-            f"t = {t:5.0f} s   ·   two stairs, half of each "
+            f"t = {t:5.1f} s   ·   two stairs, half of each "
             f"floor to each   ·   pre-movement U(30, 120) s"
         )
         return list(cells.values())
 
-    n = (len(r.times) - 1) // every + 1
+    n = -(-(len(r.times) - 1) // every) + 1
     anim = FuncAnimation(fig, update, frames=n, blit=False)
-    anim.save(out / "building.gif", writer=PillowWriter(fps=10), dpi=70)
+    anim.save(out / "building.gif", writer=PillowWriter(fps=10), dpi=120)
     plt.close(fig)
 
 
