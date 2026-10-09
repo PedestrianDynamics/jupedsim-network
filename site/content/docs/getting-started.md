@@ -161,6 +161,9 @@ All error messages are listed in
 
 ## Next steps
 
+- [Office wing]({{< relref "/docs/examples/office-wing" >}}): a worked
+  example with two floors, a stair and two exits, from floor plan to
+  bottleneck.
 - [Networks]({{< relref "/docs/using/networks" >}}): rooms, stairs and links
   for your own building.
 - [Running]({{< relref "/docs/using/running" >}}): choosing the time step and
