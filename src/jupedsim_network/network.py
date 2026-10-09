@@ -132,9 +132,9 @@ class Network:
             kind: ``"door"``, ``"opening"`` or ``"stair"``
             length: distance in m walked inside the source node to reach
                 the constriction; used in both directions
-            specific_flow: persons/s/m effective width. Defaults to 1.3 for
-                doors and openings, and to the maximum flow of the adjacent
-                stair node for stairs.
+            specific_flow: persons/s/m effective width, must be positive.
+                Defaults to 1.3 for doors and openings, and to the maximum
+                flow of the adjacent stair node for stairs.
             boundary_layer: per side in m. Defaults to 0.15 for doors and
                 stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
@@ -145,7 +145,11 @@ class Network:
         """
         src, dst = self.node(source), self.node(target)
         _validate_connection(src, dst, width, kind, length, merge_weight)
-        fs = specific_flow or _default_specific_flow(kind, src, dst)
+        fs = specific_flow
+        if fs is None:
+            fs = _default_specific_flow(kind, src, dst)
+        if not fs > 0:
+            raise ValueError(f"specific_flow must be positive, got {fs}.")
         layer = (
             _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
         )

@@ -287,6 +287,22 @@ def test_stair_specific_flow_follows_geometry():
     assert hydraulic.max_specific_flow(k) == pytest.approx(1.01, abs=0.01)
 
 
+@pytest.mark.parametrize("value", [0, 0.0, -1.0, math.nan])
+def test_non_positive_specific_flow_is_rejected(value):
+    net = Network()
+    net.add_room("room", area=10.0)
+    net.add_safe("exit")
+    with pytest.raises(ValueError, match="specific_flow"):
+        net.connect("room", "exit", width=1.0, specific_flow=value)
+    assert len(net.links) == 0
+
+
+def test_default_specific_flow_is_used_when_none():
+    net = single_room(specific_flow=None)
+    # 1.3 p/s/m over 1 m - 2 * 0.15 m.
+    assert net.links[0].capacity == pytest.approx(0.91, abs=1e-12)
+
+
 @pytest.mark.parametrize(
     "dist, mean",
     [
