@@ -51,9 +51,12 @@ validation {{< cite 1 "p. 2171" >}}.
   $\sqrt{T/R}$ law is supported for risers of 165–191 mm and treads of
   254–330 mm {{< cite 1 "p. 2175" >}}. The code accepts other values
   without a warning.
-- **Stair length is a convention.** Stair links take the walking
-  distance along the incline. Whether the horizontal run would serve
-  better is open ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
+- **Stair length is taken along the incline.** Stair links take the
+  walking distance along the line of travel, as SFPE does in its
+  Example 67.1 {{< cite 1 "p. 2178" >}}. Entering the horizontal run
+  makes the walk about 16 % too short for 18/28 cm steps. How to
+  measure the length of a real stair is open
+  ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
 - **Densities above 1.9 m⁻².** SFPE states that such densities should
   not be assumed in engineering designs {{< cite 1 "p. 2175" >}}. The
   model allows nodes up to `max_density`, 2.75 m⁻² by default, and its
@@ -117,9 +120,11 @@ validation {{< cite 1 "p. 2171" >}}.
   ([Verification]({{< relref "/docs/verification#passage-time-n1c-and-nc" >}})).
 - **Simultaneous arrivals are served in population order.** Agents that
   reach the same queue in the same step at the same interpolated time
-  pass in the order of the populations, not at random. Individual exit
-  times can therefore depend on the order of the population list
-  ([issue #1](https://github.com/PedestrianDynamics/jupedsim-network/issues/1)). In a small test, a 100 m² room with two 1 m doors
+  pass in the order of the populations, not at random. This order is
+  kept by design ([issue #1](https://github.com/PedestrianDynamics/jupedsim-network/issues/1)).
+  Individual exit times, and aggregate results when the tied agents
+  differ in speed, area factor or target, can therefore depend on the
+  order of the population list. In a small test, a 100 m² room with two 1 m doors
   of zero length to two safe nodes holds 20 agents of area factor 1 and
   20 of area factor 2. The evacuation time is 43.0 s in both orders,
   but the last agent of the area-factor-1 group leaves at 21.0 s when
