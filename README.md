@@ -39,12 +39,14 @@ The documentation is a [Hugo](https://gohugo.io) site with the
 (extended) and Go are needed to build it:
 
 ```
+uv run --group docs python scripts/figures/make_figures.py
+uv run --group docs python scripts/figures/make_gifs.py
 cd site && hugo server
 ```
 
-Its figures and animations are produced by
-`scripts/figures/make_figures.py` and `make_gifs.py`
-(`uv run --group docs python scripts/figures/make_figures.py`).
+The figures and animations are not stored in git. The two scripts write
+them to `site/static/images/network/` (about 2 minutes); CI runs them
+before every build.
 
 ## License
 
