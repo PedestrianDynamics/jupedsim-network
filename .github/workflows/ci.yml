@@ -35,6 +35,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # full history for enableGitInfo (last-updated dates)
+      - uses: astral-sh/setup-uv@v6
+      # The figures are not in git: regenerate them from the current code,
+      # so the site never shows a figure the code can no longer produce.
+      - name: Generate figures
+        run: |
+          uv run --group docs python scripts/figures/make_figures.py
+          uv run --group docs python scripts/figures/make_gifs.py
       - name: Build with Hugo
         env:
           HUGO_ENVIRONMENT: production

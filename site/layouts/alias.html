@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="{{ site.Language.LanguageCode }}">
+  <head>
+    <title>{{ .Permalink }}</title>
+    <link rel="canonical" href="{{ .Permalink }}">
+    <meta name="robots" content="noindex">
+    <meta charset="utf-8">
+    {{- /* The old single page /docs/network-model/ was split into several
+         pages. Send its section anchors to the page that now holds them;
+         other fragments are kept on the redirect target. */}}
+    <script>
+      (function () {
+        var moved = {
+          "limitations": {{ "docs/limitations/" | absURL }},
+          "comparison-with-evacuationz": {{ "docs/evacuationz/" | absURL }},
+          "verification": {{ "docs/verification/" | absURL }},
+          "usage": {{ "docs/getting-started/" | absURL }}
+        };
+        var hash = window.location.hash.slice(1);
+        var target = {{ .Permalink }};
+        if (hash) {
+          target = moved[hash] || target + "#" + hash;
+        }
+        window.location.replace(target);
+      })();
+    </script>
+    <meta http-equiv="refresh" content="0; url={{ .Permalink }}">
+  </head>
+</html>

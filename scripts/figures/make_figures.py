@@ -264,18 +264,28 @@ def door_and_merge(out):
         color=RED,
         ls="--",
         lw=1.2,
-        label="hand calculation 1 + F t",
+        label="model convention 1 + C t",
+    )
+    t = np.linspace(0, 100 / (1.33 * 0.7), 50)
+    axes[0].plot(
+        t,
+        1.33 * 0.7 * t,
+        color=ORANGE,
+        ls=":",
+        lw=1.6,
+        label="SFPE hand calculation C t",
     )
     axes[0].set(
         xlabel="time (s)",
         ylabel="agents through door",
-        title="(a) IMO test 4: 100 agents, 1 m door",
+        title="(a) IMO test 4 geometry: 100 agents, 1 m door",
     )
     axes[0].text(
         60,
-        20,
+        12,
         f"last agent: {r.evacuation_time:.1f} s\n"
-        f"(N − 1)/F = {99 / 0.931:.1f} s",
+        f"(N − 1)/C = {99 / 0.931:.1f} s\n"
+        f"N/C = {100 / 0.931:.1f} s",
         color=GREY,
         fontsize=9,
     )
@@ -283,15 +293,16 @@ def door_and_merge(out):
 
     pops = [Population("a", 300), Population("b", 300)]
     r = NetworkSimulation(merge_corridor(), pops, t_max=150.0).run(seed=2)
-    for name, color, w in [
-        ("a->corridor", PAL[2], 1),
-        ("b->corridor", ORANGE, 3),
+    for name, color, w, ls in [
+        ("a->corridor", PAL[2], 1, "-"),
+        ("b->corridor", ORANGE, 3, "--"),
     ]:
         flow = r.link_flow[:, r.link_names.index(name)]
         axes[1].plot(
             r.times,
             np.cumsum(flow),
             color=color,
+            ls=ls,
             lw=2,
             label=f"{name.split('-')[0]}  (merge weight {w})",
         )
@@ -330,7 +341,7 @@ def density_sweep(out, runs=30):
         ax.plot(limits, q[:, 1], color=color, marker=marker, lw=2, label=label)
     ax.set(
         xlabel="max_density (1/m²)",
-        ylabel="RSET (s), median and 5–95 %",
+        ylabel="evacuation time (s), median and 5–95 %",
         title="10 floors × 60 agents, one stair",
     )
     ax.legend(loc="upper left", fontsize=8)
@@ -353,7 +364,7 @@ def route_tie(out):
             building(),
             building_populations(split="AB"),
             PAL[3],
-            "-",
+            "--",
         ),
         (
             "one stair",
@@ -406,7 +417,7 @@ def monte_carlo(out, runs=300):
             va="top",
         )
     ax.set(
-        xlabel="RSET (s)",
+        xlabel="evacuation time (s)",
         ylabel="runs",
         title=f"{runs} runs, pre-movement LogNormal(120 s, 60 s)",
     )
