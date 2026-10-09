@@ -168,9 +168,9 @@ the hand value is only a lower bound. On the 10 m stair the node stays
 at its limit of 27 agents (2.7 m⁻²), and the slower walk adds about
 18 s. On the 200 ×
 1 m stair the node holds 550 agents, its limit, and all walk at about
-0.29 m/s. The flow from the first to the last exit is 1.012 and 1.015
-persons/s per metre of effective width for the 1000-agent runs on the
-200 m stairs, the stair's $F_s = k/(4a) = 1.012$. Fig. 2.7 of the report
+0.29 m/s. The flow from the first to the last exit is 1.012 persons/s
+per metre of effective width for both 1000-agent runs on the 200 m
+stairs, equal to the stair's $F_s = k/(4a) = 1.012$. Fig. 2.7 of the report
 shows 1.0 persons/s/m.
 
 **Fire Engineering Design Guide.** 90 agents (read from Fig. 2.8; the
