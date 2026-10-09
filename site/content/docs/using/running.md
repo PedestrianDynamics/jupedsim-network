@@ -127,14 +127,38 @@ inside at that time is incomplete: its `evacuation_time` is `nan`, and
 its true evacuation time is only known to exceed `t_max`. The exit time
 of every agent still inside is `nan` as well.
 
-<!-- quantile: update after fix/quantile-censored -->
-{{< callout type="warning" >}}
-In version 0.1.0, `MonteCarloResult.quantile` and
-`MonteCarloResult.complete` use completed runs only. If some runs are
-incomplete, a high quantile is lower than it should be. Count the
-incomplete runs with `np.isnan(runs.evacuation_times).sum()` and raise
-`t_max` until the count is zero.
-{{< /callout >}}
+`MonteCarloResult.quantile` ranks incomplete runs above every finished
+run. A quantile that depends on an incomplete run is only bounded from
+below and is returned as `inf`, and `quantile` issues a
+`RuntimeWarning`. `MonteCarloResult.complete` lists the finished runs
+only. With all runs finished, `quantile` is NumPy's default (linear)
+quantile of the evacuation times.
+
+The Getting started scenario with `t_max` cut to 500 s:
+
+```python
+short = NetworkSimulation(net, [population], t_max=500.0)
+cut = short.run_many(500, seed=1)
+print(cut.incomplete)
+print(cut.quantile([0.5, 0.95]))
+```
+
+Output:
+
+```
+59
+[383.25    inf]
+```
+
+The warning reads:
+
+```
+RuntimeWarning: 59 of 500 runs did not finish before t_max = 500 s; quantiles above q = 0.882 are inf.
+```
+
+The median is the same as with the default `t_max`. The 95th
+percentile needs some of the 59 unfinished runs, so it is `inf`. Raise
+`t_max` until `runs.incomplete` is 0.
 
 Runs close to the default `t_max` are realistic: in the
 [max_density sweep]({{< relref "/docs/verification#sensitivity-to-max_density" >}})

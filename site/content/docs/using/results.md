@@ -54,12 +54,13 @@ and the run ends at 323.0 s in steps of 0.5 s.
 | `evacuation_times` | One evacuation time per run; `nan` for an incomplete run |
 | `agent_counts` | Number of agents per run; varies when `count` is a distribution |
 | `complete` | The evacuation times of the completed runs |
-| `quantile(q)` | Quantile(s) of the evacuation time |
+| `incomplete` | Number of runs with agents still inside at `t_max` |
+| `t_max` | The `t_max` of the simulation, in s; set by `run_many` |
+| `quantile(q)` | Quantile(s) of the evacuation time over all runs, with incomplete runs ranked above every finished run; `inf` where the quantile depends on an incomplete run |
 
-<!-- quantile: update after fix/quantile-censored -->
 An incomplete run has agents inside at `t_max`, so its evacuation time
-is only known to exceed `t_max`. In version 0.1.0 `quantile` is taken
-over completed runs only
+is only known to exceed `t_max`. When `incomplete` is not 0, `quantile`
+issues a `RuntimeWarning` that names the quantiles it returns as `inf`
 ([t_max and incomplete runs]({{< relref "/docs/using/running#t_max-and-incomplete-runs" >}})).
 
 ## Reporting
@@ -71,8 +72,9 @@ over completed runs only
 - **Quantiles are conditional on the inputs.** The 95th percentile
   describes the spread caused by the input distributions you chose, not
   the uncertainty of the model.
-- **Report the number of runs and of incomplete runs.** A high quantile
-  of a few hundred runs has its own sampling error. Repeat the set with
+- **Report the number of runs and of incomplete runs**
+  (`runs.incomplete`). A high quantile of a few hundred runs has its
+  own sampling error. Repeat the set with
   another seed; if the quantile moves by more than you can accept, use
   more runs.
 - **Mention the limitations** that apply to your case

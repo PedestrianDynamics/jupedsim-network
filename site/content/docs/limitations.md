@@ -120,11 +120,12 @@ validation {{< cite 1 "p. 2171" >}}.
 
 ## Monte Carlo
 
-<!-- quantile: update after fix/quantile-censored -->
-- **Incomplete runs.** A run that still has agents inside at `t_max`
-  (3600 s by default) returns `nan`; its evacuation time is only known
-  to exceed `t_max`. In version 0.1.0, `quantile` uses completed runs
-  only. Count incomplete runs before reporting a quantile
+- **Incomplete runs make high quantiles infinite.** A run that still
+  has agents inside at `t_max` (3600 s by default) returns `nan`; its
+  evacuation time is only known to exceed `t_max`. `quantile` ranks such
+  runs above every finished run and returns `inf`, with a
+  `RuntimeWarning`, for every quantile that depends on one of them.
+  Raise `t_max` until `runs.incomplete` is 0
   ([Running]({{< relref "/docs/using/running#t_max-and-incomplete-runs" >}})).
 - **Quantiles describe the inputs.** They reflect the spread of the
   sampled inputs, not the uncertainty of the model itself.

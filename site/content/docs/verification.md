@@ -17,7 +17,7 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `25 passed`, followed by the run
+The last line of the output reads `40 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
@@ -35,8 +35,8 @@ is the evacuation time the current code gives in the test.
 
 Further tests check pre-movement delays, route choice, conservation of
 agents, that `max_density` is never exceeded, reproducibility with a
-fixed seed, `nan` for incomplete runs, the error messages, and the means
-and truncation of the distributions.
+fixed seed, `nan` for incomplete runs, quantiles with incomplete runs,
+the error messages, and the means and truncation of the distributions.
 
 ### IMO tests as written and as tested
 

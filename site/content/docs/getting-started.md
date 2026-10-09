@@ -73,15 +73,14 @@ full nodes ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-link
 
 A run that still has agents inside at `t_max` (3600 s by default)
 returns `nan`: its evacuation time is only known to exceed `t_max`.
-<!-- quantile: update after fix/quantile-censored -->
-In version 0.1.0, `quantile` leaves such runs out. Count them before you
-report a quantile:
+`quantile` ranks such runs above every finished run. A quantile that
+depends on one of them is `inf`, and `quantile` issues a
+`RuntimeWarning`. Count the incomplete runs before you report a
+quantile:
 
 ```python
-import numpy as np
-
 print(result.evacuated, "of", len(result.exit_times), "agents are safe")
-print(np.isnan(runs.evacuation_times).sum(), "incomplete runs")
+print(runs.incomplete, "incomplete runs")
 ```
 
 Output:
@@ -147,6 +146,7 @@ speed and leaves through the stair link. The
 | `ValueError: No route from '...' to safety.`, raised by `NetworkSimulation(...)` | No chain of links from the start node to a safe node, or to the `target` | Add the missing `connect` call; check the link direction |
 | `ValueError: Agent speeds must be positive.` | A speed distribution produced 0, or a negative value with `lower=None` | Set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
 | `evacuation_time` is `nan` | Some agents were still inside at `t_max` | Raise `t_max`, or look for a node that cannot empty |
+| `RuntimeWarning: ... runs did not finish before t_max ...`; `quantile` returns `inf` | Some runs were still running at `t_max` | Raise `t_max` until `runs.incomplete` is 0 |
 
 ## Next steps
 
