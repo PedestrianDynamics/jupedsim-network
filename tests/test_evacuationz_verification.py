@@ -35,15 +35,6 @@ IN = 0.0254
 A = 0.266  # m², slope of S = k (1 - a D)
 K_LEVEL = 84 / 60  # m/s
 
-# A link that has served its whole queue starts the next step with a full
-# allowance, so arrivals about one per step pass faster than C. These
-# tests assert the hand bounds and flip when that is fixed.
-CAPACITY_DEFECT = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="links exceed C when the queue empties between arrivals, #18",
-)
-
 
 def free_speed(k):
     return k * (1 - A * 0.54)
@@ -219,7 +210,6 @@ def test_fedg_first_exit():
     assert_invariants(result, net, 90)
 
 
-@CAPACITY_DEFECT
 def test_fedg_last_exit_bound():
     net, result = fedg()
     # After the first exit the stair link passes the other 89 at most at
@@ -356,7 +346,6 @@ def test_room_clearance_fixed_delay_shifts(delay):
         assert shift == pytest.approx(delay, abs=1e-9)
 
 
-@CAPACITY_DEFECT
 def test_room_clearance_dispersed_without_delay():
     hand = 99 / (FS * 0.7)
     for seed in range(20):
@@ -367,12 +356,11 @@ def test_room_clearance_dispersed_without_delay():
 
 @pytest.mark.parametrize(
     "mode, upper",
-    [(15, 30), pytest.param(30, 60, marks=CAPACITY_DEFECT), (60, 120)],
+    [(15, 30), (30, 60), (60, 120)],
 )
 def test_room_clearance_triangular_bound(mode, upper):
     # Start at the door. The agent with the i-th smallest delay cannot
-    # leave before the N-1-i agents after it have passed at C. With seed 0
-    # only the (0, 30, 60) series breaks the bound.
+    # leave before the N-1-i agents after it have passed at C.
     net, result = room_clearance(Triangular(0, mode, upper), 0.0, seed=0)
     tau = np.sort(result.pre_movement_times)
     bound = max(tau[i] + (99 - i) / (FS * 0.7) for i in range(100))
@@ -380,7 +368,6 @@ def test_room_clearance_triangular_bound(mode, upper):
     assert_invariants(result, net, 100)
 
 
-@CAPACITY_DEFECT
 def test_one_arrival_per_step_respects_capacity():
     # 40 agents released one per step through a 0.931/s door: the last
     # cannot leave before 39/C after the first.

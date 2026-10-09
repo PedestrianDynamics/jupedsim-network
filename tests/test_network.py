@@ -346,3 +346,129 @@ def test_distribution_truncation():
     dist = Normal(0, 10, lower=-5.0, upper=5.0)
     values = dist.sample(np.random.default_rng(1), 1000)
     assert values.min() >= -5.0 and values.max() <= 5.0
+
+
+def assert_link_capacity(result, net, dt):
+    """No link passes more than 1 + C w dt agents in any w steps."""
+    flow = result.link_flow[1:].astype(float)
+    cum = np.vstack([np.zeros(flow.shape[1]), np.cumsum(flow, axis=0)])
+    capacity = np.array([lk.capacity for lk in net.links])
+    for w in range(1, len(flow) + 1):
+        passed = (cum[w:] - cum[:-w]).max(axis=0)
+        assert np.all(passed <= 1.0 + capacity * w * dt + 1e-9), w
+
+
+def released_one_by_one(gap, count, area=40.0):
+    net = single_room(area=area, specific_flow=1.33)
+    pops = [
+        Population("room", 1, speed=1.0, pre_movement=Fixed(gap * i))
+        for i in range(count)
+    ]
+    return net, NetworkSimulation(net, pops).run(seed=1)
+
+
+def test_one_arrival_per_step_keeps_link_capacity():
+    # 40 agents released one per step through a 0.931/s door: the last
+    # cannot leave before 39/C after the first (#18).
+    net, result = released_one_by_one(0.5, 40)
+    assert result.evacuation_time >= 39 / (1.33 * 0.7)
+    assert_link_capacity(result, net, 0.5)
+
+
+def test_emptied_queue_keeps_stair_capacity():
+    # Getting started with a 1.2 m door: the door feeds the stair faster
+    # than it drains, its queue empties between arrivals (#18).
+    net = Network()
+    net.add_room("office", area=200.0)
+    net.add_stair("flight", area=10.8, riser=0.18, tread=0.28)
+    net.add_safe("street")
+    net.connect("office", "flight", width=1.2, length=25.0, bidirectional=False)
+    net.connect(
+        "flight",
+        "street",
+        width=1.2,
+        kind="stair",
+        length=9.0,
+        bidirectional=False,
+    )
+    result = NetworkSimulation(net, [Population("office", 120, speed=1.2)]).run(
+        seed=1
+    )
+    assert_link_capacity(result, net, 0.5)
+    stair = net.links[1].capacity
+    assert (
+        result.evacuation_time >= np.min(result.exit_times) + 119 / stair - 0.5
+    )
+
+
+def test_blocked_wide_link_banks_at_most_one_agent():
+    # hall->lobby passes 2.03 agents per step but is held back by the
+    # small lobby; unused capacity must not be banked beyond one agent.
+    net = Network()
+    net.add_room("hall", area=200.0)
+    net.add_room("lobby", area=3.0)
+    net.add_safe("exit")
+    net.connect(
+        "hall",
+        "lobby",
+        width=3.0,
+        kind="opening",
+        length=1.0,
+        bidirectional=False,
+    )
+    net.connect(
+        "lobby",
+        "exit",
+        width=2.8,
+        kind="opening",
+        length=0.5,
+        bidirectional=False,
+    )
+    pops = [
+        Population("hall", 1, speed=1.2, pre_movement=Fixed(0.1 * i))
+        for i in range(80)
+    ]
+    result = NetworkSimulation(net, pops, dt=0.5).run(seed=1)
+    assert_link_capacity(result, net, 0.5)
+    assert result.evacuated == 80
+
+
+def test_link_regains_capacity_at_rate_c():
+    # 1 / C = 1.07 s: the second agent, 0.5 s behind, waits for the credit.
+    _, result = released_one_by_one(0.5, 2)
+    np.testing.assert_allclose(np.sort(result.exit_times), [0.5, 1.5])
+
+
+def test_link_idle_for_one_headway_passes_at_once():
+    _, result = released_one_by_one(1.5, 2)
+    np.testing.assert_allclose(np.sort(result.exit_times), [0.5, 2.0])
+
+
+def test_fresh_link_passes_first_agent_at_once():
+    net = single_room()
+    result = NetworkSimulation(net, [Population("room", 1)]).run(seed=1)
+    assert result.evacuation_time == pytest.approx(0.5)
+
+
+def test_full_queue_keeps_n_minus_one_headways():
+    # IMO 4: 100 agents at once, 99 / 0.931 = 106.3 s, one step of slack.
+    net = single_room(area=40.0, specific_flow=1.33)
+    result = NetworkSimulation(net, [Population("room", 100, speed=1.0)]).run(
+        seed=1
+    )
+    headways = 99 / (1.33 * 0.7)
+    assert result.evacuation_time == pytest.approx(106.5)
+    assert headways < result.evacuation_time <= headways + 0.5
+    assert_link_capacity(result, net, 0.5)
+
+
+def test_dispersed_arrivals_converge_with_dt():
+    # 100 agents with pre-movement U(0, 50) through a 0.9 m door (#18).
+    net = single_room(area=400.0, width=0.9, length=5.0)
+    pop = Population("room", 100, speed=1.0, pre_movement=Uniform(0, 50))
+    times = []
+    for dt in (0.5, 0.1, 0.05):
+        result = NetworkSimulation(net, [pop], dt=dt).run(seed=3)
+        assert_link_capacity(result, net, dt)
+        times.append(result.evacuation_time)
+    assert max(times) - min(times) <= 1.0

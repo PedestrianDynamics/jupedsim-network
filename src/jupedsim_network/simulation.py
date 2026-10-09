@@ -9,12 +9,13 @@ Each time step of length ``dt`` is processed synchronously:
 3. Walking agents cover ``min(v_max, k (1 - 0.266 D)) * dt`` towards the
    constriction of their next link; on arrival they join its queue.
 4. Each link passes up to ``capacity * dt`` agents from the front of its
-   queue, keeping the fractional remainder for the next step; an idle link
-   lets the first arriving agent through at once. Above the peak-flow
-   density the summed inflow a node accepts is reduced linearly to zero at
-   ``max_density``, which the node never exceeds. When several links compete
-   for what a node accepts, it is shared in proportion to their merge
-   weights.
+   queue, keeping the fractional remainder for the next step; a link that
+   has been idle for at least ``1 / capacity`` lets the first arriving agent
+   through at once; no link passes more than ``1 + capacity * t`` agents in
+   any interval ``t``. Above the peak-flow density the summed inflow a node
+   accepts is reduced linearly to zero at ``max_density``, which the node
+   never exceeds. When several links compete for what a node accepts, it is
+   shared in proportion to their merge weights.
 5. All transfers are applied at once, so the result does not depend on the
    order in which links or nodes are processed. Agents that join the same
    queue at the same interpolated time are served in the order in which they
@@ -250,7 +251,7 @@ class _Run:
         self.inflow_rate = np.bincount(
             self.link_target, weights=self.link_rate, minlength=len(self.area)
         )
-        # An idle link lets the first agent through without waiting.
+        # A fresh link lets the first agent through without waiting.
         self.carry = np.ones(len(net.links))
         self.node_carry = np.zeros(len(self.area))
         # Served agents per merge weight; keeps merge shares across steps.
@@ -348,7 +349,7 @@ class _Run:
         free = self.sim.max_density * self.area - load
         passed = self._admit(wanted, np.minimum(free, allowance))
         flow = np.bincount(a.link[passed], minlength=len(budget))
-        self._update_carry(budget, flow, queued)
+        self._update_carry(budget, flow)
         self._update_node_carry(allowance, passed, wanted)
         self._update_virtual_time(flow, queued)
         self._move(passed, t)
@@ -421,12 +422,9 @@ class _Run:
             fits[mask] = used <= free[node] + 1e-9
         return fits
 
-    def _update_carry(self, budget, flow, queued) -> None:
-        waiting = (
-            np.bincount(self.agents.link[queued], minlength=len(budget)) > flow
-        )
-        rest = np.minimum(budget - flow, np.maximum(self.link_rate, 1.0))
-        self.carry = np.where(waiting, np.maximum(rest, 0.0), 1.0)
+    def _update_carry(self, budget, flow) -> None:
+        """Keep unused budget, at most one agent; refills at rate C."""
+        self.carry = np.clip(budget - flow, 0.0, 1.0)
 
     def _update_virtual_time(self, flow, queued) -> None:
         """Advance served links; idle links catch up to avoid banking."""
