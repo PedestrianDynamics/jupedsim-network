@@ -110,7 +110,12 @@ for width in (0.9, 1.2):
         "office", "flight", width=width, length=25.0, bidirectional=False
     )
     test.connect(
-        "flight", "street", width=1.2, kind="stair", length=9.0, bidirectional=False
+        "flight",
+        "street",
+        width=1.2,
+        kind="stair",
+        length=9.0,
+        bidirectional=False,
     )
     at_once = Population("office", 120, speed=1.2)
     print(width, NetworkSimulation(test, [at_once]).run(seed=1).evacuation_time)

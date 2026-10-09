@@ -30,7 +30,7 @@ without a route raises `ValueError` here, before any run.
 ## One run, many runs
 
 ```python
-result = simulation.run(seed=1)          # one realisation
+result = simulation.run(seed=1)  # one realisation
 runs = simulation.run_many(500, seed=1)  # 500 independent realisations
 ```
 

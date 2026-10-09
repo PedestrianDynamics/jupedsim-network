@@ -11,8 +11,13 @@ sampled anew in every run.
 
 ```python
 Population(
-    node, count, speed=1.2, pre_movement=0.0, start_distance=0.0,
-    area_factor=1.0, target=None,
+    node,
+    count,
+    speed=1.2,
+    pre_movement=0.0,
+    start_distance=0.0,
+    area_factor=1.0,
+    target=None,
 )
 ```
 
