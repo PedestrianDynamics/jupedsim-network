@@ -472,3 +472,24 @@ def test_dispersed_arrivals_converge_with_dt():
         assert_link_capacity(result, net, dt)
         times.append(result.evacuation_time)
     assert max(times) - min(times) <= 1.0
+
+
+@pytest.mark.parametrize("riser, tread", [(0.20, 0.28), (0.18, 0.24)])
+def test_stair_outside_sfpe_range_warns(riser, tread):
+    net = Network()
+    with pytest.warns(UserWarning, match="SFPE range") as record:
+        net.add_stair("flight", area=10.0, riser=riser, tread=tread)
+    assert record[0].filename == __file__
+    assert net.node("flight").speed_constant == pytest.approx(
+        hydraulic.stair_speed_constant(riser, tread)
+    )
+
+
+@pytest.mark.parametrize(
+    "riser, tread", [(0.1651, 0.254), (0.1905, 0.3302), (0.18, 0.28)]
+)
+def test_stair_inside_sfpe_range_is_silent(riser, tread):
+    net = Network()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        net.add_stair("flight", area=10.0, riser=riser, tread=tread)

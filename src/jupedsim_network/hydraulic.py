@@ -32,6 +32,12 @@ JAM_DENSITY = 1.0 / SPEED_DENSITY_SLOPE
 #: Density at which the specific flow ``S * D`` reaches its maximum.
 PEAK_FLOW_DENSITY = 1.0 / (2.0 * SPEED_DENSITY_SLOPE)
 
+#: Riser range in m of the stairs in SFPE Table 67.2 (6.5-7.5 in).
+STAIR_RISER_RANGE = (6.5 * 0.0254, 7.5 * 0.0254)
+
+#: Tread range in m of the stairs in SFPE Table 67.2 (10-13 in).
+STAIR_TREAD_RANGE = (10.0 * 0.0254, 13.0 * 0.0254)
+
 
 def stair_speed_constant(riser: float, tread: float) -> float:
     """Speed constant k for stairs, ``51.8 * sqrt(tread / riser)`` m/min.
