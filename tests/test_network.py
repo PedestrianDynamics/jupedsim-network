@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from jupedsim_network import (
     Fixed,
     LogNormal,
+    MonteCarloResult,
     Network,
     NetworkSimulation,
     Normal,
@@ -161,6 +163,88 @@ def test_monte_carlo_samples_vary():
     assert np.isfinite(mc.evacuation_times).all()
     assert mc.evacuation_times.std() > 0
     assert mc.quantile(0.5) == pytest.approx(np.median(mc.complete))
+
+
+def censored_fixture(**kwargs):
+    times = np.array([10, 20, 30, 40, 50, 60, 70, 80, np.nan, np.nan])
+    return MonteCarloResult(times, np.ones(10, dtype=int), **kwargs)
+
+
+def test_quantile_ranks_unfinished_runs_last():
+    mc = censored_fixture()
+    with pytest.warns(RuntimeWarning, match="2 of 10"):
+        q = mc.quantile([0.5, 0.75, 7 / 9, 0.9])
+    np.testing.assert_array_equal(q, [55.0, 77.5, 80.0, np.inf])
+
+
+@pytest.mark.parametrize(
+    "q, expected",
+    [
+        (0.0, 10.0),
+        (0.5, 55.0),
+        (0.7, 73.0),
+        (0.75, 77.5),
+        (7 / 9, 80.0),
+        (0.78, np.inf),
+        (0.9, np.inf),
+        (0.95, np.inf),
+        (1.0, np.inf),
+    ],
+)
+def test_quantile_values_with_unfinished_runs(q, expected):
+    mc = censored_fixture()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        value = mc.quantile(q)
+    assert np.ndim(value) == 0
+    assert value == expected
+
+
+def test_quantile_warning_names_counts_and_t_max():
+    mc = censored_fixture(t_max=100.0)
+    assert mc.incomplete == 2
+    np.testing.assert_array_equal(mc.complete, np.arange(10, 90, 10))
+    with pytest.warns(RuntimeWarning, match="2 of 10") as record:
+        mc.quantile(0.1)
+    assert "100" in str(record[0].message)
+    with pytest.warns(RuntimeWarning) as record:
+        censored_fixture().quantile(0.1)
+    assert "t_max" not in str(record[0].message)
+
+
+def test_quantile_unchanged_when_all_runs_finish():
+    times = np.array([12.5, 3.0, 7.5, 40.0, 18.0, 25.5, 9.0])
+    mc = MonteCarloResult(times, np.ones(7, dtype=int))
+    qs = np.linspace(0, 1, 101)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert mc.quantile(0.37) == np.quantile(times, 0.37)
+        np.testing.assert_array_equal(mc.quantile(qs), np.quantile(times, qs))
+    assert mc.incomplete == 0
+
+
+def test_quantile_all_runs_unfinished_is_inf():
+    mc = MonteCarloResult(np.full(4, np.nan), np.ones(4, dtype=int))
+    with pytest.warns(RuntimeWarning, match="4 of 4"):
+        q = mc.quantile([0, 0.5, 1])
+    np.testing.assert_array_equal(q, [np.inf, np.inf, np.inf])
+
+
+def test_quantile_single_unfinished_run_is_inf():
+    mc = MonteCarloResult(np.array([np.nan]), np.ones(1, dtype=int))
+    with pytest.warns(RuntimeWarning, match="1 of 1"):
+        assert mc.quantile(0.5) == np.inf
+
+
+def test_run_many_ranks_unfinished_runs_last():
+    net = single_room()
+    pop = Population("room", 5, pre_movement=Uniform(0, 40))
+    sim = NetworkSimulation(net, [pop], t_max=35.0)
+    mc = sim.run_many(20, seed=3)
+    assert mc.t_max == sim.t_max
+    assert 0 < mc.incomplete < 20
+    with pytest.warns(RuntimeWarning, match=f"{mc.incomplete} of 20"):
+        assert mc.quantile(1.0) == np.inf
 
 
 def test_incomplete_run_reports_nan():
