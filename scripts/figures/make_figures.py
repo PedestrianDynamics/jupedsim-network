@@ -251,7 +251,7 @@ def fundamental(out):
 
 
 def door_and_merge(out):
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    fig, axes = plt.subplots(2, 1, figsize=(7, 8))
     net = Network()
     net.add_room("room", area=40.0)
     net.add_safe("exit")
@@ -290,8 +290,8 @@ def door_and_merge(out):
         title="(a) IMO test 4 geometry: 100 agents, 1 m door",
     )
     axes[0].text(
-        60,
-        12,
+        2,
+        52,
         f"last agent: {r.evacuation_time:.1f} s\n"
         f"(N − 1)/C = {99 / 0.931:.1f} s\n"
         f"N/C = {100 / 0.931:.1f} s",
@@ -299,6 +299,19 @@ def door_and_merge(out):
         fontsize=9,
     )
     axes[0].legend(loc="upper left", fontsize=8)
+    # The three lines differ by one agent, which only shows near the end.
+    inset = axes[0].inset_axes([0.58, 0.07, 0.39, 0.38], facecolor="white")
+    for line in axes[0].get_lines():
+        inset.plot(
+            *line.get_data(),
+            color=line.get_color(),
+            ls=line.get_linestyle(),
+            lw=line.get_linewidth(),
+            drawstyle=line.get_drawstyle(),
+        )
+    inset.set(xlim=(95, 108.5), ylim=(88, 101), yticks=[90, 95, 100])
+    inset.tick_params(labelsize=7)
+    axes[0].indicate_inset_zoom(inset, edgecolor=GREY)
 
     pops = [Population("a", 300), Population("b", 300)]
     r = NetworkSimulation(merge_corridor(), pops, t_max=150.0).run(seed=2)
@@ -401,7 +414,7 @@ def route_tie(out):
         ylabel="agents evacuated",
         title="Equal-distance exits are not split",
     )
-    ax.legend(loc="lower right", fontsize=8)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fontsize=11)
     frame(ax)
     fig.savefig(out / "route_tie.png")
     plt.close(fig)

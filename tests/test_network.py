@@ -212,6 +212,15 @@ def test_quantile_warning_names_counts_and_t_max():
     assert "t_max" not in str(record[0].message)
 
 
+def test_quantile_warning_states_exact_boundary():
+    # 7/9 = 0.7778 prints as 0.778; a rounded boundary hides that
+    # q = 0.7779 is already inf.
+    mc = censored_fixture()
+    with pytest.warns(RuntimeWarning, match="above q = 7/9 ") as record:
+        assert mc.quantile(0.7779) == np.inf
+    assert "0.778" in str(record[0].message)
+
+
 def test_quantile_unchanged_when_all_runs_finish():
     times = np.array([12.5, 3.0, 7.5, 40.0, 18.0, 25.5, 9.0])
     mc = MonteCarloResult(times, np.ones(7, dtype=int))

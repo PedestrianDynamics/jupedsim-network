@@ -45,7 +45,7 @@ cd site && hugo server
 ```
 
 The figures and animations are not stored in git. The two scripts write
-them to `site/static/images/network/` (about 2 minutes); CI runs them
+them to `site/static/images/network/` (a few minutes); CI runs them
 before every build.
 
 ## License

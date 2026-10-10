@@ -215,7 +215,8 @@ least-populated connection (§2.6).
 
 (a) IMO test 4 geometry. The model follows $1 + C\,t$, the
 $(N-1)/C$ convention, to within one time step. The SFPE hand
-calculation $C\,t$ lies one agent lower and ends at $N/C = 107.4$ s. (b) Two rooms feeding a
+calculation $C\,t$ lies one agent lower and ends at $N/C = 107.4$ s; the
+inset shows the last 13 s. (b) Two rooms feeding a
 full corridor with merge weights 1 : 3. Over 150 s the flows reach
 3 : 1. At the start, room a passes no one from 2.5 s to 17.5 s while
 room b catches up on the share it lost before the corridor filled
