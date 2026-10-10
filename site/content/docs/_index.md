@@ -12,6 +12,13 @@ move through this graph by relations adapted from the SFPE hydraulic
 model. A run of a ten-storey building with 600 agents takes about 0.1 s,
 so a scenario can be sampled hundreds of times.
 
+![One time step: node densities, pre-movement, walking to the next queue, passing links and applying all transfers at once, around the shared network state of agents, queues and carries](/images/diagrams/time-step.svg)
+
+Each time step of length $\Delta t$ runs these five stages in order and
+then repeats. Passing links is where capacity, carry, counterflow and the
+supply limit of a full node act
+([Update scheme]({{< relref "/docs/model/update-scheme" >}})).
+
 {{< callout type="warning" >}}
 Version 0.2.0, a prototype. The model is verified against hand
 calculations and adapted IMO component tests. It is not validated against drills
