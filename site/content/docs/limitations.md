@@ -1,6 +1,7 @@
 ---
 title: Limitations
 weight: 6
+description: Known limitations of the jupedsim-network model and how its defaults compare with the bounding defaults of Gwynne et al.
 ---
 
 This page lists every known limitation of version 0.2.0. Read it before
@@ -18,15 +19,75 @@ validation {{< cite 1 "p. 2171" >}}.
   design use.
 - **Optimistic by construction.** SFPE notes that the hydraulic model
   tends to give an optimistic estimate {{< cite 1 "p. 2165" >}}.
-  Nearest-exit routing and equal merge weights are optimistic defaults
-  in the sense of Gwynne et al., who argue for bounding defaults on
-  route use, flow, pre-evacuation time and speed {{< cite 11 "" >}}.
+  Gwynne et al. name five elements an egress model must address:
+  pre-evacuation time, travel speed, route usage, route availability
+  and flow constraints {{< cite 11 "p. 339" >}}. They write that model
+  defaults "often represent optimistic and even unrealistic evacuation
+  conditions or occupant behaviour (e.g. immediate response and optimal
+  use of routes available)" {{< cite 11 "p. 336" >}}, and propose
+  bounding defaults instead: values from the literature that lengthen
+  the evacuation time {{< cite 11 "pp. 335, 342" >}}. The
+  [table below](#defaults-compared-with-bounding-defaults) compares
+  them with the defaults of this model.
 - **SFPE relations applied to a network.** Shestopal and Grubits write
   that the analytical approach of Nelson and MacLennan, in the SFPE
   Handbook, "is not intended to be extrapolated to complex network of
   exit routes" {{< cite 19 "p. 625" >}}. This model applies those SFPE relations on
   a network of nodes and links. The effect of this has not been tested.
 - **Prototype.** The interface may change between versions.
+
+### Defaults compared with bounding defaults
+
+No default of this model is a bounding default in the sense of Gwynne
+et al. They give their values as "the first iteration of values that
+might then be modified", and their approach gives "relative
+conservatism (within the application of each model)"
+{{< cite 11 "p. 343" >}}. The paper does not test the values in a
+simulation.
+
+| Element | Direction | Default here | Bounding default of Gwynne et al. |
+|---------|-----------|--------------|-----------------------------------|
+| Pre-evacuation time | Optimistic | `pre_movement=0.0` s for every agent | 1800 s, all agents at once {{< cite 11 "p. 345" >}} |
+| Travel speed | Design value | `speed=1.2` m/s; level speed capped at 1.199 m/s | 0.3 m/s {{< cite 11 "p. 346" >}} |
+| Route availability and usage | Optimistic (availability); not established (usage) | Every safe node can be used; shortest distance to the nearest one | All agents to the narrowest, most remote final exit {{< cite 11 "pp. 346–347; Table II, p. 349" >}} |
+| Ties between routes | Not established (see Ties below) | `split_ties=True`: agents alternate between tied links | "all agents are randomly assigned to one of those final exits" {{< cite 11 "p. 347" >}} |
+| Door flow | Design value; disputed | $F_s = 1.3$ persons/s/m of effective width, $b = 0.15$ m per side | 0.67 persons/s per single-leaf door of regulated minimum width, not scaled with width {{< cite 11 "p. 348" >}} |
+| Merge weights | Not established | 1 for every link | None proposed |
+| `max_density`, supply reduction | Not established | 2.75 m⁻², on | None proposed |
+
+- **Pre-movement.** Zero pre-evacuation time is the paper's example of
+  an optimistic default {{< cite 11 "p. 342" >}}. A pre-movement time
+  $T$ common to all agents adds $T$ to the evacuation time, because the
+  agents start together and queue the same way. This holds exactly when
+  $T$ is a multiple of $\Delta t$ and the run ends before `t_max`.
+  Detection and alarm count only if added to `pre_movement`
+  ([Behaviour](#behaviour)).
+- **Travel speed.** 1.2 m/s is "a frequently used design value"
+  {{< cite 11 "p. 345" >}}.
+- **Route availability and usage.** Gwynne et al. give one bound for
+  both elements. Taking all routes and exits as available "may produce
+  optimistic results"; as a first step they discount the widest final
+  exit, then refine this to the narrowest, most remote one
+  {{< cite 11 "pp. 346–347" >}}. Whether nearest exit and shortest
+  path are conservative depends on the scenario
+  {{< cite 11 "p. 341" >}}. To test a blocked exit, build the network
+  without that safe node and compare the results.
+- **Ties.** The paper's tie rule applies to final exits of the same
+  minimum width and the same maximum travel distance; it does not cover
+  ties at intermediate nodes {{< cite 11 "p. 347" >}}. In the
+  ten-storey case, splitting ties is faster than `split_ties=False`
+  (407.5 s against 725.5 s, see [Routes](#routes)). With tied links of
+  different widths, alternation can be slower, because it splits agents
+  by count, not by capacity. Neither setting bounds the result.
+- **Door flow.** 1.3 persons/s/m is the SFPE design value
+  {{< cite 1 "Table 67.5, p. 2176" >}}. Gwynne et al. and SFPE differ
+  on whether the door data are conservative; see "Doors are open and
+  the data are old" under [Movement and capacity](#movement-and-capacity).
+- **Merge weights.** Gwynne et al. propose no bound; SFPE calls equal
+  shares not conservative {{< cite 1 "p. 2178" >}}.
+- **`max_density` and supply reduction.** Gwynne et al. propose no
+  bound. [Verification]({{< relref "/docs/verification#sensitivity-to-max_density" >}})
+  shows how the results depend on `max_density`.
 
 ## Routes
 
@@ -88,11 +149,20 @@ validation {{< cite 1 "p. 2171" >}}.
   one-way flow {{< cite 6 "pp. 6, 10–11" >}}, so the model overpredicts
   it by about 1.7 times (our estimate from these trials)
   ([issue #8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)).
+  When every link has a positive length, default routing (no `target`)
+  sends no agents both ways along a link, because every shortest route
+  moves strictly closer to a safe node. Counterflow then arises only
+  when populations have different `target`s (zero-length links: see
+  [issue #36](https://github.com/PedestrianDynamics/jupedsim-network/issues/36)).
 - **Doors are open and the data are old.** $F_s = 1.3$ persons/s/m
   assumes doors held open; for doors that are not, SFPE suggests
   50 persons/min per door leaf. SFPE also notes that the door data are
   several decades old, come from non-emergency movement and drills, and
   should not be assumed to be conservative {{< cite 1 "p. 2176" >}}.
+  Gwynne et al. call 1.3 persons/s/m "possibly already conservative"
+  {{< cite 11 "p. 348" >}}; the question is open. With the boundary
+  layers, $1.3\,(w - 0.3)$ equals their bound of 0.67 persons/s at a
+  clear width $w$ of about 0.82 m; wider doors pass more.
   There are no door leaves or closers in the model.
 - **Equal merge weights are not conservative.** SFPE says merge shares
   cannot be predetermined and recommends, conservatively, that the route
@@ -188,7 +258,8 @@ validation {{< cite 1 "p. 2171" >}}.
   speed, no groups, refuges, phased evacuation or node delays. Mobility
   impairment can be represented only through speed and area factor.
 - **Detection and alarm are not modelled.** They count only if added
-  to `pre_movement`.
+  to `pre_movement`
+  ([defaults](#defaults-compared-with-bounding-defaults)).
 
 ## Output
 

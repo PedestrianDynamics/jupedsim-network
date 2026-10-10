@@ -33,6 +33,11 @@ Population(
 
 Plain numbers are accepted for every distribution argument.
 
+The default `pre_movement=0.0` starts every agent at once, which
+Gwynne et al. call an optimistic default {{< cite 11 "p. 342" >}}. Set
+a pre-movement time for any result that is to be read as an evacuation
+time ([Limitations]({{< relref "/docs/limitations#defaults-compared-with-bounding-defaults" >}})).
+
 ### Speeds above 1.2 m/s have no effect on level ground
 
 The walking speed is the smaller of $v_i^\text{max}$ and the congested
