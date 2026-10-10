@@ -9,3 +9,4 @@ site/public/
 site/resources/
 .hugo_build.lock
 site/static/images/network/
+.context/

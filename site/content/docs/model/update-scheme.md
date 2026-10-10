@@ -68,6 +68,13 @@ $$
 At most $\lfloor \beta_\ell \rfloor$ agents from the front of the queue
 ask to pass.
 
+The two links $\ell$ and $\bar\ell$ of a two-way connection form a pair
+and share one door. Under `counterflow="bounding"` (the default) and
+`"estimate"` the pair has one carry $c_P$
+and one budget $B_P$ for both directions; while both directions have a
+queue, $B_P = c_P + g\,C\,\Delta t$ with $g \le 1$
+([Counterflow]({{< relref "/docs/model/counterflow" >}})).
+
 **What the target node accepts.** A receiving node $n$ that is not safe
 accepts agents only up to two limits.
 
@@ -87,9 +94,14 @@ accepts agents only up to two limits.
       \frac{D_\text{max} - D_n}{D_\text{max} - D_\text{peak}},\, 0,\, 1
   \right),
   \qquad
-  \alpha_n = \gamma_n + \varphi_n \sum_{\ell \in Q_n} C_\ell\,\Delta t
+  \alpha_n = \gamma_n + \varphi_n \sum_{\ell \in Q_n} \tilde C_\ell\,\Delta t
   \quad (\varphi_n < 1).
   $$
+
+  $\tilde C_\ell$ equals $C_\ell$, except for a link whose pair is in
+  counterflow, which counts with its share of the door,
+  $\tilde C_\ell = y_\ell\,g\,C_\ell$
+  ([Counterflow]({{< relref "/docs/model/counterflow#the-rule" >}})).
 
   Here $D_\text{peak} = 1/(2a) = 1.88$ m⁻². The sum runs over $Q_n$,
   the links into $n$ that have a queue in this step, the same links that compete
@@ -103,12 +115,12 @@ accepts agents only up to two limits.
   after every step, whether or not an agent was ready to pass, becomes
 
   $$
-  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\in Q_n} C_\ell\,\Delta t,\ 1,\ a^\ast_n\bigr)\Bigr).
+  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\in Q_n} \tilde C_\ell\,\Delta t,\ 1,\ a^\ast_n\bigr)\Bigr).
   $$
 
   A node at or below $D_\text{peak}$ has $\alpha_n = \infty$, so after
   such a step its carry is full. Like the link carry, $\gamma_n$
-  refills at $\varphi_n \sum_{\ell\in Q_n} C_\ell\,\Delta t$ per step
+  refills at $\varphi_n \sum_{\ell\in Q_n} \tilde C_\ell\,\Delta t$ per step
   and holds at most one cap. A node that has just passed
   $D_\text{peak}$ can take one cap at once, then takes the share
   $\varphi_n$. The cap uses the same sum over links with a queue as
@@ -137,6 +149,9 @@ $q_\ell / m_\ell$ when $q_\ell$ agents pass, and a link with an empty
 queue is moved up to the smallest $\tau$ of the active links into the
 same node. Over time each link's share approaches $m_\ell / \sum m$.
 This interleaving rule is an implementation choice of this model.
+After the target has admitted its candidates, a pair in counterflow
+keeps only $\lfloor B_P \rfloor$ of them, in order of its own pair
+key; the merge key itself is unchanged.
 
 ### Carry update
 
@@ -153,6 +168,12 @@ passage, the next credit builds up at rate $C_\ell$. Unused capacity is
 never kept beyond one agent, whether the link was idle or blocked
 downstream. As a result, no link passes more than $1 + C_\ell\,t$ agents
 in any interval $t$.
+
+Under `"bounding"` and `"estimate"` the two links of a pair hold one
+carry, $c_P = \operatorname{clip}(B_P - q_\ell - q_{\bar\ell},\ 0,\ 1)$,
+so a pair passes at most $1 + C\,t$ agents in any interval $t$, in
+both directions together. Under `"independent"` each link keeps its own
+carry.
 
 When $N$ agents queue at a fresh link, the first passes at once and the
 last after $(N-1)/C_\ell$. This is the convention

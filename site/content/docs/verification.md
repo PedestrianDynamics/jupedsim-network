@@ -20,11 +20,14 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `151 passed`, followed by the run
+The last line of the output reads `166 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
-is what the test measures with the current code.
+is what the test measures with the current code. In the counterflow
+rows, values separated by "/" are for `counterflow="independent"` /
+`"estimate"` / `"bounding"`; the derivation is under
+[Counterflow at a shared door](#counterflow-at-a-shared-door).
 
 | Case | Expected | Result | Tolerance | Test |
 |------|----------|--------|-----------|------|
@@ -38,6 +41,11 @@ is what the test measures with the current code.
 | Supply ramp between passages, 45 agents per room | passages at $t_q + \Delta t\,\lceil k/(\varphi\,C\,\Delta t)\rceil$, $k = 1 \ldots 45$; first exit 94.5 s, $T = 150.0$ s | equal | exact | `test_supply_ramp_holds_between_passages` |
 | Steady density on the ramp, exit door 0.7 m and 0.9 m | $40\,D^*$ = 90.11 and 80.16 agents | mean 90.11 and 80.16, maximum 91 and 81 | 0.5 agent; maximum ≤ $\lceil 40\,D^* \rceil$ | `test_supply_ramp_sets_steady_density` |
 | Chain of five 100 m² rooms A–B–C–D–E with exits at A and E (safe nodes `s0` and `s1`); all six connections are 1 m doors of length 0; $N = 50$ agents in E, 1.2 m/s, no pre-movement, $\Delta t = 0.5\,\mathrm{s}$; both `split_ties` settings ([Routes]({{< relref "/docs/using/networks#routes" >}})) | $C = 1.3\,(1-2\cdot0.15) = 0.91$ /s; $\Delta t\,\lceil (N-1)/(C\,\Delta t)\rceil = 0.5\cdot\lceil 49/0.455\rceil = 54.0$ s | 54.0 s, `E->s1` = 50, all other links 0 | exact | `test_zero_length_chain_uses_adjacent_exit` |
+| Two 200 m² rooms A and B swap 20 + 20 agents through one two-way 1 m door | `independent`: 21.5 s; `estimate` ($g \le 1$): $T \ge 43.5\,\mathrm{s}$, recursion 44.0 s; `bounding` ($g \le 0.94$): $T \ge 46.5\,\mathrm{s}$, recursion 46.5 s | 21.5 / 44.0 / 46.5 s; pair passes $\le 1 + C\,t$ | exact | `test_counterflow_door_swap_balanced` |
+| Same door, 36 agents in A against 4 in B | recursion: $T$ = 39.0 / 45.5 / 47.0 s; B's passages at 0.5, 1.5, 2.5, 3.5 / 4.0, 8.5, 14.5, 20.5 / 4.0, 9.0, 15.5, 22.0 s | equal | exact | `test_counterflow_door_minor_ten_percent` |
+| 1.2 m stair entry: 20 evacuees leave the flight, 4 responders enter it | recursion: evacuees' $T$ = 21.5 / 29.0 / 30.0 s; responders out at 1.5–4.5 / 4.0, 9.0, 12.5, 19.5 / 4.0, 9.5, 13.5, 20.5 s | equal | exact | `test_counterflow_stair_responders` |
+| Chain A–E of the row above, 10 agents per room, no `target`, both `split_ties` | $\Delta t\,\lceil (N_A - 1)/(C\,\Delta t)\rceil$ = 26.5 s ($N_A = 25$) and 32.0 s ($N_A = 30$), the same under all three values; no link used both ways | equal | exact | `test_default_routing_has_no_counterflow` |
+| 1 agent in A against 50 in B, B of 20 m² ($D_B = 2.5\,\mathrm{m^{-2}}$) | A's agent exits at 13.0 s (`estimate`) and 14.0 s (`bounding`); $T$ = 57.0 s and 58.0 s | equal | exact | `test_counterflow_supply_uses_door_share` |
 
 The two supply-ramp tests check that the code delivers the share
 $\varphi_n$ of the
@@ -67,7 +75,120 @@ Further tests check pre-movement delays, route choice, conservation of
 agents, that `max_density` is never exceeded, that no link passes more
 than $1 + C\,t$ agents in any interval $t$, reproducibility with a
 fixed seed, the stair-range warning, `nan` for incomplete runs, quantiles with incomplete runs,
-the error messages, and the means and truncation of the distributions.
+the error messages, that `counterflow` rejects unknown values
+(`test_counterflow_rejects_unknown_value`), and the means and
+truncation of the distributions. The two room swaps of
+`test_supply_carry_admits_large_agent_swap` are pinned to
+`counterflow="independent"`.
+
+### Counterflow at a shared door
+
+The rule is described in
+[Counterflow]({{< relref "/docs/model/counterflow#the-rule" >}}). All
+five rows use $\Delta t = 0.5\,\mathrm{s}$, seed 1 and no pre-movement.
+Every agent queues at its first link in step 0; it reaches its next
+link, the exit or, for a responder, flight→floor, one step after its
+previous passage.
+
+**Door geometry** (`door_swap` in `tests/test_network.py`). Rooms A and
+B are joined by `connect("A", "B", width=1.0)`, a two-way door of
+length 0: $C = 1.3\,(1 - 0.3) = 0.91\,\mathrm{s^{-1}}$ and
+$C\,\Delta t = 0.455$. A's agents head for B's exit and B's for A's;
+both exits are 20 m openings of length 0. An agent that passes the door
+in step $k = 0, 1, \ldots$ is recorded in `link_flow` at
+$(k + 1)\,\Delta t$ and exits at $(k + 2)\,\Delta t$.
+
+**`independent`.** A fresh link passes its first agent in step 0 and its
+$k$-th agent ($k \ge 2$) in step $\lceil (k - 1)/(C\,\Delta t) - 1\rceil$.
+With 20 agents: $\lceil 19/0.455 - 1\rceil = 41$, so
+$T = 43 \cdot 0.5\,\mathrm{s} = 21.5\,\mathrm{s}$. With 36:
+$\lceil 35/0.455 - 1\rceil = 76$, $T = 39.0\,\mathrm{s}$; the 4 agents in B
+pass in steps 0, 2, 4 and 6.
+
+**Bound for the shared door.** In steps $0 \ldots m$ a pair passes at
+most $1 + g\,C\,\Delta t\,(m + 1)$ agents. Forty passages with $g \le 1$
+need $m \ge 39/0.455 - 1$, so $m \ge 85$ and
+$T \ge 87 \cdot 0.5\,\mathrm{s} = 43.5\,\mathrm{s}$. With $g \le 0.94$:
+$m \ge \lceil 39/(0.94 \cdot 0.455) - 1\rceil = 91$, so
+$T \ge 46.5\,\mathrm{s}$, which `bounding` attains.
+
+**Recursion.** The `estimate` and `bounding` values apply the rule step
+by step. With $n_A$, $n_B$ the queues, $s$ the minor share,
+$g = g_0 + (g_{1/2} - g_0)\,2s$, $y_A = 0.17 + 0.66\,n_A/(n_A + n_B)$,
+budget $B_P = c_P + g\,C\,\Delta t$ and key
+$\lambda = \sigma + (j + 1)/y$, the first steps of the balanced swap under
+`estimate` ($g_0 = 0.90$, $g_{1/2} = 1.00$, $c_P = 1$ at the start) are:
+
+| Step | $n_A$, $n_B$ | $s$ | $g$ | $B_P$ | $\lambda_A$, $\lambda_B$ | Passes |
+|------|--------------|-----|-----|-------|----------------------------|--------|
+| 0 | 20, 20 | 0.5 | 1 | 1.455 | 2.000, 2.000 | A (tie: A→B was created first) |
+| 1 | 19, 20 | 0.4872 | 0.99744 | 0.909 | – | none |
+| 2 | 19, 20 | 0.4872 | 0.99744 | 1.363 | 4.034, 1.967 | B |
+
+The first steps of 36 against 4 under `bounding` ($g_0 = 0.84$,
+$g_{1/2} = 0.94$) are:
+
+| Step | $n_A$, $n_B$ | $s$ | $g$ | $B_P$ | $\lambda_A$, $\lambda_B$ | Passes |
+|------|--------------|-----|-----|-------|----------------------------|--------|
+| 0 | 36, 4 | 0.1000 | 0.8600 | 1.391 | 1.309, 4.237 | A |
+| 1 | 35, 4 | 0.1026 | 0.8605 | 0.783 | – | none |
+| 2 | 35, 4 | 0.1026 | 0.8605 | 1.174 | 2.621, 4.207 | A |
+| 5 | 34, 4 | 0.1053 | 0.8611 | 1.350 | 3.936, 4.176 | A |
+| 7 | 33, 4 | 0.1081 | 0.8616 | 1.134 | 5.254, 4.143 | B |
+
+In step 7, B's key is still $1/y_B = 1/0.2414 = 4.143$ ($\sigma_B = 0$),
+so B's first agent passes and is recorded at 4.0 s.
+
+**Stair** (`test_counterflow_stair_responders`). Node "flight" of 30 m²
+with 18/28 cm steps; rooms "lobby" and "floor" of 100 m²; safe node
+"street" off the lobby and "roof" off the floor, through 20 m one-way
+openings of length 0. `connect("flight", "lobby", width=1.2,
+kind="stair")` and the same to "floor":
+$k = 51.8\sqrt{28/18}\ \mathrm{m/min} = 1.0768\,\mathrm{m/s}$,
+$F_s = k/(4a) = 1.0120\,\mathrm{s^{-1}m^{-1}}$,
+$C = 1.0120 \cdot 0.9 = 0.9108\,\mathrm{s^{-1}}$ and
+$C\,\Delta t = 0.4554$. The stair values $g_0$, $g_{1/2}$ apply. The 20
+evacuees leave the flight to the lobby and exit at $(k + 2)\,\Delta t$; the
+4 responders start in the lobby, target the roof, pass lobby→flight in
+step $k$, flight→floor in step $k + 1$ and exit at $(k + 3)\,\Delta t$.
+`independent`: evacuees $\lceil 19/0.4554 - 1\rceil = 41$, so 21.5 s;
+responders in steps 0, 2, 4, 6, so out at 1.5, 2.5, 3.5 and 4.5 s.
+
+**Chain.** Rooms A–E as in the chain row above, with 10 agents per
+room. A's queue never empties, so
+$T = \Delta t\,\lceil (N_A - 1)/(C\,\Delta t)\rceil$, where $N_A$ is the
+number of agents leaving through `A->s0`. With ties split, C's 10 agents
+split 5/5, so $N_A = 25$ and $T = 26.5\,\mathrm{s}$. `split_ties=False`
+sends C's 10 via B (and warns), so $N_A = 30$ and $T = 32.0\,\mathrm{s}$.
+The link totals for `A->s0`, `B->A`, `C->B`, `C->D`, `D->E`, `E->s1`
+are 25, 15, 5, 5, 15, 25 and 30, 20, 10, 0, 10, 20.
+
+**Supply uses the door share.** The door geometry, with B of 20 m²
+holding 50 agents ($D_B = 2.5\,\mathrm{m^{-2}}$) and 1 agent in A. B is
+above $D_\text{peak} = 1.88\,\mathrm{m^{-2}}$, so it admits A's agent only
+when $\alpha_B = \gamma_B + \varphi_B\,\tilde C_A\,\Delta t \ge 1$, with
+$\varphi_B = (2.75 - D_B)/(2.75 - 1.88)$ and $\tilde C_A = y_A\,g\,C$, A's
+share of the door. Under `bounding`, $y_A = 0.17 + 0.66/51 = 0.183$,
+$g = 0.844$ and $\tilde C_A\,\Delta t \approx 0.070$. $D_B$ falls by
+$0.05\,\mathrm{m^{-2}}$ with each agent that leaves B.
+
+| Step | $D_B$ (m⁻²) | $\alpha_B$ | $\gamma_B$ after the step | $B_P$ | Passes |
+|------|-------------|-------------|---------------------------|-------|--------|
+| 0 | 2.50 | 0.020 | 0.020 | 1.384 | B |
+| 5 | 2.40 | 0.154 | 0.154 | 1.304 | B |
+| 10 | 2.30 | 0.328 | 0.328 | 1.225 | B |
+| 15 | 2.20 | 0.540 | 0.540 | 1.146 | B |
+| 20 | 2.10 | 0.793 | 0.793 | 1.067 | B |
+| 24 | 2.00 | 1.027 | 1.000 (cap) | 0.605 | none |
+| 25 | 2.00 | 1.062 | 1.000 (cap) | 0.989 | none |
+| 26 | 2.00 | 1.062 | 0.062 | 1.374 | A |
+
+$\alpha_B$ first exceeds 1 in step 24, but the pair budget allows a
+passage only in step 26, where A's key wins: A's agent exits at
+$28 \cdot 0.5\,\mathrm{s} = 14.0\,\mathrm{s}$. With $C\,\Delta t$ in place of
+$\tilde C_A\,\Delta t$ it would exit at 6.0 s (5.5 s under `estimate`);
+with $\tilde C_A = 0$, only after $D_B$ falls below $1.88\,\mathrm{m^{-2}}$,
+at 17.5 s (16.5 s).
 
 ### IMO tests as written and as tested
 

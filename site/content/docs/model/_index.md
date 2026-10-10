@@ -118,4 +118,5 @@ code: the module docstring of `jupedsim_network.simulation`,
 {{< cards >}}
   {{< card link="elements" title="Model elements" subtitle="Nodes, links, agents, routes, the hydraulic relations and where each value comes from." >}}
   {{< card link="update-scheme" title="Update scheme" subtitle="The five stages of a time step, with equations." >}}
+  {{< card link="counterflow" title="Counterflow" subtitle="How the two links of a two-way connection share one door, the presets and their sources." >}}
 {{< /cards >}}

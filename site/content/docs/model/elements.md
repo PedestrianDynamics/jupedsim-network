@@ -99,6 +99,10 @@ A link also has:
 | Peak-flow density | $1/(2a) = 1.88$ m⁻² | SFPE gives 1.9 {{< cite 1 "pp. 2175–2176" >}} | `hydraulic.PEAK_FLOW_DENSITY` |
 | Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `hydraulic.JAM_DENSITY` |
 | `max_density` | 2.75 m⁻² | EvacuatioNZ default {{< cite 3 "p. 3" >}} | `NetworkSimulation` |
+| `counterflow` | `"bounding"` | choice of this model ([Counterflow]({{< relref "/docs/model/counterflow" >}})) | `NetworkSimulation` |
+| Minimum pass share $y_0$ | 0.17 | adapted from {{< cite 21 "p. 36" >}} | `simulation._COUNTERFLOW` |
+| $g_0 \to g_{1/2}$, door and opening | 0.84 → 0.94 (`bounding`), 0.90 → 1.00 (`estimate`) | walkway data {{< cite 21 "Table III, p. 36" 22 "p. 4" 28 "Fig. 6" 31 "p. 11-7" 24 "p. 1613" 23 "p. 44" >}} | `simulation._COUNTERFLOW` |
+| $g_0 \to g_{1/2}$, stair | 0.75 → 0.94 (`bounding`), 0.80 → 1.00 (`estimate`) | {{< cite 29 "p. 520" 24 "Fig. 3, p. 1615" >}}; $g_{1/2}$ = 0.94 from walkways | `simulation._COUNTERFLOW` |
 
 The stair specific flow is the maximum of the SFPE specific flow
 $F_s = (1 - aD)\,kD$ {{< cite 1 "Eq. 67.6, p. 2176" >}}, reached at
@@ -165,4 +169,8 @@ model adapts it as follows:
   after $(N-1)/C$. SFPE gives
   $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}
   ([update scheme]({{< relref "/docs/model/update-scheme#carry-update" >}})).
+- **Counterflow.** SFPE has no counterflow term. The two links of a
+  two-way connection share one door; their total $g(s)\,C$ is a linear
+  interpolation between anchors from walkway and stair data
+  ([Counterflow]({{< relref "/docs/model/counterflow" >}})).
 {{< /details >}}

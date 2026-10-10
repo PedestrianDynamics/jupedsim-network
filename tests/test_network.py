@@ -198,7 +198,7 @@ def test_supply_ignores_idle_feeder():
     assert result.evacuation_time == 660.0
 
 
-def room_swap(count, area_factor, side_door, two_way=True):
+def room_swap(count, area_factor, side_door, two_way=True, **options):
     """Rooms A and B (20 m²) swap occupants through 1 m doors."""
     net = Network()
     for name in ("A", "B"):
@@ -219,7 +219,7 @@ def room_swap(count, area_factor, side_door, two_way=True):
         Population("A", count, area_factor=area_factor, target="exitB"),
         Population("B", count, area_factor=area_factor, target="exitA"),
     ]
-    return NetworkSimulation(net, pops, t_max=900.0).run(seed=1)
+    return NetworkSimulation(net, pops, t_max=900.0, **options).run(seed=1)
 
 
 def door_passages(result, link):
@@ -254,7 +254,8 @@ def test_supply_carry_admits_large_agent_swap(
     count, area_factor, side_door, first_exit, total, start
 ):
     # A capped at max(C * dt, 1) stalls: alpha <= 1 + phi * C * dt < a.
-    result = room_swap(count, area_factor, side_door)
+    # The doors pass at their full capacity each way (no shared door).
+    result = room_swap(count, area_factor, side_door, counterflow="independent")
     density = 2 * count * area_factor / 40.0
     expected = ramp_passages(start, density, area_factor, count)
     assert door_passages(result, "A->B") == expected
@@ -976,3 +977,169 @@ def test_second_population_in_unknown_node_is_rejected(target):
     ]
     with pytest.raises(ValueError, match="Unknown node .nowhere."):
         NetworkSimulation(single_room(), populations)
+
+
+def door_swap(n_a, n_b, counterflow, area_b=200.0):
+    """Rooms A and B swap through one two-way 1 m door (C dt = 0.455).
+
+    Exits are 20 m openings, so an agent passing the door in step k
+    exits at (k + 2) dt.
+    """
+    net = Network()
+    net.add_room("A", area=200.0)
+    net.add_room("B", area=area_b)
+    net.add_safe("xA")
+    net.add_safe("xB")
+    net.connect("A", "B", width=1.0)
+    net.connect("A", "xA", width=20.0, kind="opening", bidirectional=False)
+    net.connect("B", "xB", width=20.0, kind="opening", bidirectional=False)
+    pops = [
+        Population("A", n_a, target="xB"),
+        Population("B", n_b, target="xA"),
+    ]
+    sim = NetworkSimulation(net, pops, counterflow=counterflow)
+    return sim.run(seed=1)
+
+
+def passage_times(result, link):
+    column = result.link_flow[:, result.link_names.index(link)]
+    return [t for t, f in zip(result.times.tolist(), column) for _ in range(f)]
+
+
+def worst_pair_excess(result, links, rate):
+    """Largest excess of the pair's passages over 1 + C t in any window."""
+    columns = [result.link_names.index(link) for link in links]
+    total = result.link_flow[1:, columns].sum(axis=1)
+    cumulative = np.concatenate([[0], np.cumsum(total)])
+    return max(
+        (cumulative[w:] - cumulative[:-w]).max() - (1 + rate * w)
+        for w in range(1, cumulative.size)
+    )
+
+
+@pytest.mark.parametrize(
+    ("counterflow", "total"),
+    [("independent", 21.5), ("estimate", 44.0), ("bounding", 46.5)],
+)
+def test_counterflow_door_swap_balanced(counterflow, total):
+    # Each way alone: 19 headways in ceil(19 / 0.455 - 1) = 41 steps.
+    # Shared door, g = 1: the 40th passage in step ceil(39 / 0.455 - 1)
+    # = 85. Bounding, g <= 0.94: at least ceil(39 / (0.94 * 0.455) - 1)
+    # = 91 steps, T = 46.5 s.
+    result = door_swap(20, 20, counterflow)
+    assert result.evacuated == 40
+    assert result.evacuation_time == total
+    first = result.link_flow[result.times == 0.5][0]
+    if counterflow == "independent":
+        assert first.tolist()[:2] == [1, 1]
+        return
+    # Equal pair keys go to A->B, created first by connect.
+    assert first.tolist()[:2] == [1, 0]
+    assert worst_pair_excess(result, ("A->B", "B->A"), 0.455) <= 1e-9
+
+
+@pytest.mark.parametrize(
+    ("counterflow", "total", "minor"),
+    [
+        ("independent", 39.0, [0.5, 1.5, 2.5, 3.5]),
+        ("estimate", 45.5, [4.0, 8.5, 14.5, 20.5]),
+        ("bounding", 47.0, [4.0, 9.0, 15.5, 22.0]),
+    ],
+)
+def test_counterflow_door_minor_ten_percent(counterflow, total, minor):
+    # 36 agents against 4: the minor stream gets at least y0 = 0.17 of
+    # the passages, so it is not held behind the whole major queue.
+    result = door_swap(36, 4, counterflow)
+    assert result.evacuated == 40
+    assert result.evacuation_time == total
+    assert passage_times(result, "B->A") == minor
+
+
+@pytest.mark.parametrize(
+    ("counterflow", "total", "responders"),
+    [
+        ("independent", 21.5, [1.5, 2.5, 3.5, 4.5]),
+        ("estimate", 29.0, [4.0, 9.0, 12.5, 19.5]),
+        ("bounding", 30.0, [4.0, 9.5, 13.5, 20.5]),
+    ],
+)
+def test_counterflow_stair_responders(counterflow, total, responders):
+    # 20 evacuees leave the flight to the street; 4 responders enter it
+    # from the lobby, heading for the roof (C dt = 0.455399).
+    net = Network()
+    net.add_room("lobby", area=100.0)
+    net.add_room("floor", area=100.0)
+    net.add_stair("flight", area=30.0, riser=0.18, tread=0.28)
+    net.add_safe("street")
+    net.add_safe("roof")
+    net.connect("flight", "lobby", width=1.2, kind="stair")
+    net.connect("flight", "floor", width=1.2, kind="stair")
+    for room, safe in (("lobby", "street"), ("floor", "roof")):
+        net.connect(room, safe, width=20.0, kind="opening", bidirectional=False)
+    pops = [
+        Population("flight", 20, target="street"),
+        Population("lobby", 4, target="roof"),
+    ]
+    sim = NetworkSimulation(net, pops, counterflow=counterflow)
+    result = sim.run(seed=1)
+    assert result.evacuation_time == total
+    assert sorted(result.exit_times[20:].tolist()) == responders
+
+
+def chain_run(split, counterflow):
+    pops = [Population(name, 10) for name in "ABCDE"]
+    if split:
+        sim = NetworkSimulation(chain(), pops, counterflow=counterflow)
+        return sim.run(seed=1)
+    with pytest.warns(UserWarning, match=r"Routes are tied at \['C'\]"):
+        sim = NetworkSimulation(
+            chain(), pops, split_ties=False, counterflow=counterflow
+        )
+    return sim.run(seed=1)
+
+
+@pytest.mark.parametrize(
+    ("split", "total", "expected"),
+    [
+        (True, 26.5, (25, 15, 5, 5, 15, 25)),
+        (False, 32.0, (30, 20, 10, 0, 10, 20)),
+    ],
+)
+def test_default_routing_has_no_counterflow(split, total, expected):
+    # T = 0.5 ceil((N_A - 1) / 0.455) with N_A agents leaving via A->s0;
+    # A's queue never empties.
+    names = ("A->s0", "B->A", "C->B", "C->D", "D->E", "E->s1")
+    net = chain()
+    base = chain_run(split, "independent")
+    assert base.evacuation_time == total
+    assert {k: v for k, v in flows(base).items() if v} == {
+        k: v for k, v in zip(names, expected) if v
+    }
+    for i, j in net._reverse.items():
+        assert min(flows(base)[net.links[k].name] for k in (i, j)) == 0
+    for counterflow in ("estimate", "bounding"):
+        result = chain_run(split, counterflow)
+        np.testing.assert_array_equal(result.exit_times, base.exit_times)
+        np.testing.assert_array_equal(result.link_flow, base.link_flow)
+
+
+@pytest.mark.parametrize("value", ["halve", ["bounding"]])
+def test_counterflow_rejects_unknown_value(value):
+    with pytest.raises(ValueError, match="counterflow must be one of"):
+        NetworkSimulation(
+            single_room(), [Population("room", 1)], counterflow=value
+        )
+
+
+@pytest.mark.parametrize(
+    ("counterflow", "first", "total"),
+    [("bounding", 14.0, 58.0), ("estimate", 13.0, 57.0)],
+)
+def test_counterflow_supply_uses_door_share(counterflow, first, total):
+    # B (20 m²) holds 50 agents, D = 2.5 m⁻²: it accepts gamma + phi_s r
+    # with r = y_A g C dt, A's share of the door, not C dt (A out at
+    # 6.0 / 5.5 s) and not 0 (17.5 / 16.5 s, after D falls below 1.88).
+    result = door_swap(1, 50, counterflow, area_b=20.0)
+    assert result.evacuated == 51
+    assert result.exit_times[0] == first
+    assert result.evacuation_time == total

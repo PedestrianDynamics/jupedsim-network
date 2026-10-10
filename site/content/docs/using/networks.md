@@ -86,7 +86,7 @@ net.connect(
 | `specific_flow` | $F_s$ in persons/s per m of effective width; `None` uses the default of the kind. |
 | `boundary_layer` | $b$ in m per side; `None` uses the default of the kind. |
 | `merge_weight` | Relative share of this link when several links feed one full node. |
-| `bidirectional` | Also create the link from `target` to `source`. |
+| `bidirectional` | Also create the link from `target` to `source`; the two links share one door ([Counterflow]({{< relref "/docs/model/counterflow" >}})). |
 | `name` | Name of the forward link; the default is `"source->target"`. |
 
 ### Kinds
@@ -124,8 +124,13 @@ entering the horizontal run makes the walk about 16 % too short.
 `target` to `source`, named `"target->source"` whatever `name` says. No
 link is created out of a safe node, so `connect("street", "office",
 bidirectional=False)` with a safe `"street"` creates no link and does
-not raise. A door used in both directions passes its full capacity
-each way, since counterflow is not modelled. A reverse link that nobody
+not raise. The two links of one two-way `connect` share one door: they
+keep one carry, and while both directions have a queue they pass a
+total $g\,C$ split between them
+([Counterflow]({{< relref "/docs/model/counterflow" >}})).
+`counterflow="independent"` restores the full capacity each way. Two
+one-way `connect` calls between the same nodes make two separate doors.
+A reverse link that nobody
 queues at does not change how much a nearly full node accepts
 ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
 
