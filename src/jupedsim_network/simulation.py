@@ -137,8 +137,11 @@ class MonteCarloResult:
         head = f"{m} of {n} runs did not finish{when}; "
         if m == n:
             return head + "all quantiles are inf."
-        boundary = (n - m - 1) / (n - 1)
-        return head + f"quantiles above q = {boundary:.3f} are inf."
+        k = n - m - 1
+        return (
+            head
+            + f"quantiles above q = {k}/{n - 1} (about {k / (n - 1):.3f}) are inf."
+        )
 
 
 class NetworkSimulation:

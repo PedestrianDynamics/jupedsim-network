@@ -56,8 +56,7 @@ Output:
 [383.25 550.05]
 ```
 
-The 500 runs take about half a minute on a laptop
-([run times]({{< relref "/docs/ten-storey#the-building" >}})).
+The 500 runs take about 15 s on a laptop (Apple M3 Pro).
 
 - `323.0` is the `evacuation_time` of the run with seed 1: the time in
   seconds at which the last agent reached the street, pre-movement

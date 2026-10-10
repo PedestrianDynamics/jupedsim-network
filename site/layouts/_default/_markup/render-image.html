@@ -1,0 +1,33 @@
+{{- /* Hextra v0.8.4's image hook, plus: each image links to its full-size
+     file, so wide figures can be read on a phone, and a missing file
+     under static/ warns, since the figure scripts write them outside git. */ -}}
+{{- $alt := .PlainText | safeHTML -}}
+{{- $lazyLoading := .Page.Site.Params.enableImageLazyLoading | default true -}}
+{{- $dest := .Destination -}}
+
+{{- $isLocal := not (urls.Parse $dest).Scheme -}}
+{{- $isPage := and (eq .Page.Kind "page") (not .Page.BundleType) -}}
+{{- $startsWithSlash := hasPrefix $dest "/" -}}
+{{- $startsWithRelative := hasPrefix $dest "../" -}}
+
+{{- if and $dest $isLocal -}}
+  {{- if $startsWithSlash -}}
+    {{/* Images under static directory */}}
+    {{- if not (fileExists (path.Join "static" $dest)) -}}
+      {{- warnf "%s: image %s not found; run the figure scripts in scripts/figures/" .Page.File.Path $dest -}}
+    {{- end -}}
+    {{- $dest = (relURL (strings.TrimPrefix "/" $dest)) -}}
+  {{- else if and $isPage (not $startsWithRelative) -}}
+    {{/* Images that are sibling to the individual page file */}}
+    {{ $dest = (printf "../%s" $dest) }}
+  {{- end -}}
+{{- end -}}
+
+{{- with .Title -}}
+  <figure>
+    <a href="{{ $dest | safeURL }}"><img src="{{ $dest | safeURL }}" title="{{ . }}" alt="{{ $alt }}" {{ if $lazyLoading }}loading="lazy"{{ end }} /></a>
+    <figcaption>{{ . }}</figcaption>
+  </figure>
+{{- else -}}
+  <a href="{{ $dest | safeURL }}"><img src="{{ $dest | safeURL }}" alt="{{ $alt }}" {{ if $lazyLoading }}loading="lazy"{{ end }} /></a>
+{{- end -}}

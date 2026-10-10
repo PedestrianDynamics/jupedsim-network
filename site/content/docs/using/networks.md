@@ -11,8 +11,22 @@ sources are in [Model elements]({{< relref "/docs/model/elements" >}}).
 ## Nodes
 
 ```python
-net.add_room(name, *, area=None, length=None, width=None)
-net.add_stair(name, *, riser, tread, area=None, length=None, width=None)
+net.add_room(
+    name,
+    *,
+    area=None,
+    length=None,
+    width=None,
+)
+net.add_stair(
+    name,
+    *,
+    riser,
+    tread,
+    area=None,
+    length=None,
+    width=None,
+)
 net.add_safe(name)
 ```
 
@@ -48,9 +62,17 @@ UserWarning: Stair 'flight': riser 200.0 mm and tread 280.0 mm lie outside the S
 
 ```python
 net.connect(
-    source, target, *, width, kind="door", length=0.0,
-    specific_flow=None, boundary_layer=None, merge_weight=1.0,
-    bidirectional=True, name=None,
+    source,
+    target,
+    *,
+    width,
+    kind="door",
+    length=0.0,
+    specific_flow=None,
+    boundary_layer=None,
+    merge_weight=1.0,
+    bidirectional=True,
+    name=None,
 )
 ```
 

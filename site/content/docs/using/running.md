@@ -12,7 +12,12 @@ the [Getting started]({{< relref "/docs/getting-started" >}}) scenario.
 
 ```python
 NetworkSimulation(
-    network, populations, *, dt=0.5, t_max=3600.0, max_density=2.75,
+    network,
+    populations,
+    *,
+    dt=0.5,
+    t_max=3600.0,
+    max_density=2.75,
     supply_reduction=True,
 )
 ```
@@ -155,7 +160,7 @@ Output:
 The warning reads:
 
 ```
-RuntimeWarning: 59 of 500 runs did not finish before t_max = 500 s; quantiles above q = 0.882 are inf.
+RuntimeWarning: 59 of 500 runs did not finish before t_max = 500 s; quantiles above q = 440/499 (about 0.882) are inf.
 ```
 
 The median is the same as with the default `t_max`. The 95th
