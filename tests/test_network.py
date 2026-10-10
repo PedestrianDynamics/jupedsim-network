@@ -683,6 +683,68 @@ def test_zero_length_detour_is_not_a_tie():
     assert net._route_choices()[net.node("c").index] == (direct.index,)
 
 
+def chain(length=0.0):
+    # Rooms A-B-C-D-E, safe s0 at A and s1 at E. With zero lengths every
+    # node is at distance 0, and only C ties (via B and via D).
+    net = Network()
+    for name in "ABCDE":
+        net.add_room(name, area=100.0)
+    net.add_safe("s0")
+    net.add_safe("s1")
+    net.connect("A", "s0", width=1.0, length=length)
+    for a, b in ("AB", "BC", "CD", "DE"):
+        net.connect(a, b, width=1.0, length=length)
+    net.connect("E", "s1", width=1.0, length=length)
+    return net
+
+
+def test_route_table_takes_tied_links():
+    net = chain()
+    table, choices = net.route_table(), net._route_choices()
+    for link, tied in zip(table, choices):
+        assert link is None or link in tied
+    names = {u: net.links[table[net.node(u).index]].name for u in "ABCDE"}
+    assert names == {
+        "A": "A->s0",
+        "B": "B->A",
+        "C": "C->B",
+        "D": "D->E",
+        "E": "E->s1",
+    }
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_zero_length_chain_uses_adjacent_exit(split):
+    # C = 1.3 * 0.7 = 0.91 /s; the 50th agent passes E->s1 at 53.5 s
+    # (floor(1 + 0.455 * 108) = 50) and exits one step later.
+    sim = NetworkSimulation(chain(), [Population("E", 50)], split_ties=split)
+    result = sim.run(1)
+    flow = flows(result)
+    assert flow.pop("E->s1") == 50
+    assert set(flow.values()) == {0}
+    assert result.evacuation_time == 54.0
+
+
+def test_unsplit_ties_keep_first_found_route():
+    # room->x->s (2 links) and room->y->z->s (3 links) are both 2.0 m.
+    # Dijkstra reaches room via y first; split_ties=False keeps it.
+    net = Network()
+    for name in ("room", "x", "y", "z"):
+        net.add_room(name, area=100.0)
+    net.add_safe("s")
+    net.connect("room", "x", width=1.0, length=0.5, bidirectional=False)
+    net.connect("room", "y", width=1.0, length=1.0, bidirectional=False)
+    net.connect("x", "s", width=1.0, length=1.5)
+    net.connect("y", "z", width=1.0, length=0.5, bidirectional=False)
+    net.connect("z", "s", width=1.0, length=0.5)
+    room = net.node("room").index
+    assert net.links[net.route_table()[room]].name == "room->y"
+    with pytest.warns(UserWarning, match=r"tied at \['room'\]"):
+        sim = NetworkSimulation(net, [Population("room", 20)], split_ties=False)
+    flow = flows(sim.run(1))
+    assert (flow["room->y"], flow["room->x"]) == (20, 0)
+
+
 @pytest.mark.parametrize("delta, tied", [(0.0, True), (1e-6, False)])
 def test_ties_within_rounding_only(delta, tied):
     # 0.1 + 0.2 differs from 0.3 in floating point but is a tie.

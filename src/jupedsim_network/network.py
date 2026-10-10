@@ -198,8 +198,11 @@ class Network:
         Arguments:
             target: name of one safe node; ``None`` uses the nearest one
 
-        Of several equally short routes the first link found is kept;
-        ``NetworkSimulation`` splits such ties between their links.
+        Of several equally short routes the first link found is kept if it
+        makes progress (closer to safety, or as close over fewer links),
+        else the first such link in creation order; ``NetworkSimulation``
+        splits such ties between their links. Raises ``RuntimeError`` if
+        tied routes form a cycle, which the progress rule excludes.
 
         Returns:
             For each node index the index of the link to take, or ``None``
@@ -217,7 +220,11 @@ class Network:
                 continue
             for link in incoming[index]:
                 self._relax(link, d, distance, next_link, heap)
-        return next_link
+        choices = self._route_choices(target)
+        return [
+            link if not tied or link in tied else tied[0]
+            for link, tied in zip(next_link, choices)
+        ]
 
     def _relax(self, link, d, distance, next_link, heap) -> None:
         candidate = d + link.length

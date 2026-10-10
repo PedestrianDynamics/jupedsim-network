@@ -153,12 +153,16 @@ the run starts and is never updated.
   link getting one more if their number is odd. Ties are split wherever
   they occur along a route, and with `target` within the routes to that
   safe node. No random numbers are drawn.
-- A zero-length link counts towards a tie only if it brings agents
-  closer to safety, or as close over fewer links. A zero-length detour
-  is therefore not a tie, and agents cannot walk in circles.
-- `NetworkSimulation(..., split_ties=False)` sends every agent along the
-  route found first, as `route_table` returns it, and issues a
-  `UserWarning` naming the tied nodes the populations can reach
+- A link is on a route only if it brings agents closer to safety, or as
+  close over fewer links; this holds at ties and elsewhere. A
+  zero-length detour is therefore never taken, and agents cannot walk
+  in circles.
+- With `NetworkSimulation(..., split_ties=False)`, every agent at a node
+  takes the one link that `route_table` returns: the link found first,
+  if the rule above allows it; otherwise the first allowed link in the
+  order the links were created (only at a node where zero-length links
+  tie). The simulation issues a `UserWarning` naming the tied nodes
+  the populations can reach
   ([Limitations]({{< relref "/docs/limitations#routes" >}}),
   [issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
 - `start_distance` of a population is added to the walk but not to the

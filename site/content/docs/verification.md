@@ -20,7 +20,7 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `147 passed`, followed by the run
+The last line of the output reads `151 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
@@ -37,6 +37,7 @@ is what the test measures with the current code.
 | Stair 7/11 in: $k$ and $F_s = k/(4a)$ | 1.08 m/s (SFPE Table 67.2 {{< cite 1 "p. 2174" >}}), 1.01 persons/s/m (SFPE Table 67.5 {{< cite 1 "p. 2176" >}}) | 1.081, 1.016 | 0.01 | `test_stair_specific_flow_follows_geometry` |
 | Supply ramp between passages, 45 agents per room | passages at $t_q + \Delta t\,\lceil k/(\varphi\,C\,\Delta t)\rceil$, $k = 1 \ldots 45$; first exit 94.5 s, $T = 150.0$ s | equal | exact | `test_supply_ramp_holds_between_passages` |
 | Steady density on the ramp, exit door 0.7 m and 0.9 m | $40\,D^*$ = 90.11 and 80.16 agents | mean 90.11 and 80.16, maximum 91 and 81 | 0.5 agent; maximum ≤ $\lceil 40\,D^* \rceil$ | `test_supply_ramp_sets_steady_density` |
+| Chain of five 100 m² rooms A–B–C–D–E with exits at A and E (safe nodes `s0` and `s1`); all six connections are 1 m doors of length 0; $N = 50$ agents in E, 1.2 m/s, no pre-movement, $\Delta t = 0.5\,\mathrm{s}$; both `split_ties` settings ([Routes]({{< relref "/docs/using/networks#routes" >}})) | $C = 1.3\,(1-2\cdot0.15) = 0.91$ /s; $\Delta t\,\lceil (N-1)/(C\,\Delta t)\rceil = 0.5\cdot\lceil 49/0.455\rceil = 54.0$ s | 54.0 s, `E->s1` = 50, all other links 0 | exact | `test_zero_length_chain_uses_adjacent_exit` |
 
 The two supply-ramp tests check that the code delivers the share
 $\varphi_n$ of the

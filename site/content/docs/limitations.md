@@ -151,9 +151,9 @@ simulation.
   ([issue #8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)).
   When every link has a positive length, default routing (no `target`)
   sends no agents both ways along a link, because every shortest route
-  moves strictly closer to a safe node. Counterflow then arises only
-  when populations have different `target`s (zero-length links: see
-  [issue #36](https://github.com/PedestrianDynamics/jupedsim-network/issues/36)).
+  moves closer to a safe node, or as close over fewer links.
+  Counterflow then arises only when populations have different
+  `target`s.
 - **Doors are open and the data are old.** $F_s = 1.3$ persons/s/m
   assumes doors held open; for doors that are not, SFPE suggests
   50 persons/min per door leaf. SFPE also notes that the door data are
