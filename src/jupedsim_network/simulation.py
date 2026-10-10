@@ -12,10 +12,13 @@ Each time step of length ``dt`` is processed synchronously:
    queue, keeping the fractional remainder for the next step; a link that
    has been idle for at least ``1 / capacity`` lets the first arriving agent
    through at once; no link passes more than ``1 + capacity * t`` agents in
-   any interval ``t``. Above the peak-flow density the summed inflow a node
-   accepts is reduced linearly to zero at ``max_density``, which the node
-   never exceeds. When several links compete for what a node accepts, it is
-   shared in proportion to their merge weights.
+   any interval ``t``. Above the peak-flow density a node accepts a share
+   of the summed capacity of its incoming links that have a queue in this
+   step; the share falls linearly to zero at ``max_density``, which the
+   node never exceeds. A blocked node saves unused supply up to one
+   step of inflow, one agent or the largest area factor waiting at its
+   links, whichever is largest. When several links compete for what a
+   node accepts, it is shared in proportion to their merge weights.
 5. All transfers are applied at once, so the result does not depend on the
    order in which links or nodes are processed. Agents that join the same
    queue at the same interpolated time are served in the order in which they
@@ -195,6 +198,8 @@ class NetworkSimulation:
         self.split_ties = split_ties
         self._routes = _route_tables(network, self.populations)
         self._choices = {t: network._route_choices(t) for t in self._routes}
+        for pop in self.populations:
+            _check_area_factor(self, pop)
         if not split_ties:
             _warn_unsplit_ties(self)
 
@@ -232,6 +237,36 @@ def _route_tables(network, populations) -> dict:
         if tables[pop.target][node.index] is None:
             raise ValueError(f"No route from '{pop.node}' to safety.")
     return tables
+
+
+def _check_area_factor(sim, pop) -> None:
+    """Reject agents that cannot fit into a node they must enter."""
+    nodes = sim.network.nodes
+    for u in _route_nodes(sim, pop) - {sim.network.node(pop.node).index}:
+        limit = sim.max_density * nodes[u].area
+        if pop.area_factor <= limit + 1e-9:
+            continue
+        raise ValueError(
+            f"area_factor {pop.area_factor} of the population in "
+            f"'{pop.node}' exceeds max_density * area = {limit:g} of "
+            f"'{nodes[u].name}' on its route."
+        )
+
+
+def _route_nodes(sim, pop) -> set[int]:
+    """Non-safe nodes agents of ``pop`` can reach, start node included."""
+    net = sim.network
+    links, table = net.links, sim._routes[pop.target]
+    choices = sim._choices[pop.target]
+    stack, seen = [net.node(pop.node).index], set()
+    while stack:
+        u = stack.pop()
+        if u in seen or table[u] is None:
+            continue
+        seen.add(u)
+        tied = choices[u] if sim.split_ties else ()
+        stack.extend(links[i].target for i in (table[u], *tied))
+    return seen
 
 
 def _warn_unsplit_ties(sim) -> None:
@@ -294,9 +329,6 @@ class _Run:
         self.link_length = np.array([lk.length for lk in net.links])
         self.link_rate = np.array([lk.capacity for lk in net.links]) * sim.dt
         self.link_weight = np.array([lk.merge_weight for lk in net.links])
-        self.inflow_rate = np.bincount(
-            self.link_target, weights=self.link_rate, minlength=len(self.area)
-        )
         # A fresh link lets the first agent through without waiting.
         self.carry = np.ones(len(net.links))
         self.node_carry = np.zeros(len(self.area))
@@ -415,21 +447,37 @@ class _Run:
         queued = queued[np.lexsort((queued, a.arrival[queued], a.link[queued]))]
         budget = self.carry + self.link_rate
         wanted = self._wanted(queued, budget)
-        allowance = self._allowance(density)
+        queuing = np.bincount(a.link[queued], minlength=len(budget)) > 0
+        # Links whose capacity enters the supply limit of their target.
+        supply_links = queuing.copy()
+        offered = self._offered(supply_links)
+        allowance = self._allowance(density, offered)
         free = self.sim.max_density * self.area - load
         passed = self._admit(wanted, np.minimum(free, allowance))
         flow = np.bincount(a.link[passed], minlength=len(budget))
         self._update_carry(budget, flow)
-        self._update_node_carry(allowance, passed, wanted)
-        self._update_virtual_time(flow, queued)
+        head = self._head_area(queued, passed)
+        self._update_node_carry(allowance, offered, head, passed, wanted)
+        self._update_virtual_time(flow, queuing)
         self._move(passed, t)
         return flow
 
-    def _allowance(self, density: np.ndarray) -> np.ndarray:
+    def _offered(self, links: np.ndarray) -> np.ndarray:
+        """Summed per-step rate of the selected links into each node."""
+        return np.bincount(
+            self.link_target[links],
+            weights=self.link_rate[links],
+            minlength=len(self.area),
+        )
+
+    def _allowance(
+        self, density: np.ndarray, offered: np.ndarray
+    ) -> np.ndarray:
         """Agent area a node accepts this step beyond the space limit.
 
-        Above the peak-flow density the summed inflow capacity of a node is
-        reduced linearly to zero at ``max_density``.
+        Above the peak-flow density the capacity ``offered`` to a node by
+        its incoming links with a queue is reduced linearly to zero at
+        ``max_density``.
         """
         allowance = np.full(len(self.area), np.inf)
         peak, limit = hydraulic.PEAK_FLOW_DENSITY, self.sim.max_density
@@ -438,12 +486,27 @@ class _Run:
         factor = np.clip((limit - density) / (limit - peak), 0.0, 1.0)
         reduced = (factor < 1.0) & ~self.safe
         allowance[reduced] = (
-            self.node_carry[reduced]
-            + factor[reduced] * self.inflow_rate[reduced]
+            self.node_carry[reduced] + factor[reduced] * offered[reduced]
         )
         return allowance
 
-    def _update_node_carry(self, allowance, passed, wanted) -> None:
+    def _head_area(self, queued, passed) -> np.ndarray:
+        """Largest area factor at the head of a queue into each node."""
+        a = self.agents
+        head = np.zeros(len(self.area))
+        waiting = queued[~np.isin(queued, passed)]
+        if waiting.size == 0:
+            return head
+        links = a.link[waiting]
+        first = np.ones(waiting.size, dtype=bool)
+        first[1:] = links[1:] != links[:-1]
+        heads = waiting[first]
+        np.maximum.at(head, self.link_target[a.link[heads]], a.area[heads])
+        return head
+
+    def _update_node_carry(
+        self, allowance, offered, head, passed, wanted
+    ) -> None:
         a = self.agents
         candidates = np.concatenate(wanted) if wanted else passed
         demand = self._load(
@@ -451,7 +514,8 @@ class _Run:
         )
         admitted = self._load(self.link_target[a.link[passed]], a.area[passed])
         blocked = np.isfinite(allowance) & (demand > admitted)
-        cap = np.maximum(self.inflow_rate, 1.0)
+        # Save at most one step of supply, or enough for the largest head.
+        cap = np.maximum(np.maximum(offered, 1.0), head)
         rest = np.clip(allowance - admitted, 0.0, cap)
         self.node_carry = np.where(blocked, rest, 0.0)
 
@@ -496,10 +560,9 @@ class _Run:
         """Keep unused budget, at most one agent; refills at rate C."""
         self.carry = np.clip(budget - flow, 0.0, 1.0)
 
-    def _update_virtual_time(self, flow, queued) -> None:
+    def _update_virtual_time(self, flow, active) -> None:
         """Advance served links; idle links catch up to avoid banking."""
         self.virtual_time += flow / self.link_weight
-        active = np.bincount(self.agents.link[queued], minlength=len(flow)) > 0
         floor = np.full(len(self.area), np.inf)
         np.minimum.at(
             floor, self.link_target[active], self.virtual_time[active]

@@ -76,13 +76,11 @@ validation {{< cite 1 "p. 2171" >}}.
   between 1.88 m⁻² and `max_density` has not been calibrated against
   experiments. It is off when `max_density` ≤ 1.88 m⁻².
   `max_density` must stay below the jam density of 3.76 m⁻².
-- **Supply counts every incoming link.** The inflow capacity in the
-  supply factor includes links that rarely carry anyone, such as the
-  reverse direction of a two-way connection. A nearly full node then
-  accepts more inflow than intended. Two-way links are the default
-  (`bidirectional=True`); use `bidirectional=False` for egress networks
-  ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-links" >}}),
-  [issue #9](https://github.com/PedestrianDynamics/jupedsim-network/issues/9)).
+- **Supply depends on which links have a queue.** Above 1.88 m⁻² a node
+  accepts a share of the summed capacity of its incoming links that have
+  a queue in this step. At the same density, a node fed through one
+  queued link therefore accepts less than one fed through two
+  ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
 - **Counterflow isn't modelled.** The two directions of a two-way
   connection are separate links, each with the full capacity, so a door
   used both ways passes twice its capacity. In trials, the flow per
@@ -133,6 +131,19 @@ validation {{< cite 1 "p. 2171" >}}.
   contribution to density. It is not the Predtechenskii–Milinskii
   method that SFPE describes for mixed body sizes
   {{< cite 1 "pp. 2185–2187" >}}.
+- **Full nodes can lock up.** No node ever exceeds `max_density`, so an
+  agent enters only if its area factor fits into the free space. When
+  every node on a cycle is too full to take the next agent waiting for
+  it, the run never finishes: two 20 m² rooms holding 55 agents each
+  ($2.75 \times 20$) and swapping occupants through one door stay full
+  for good. The evacuation time is `nan`, and a larger `t_max` doesn't
+  help. With mixed area factors a lock can also come from the queue
+  order: a node serves the heads of its queues in turn, so a smaller
+  agent that would fit waits behind a larger one that does not. An
+  agent whose area factor exceeds `max_density` × area of a node on its
+  route would never fit; `NetworkSimulation` rejects it with a
+  `ValueError`
+  ([Running]({{< relref "/docs/using/running#errors" >}})).
 
 ## Numerics
 

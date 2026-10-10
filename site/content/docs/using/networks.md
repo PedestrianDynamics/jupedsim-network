@@ -124,13 +124,10 @@ entering the horizontal run makes the walk about 16 % too short.
 `target` to `source`, named `"target->source"` whatever `name` says. No
 link is created out of a safe node, so `connect("street", "office",
 bidirectional=False)` with a safe `"street"` creates no link and does
-not raise. The reverse link has two side effects:
-
-- it adds its capacity to the inflow capacity of the source node, which
-  sets how much a nearly full node accepts
-  ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}}));
-- a door used in both directions passes its full capacity each way,
-  since counterflow is not modelled.
+not raise. A door used in both directions passes its full capacity
+each way, since counterflow is not modelled. A reverse link that nobody
+queues at does not change how much a nearly full node accepts
+([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
 
 For a pure egress network, where everyone walks towards the exits, use
 `bidirectional=False`. The building scenarios and the Getting started
