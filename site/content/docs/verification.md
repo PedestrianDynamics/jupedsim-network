@@ -20,7 +20,7 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `144 passed`, followed by the run
+The last line of the output reads `147 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
@@ -35,6 +35,32 @@ is what the test measures with the current code.
 | 200 agents at 2 m⁻² walk 20 m {{< cite 3 "p. 15" >}} | $20/(1.4\,(1-0.266\cdot2)) = 30.5$ s | 31.0 s | 0.6 s | `test_congested_walking_speed` |
 | Merge weights 1 : 3 over 150 s | flow ratio 3 | 3.0 | 15 % | `test_merge_weights_split_flow` |
 | Stair 7/11 in: $k$ and $F_s = k/(4a)$ | 1.08 m/s (SFPE Table 67.2 {{< cite 1 "p. 2174" >}}), 1.01 persons/s/m (SFPE Table 67.5 {{< cite 1 "p. 2176" >}}) | 1.081, 1.016 | 0.01 | `test_stair_specific_flow_follows_geometry` |
+| Supply ramp between passages, 45 agents per room | passages at $t_q + \Delta t\,\lceil k/(\varphi\,C\,\Delta t)\rceil$, $k = 1 \ldots 45$; first exit 94.5 s, $T = 150.0$ s | equal | exact | `test_supply_ramp_holds_between_passages` |
+| Steady density on the ramp, exit door 0.7 m and 0.9 m | $40\,D^*$ = 90.11 and 80.16 agents | mean 90.11 and 80.16, maximum 91 and 81 | 0.5 agent; maximum ≤ $\lceil 40\,D^* \rceil$ | `test_supply_ramp_sets_steady_density` |
+
+The two supply-ramp tests check that the code delivers the share
+$\varphi_n$ of the
+[update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}}),
+with $D_\text{max} = 2.75\,\text{m}^{-2}$ (the default `max_density`)
+and $D_\text{peak} = 1.88\,\text{m}^{-2}$. In the first, two 20 m²
+rooms of 45 agents each swap occupants through two one-way doors, 1 m
+wide and 2 m long, with $C\,\Delta t = 0.455$. The swap keeps
+$D = 2.25\,\text{m}^{-2}$ in both rooms, so one share
+$\varphi = 0.5745$ holds for all 45 passages. Walking 2 m at
+$0.5621\,\text{m/s}$ takes 8 steps, so the first step with a queue
+starts at $t_q = 3.5$ s. Each group then leaves through a 50 m one-way
+link to the far exit. Walking 50 m at the same speed takes 178 steps,
+so the first agent to pass, at 5.5 s, exits at 94.5 s.
+$T = 150.0$ s follows from a step-by-step
+recursion of these exits. In the second, a 40 m² room
+is fed through a 1 m one-way door ($C_\text{in} = 0.91\,\text{s}^{-1}$)
+and left through a door of width $w$, with
+$C_\text{out} = 1.3\,(w - 0.3) = 0.52$ and $0.78\,\text{s}^{-1}$.
+Setting $\varphi\,C_\text{in} = C_\text{out}$ gives
+$D^* = D_\text{max} - (D_\text{max} - D_\text{peak})\,C_\text{out}/C_\text{in}$.
+The test averages the occupancy over $t \ge 500\,\text{s}$ for
+$w = 0.7\,\text{m}$ and over $t \ge 800\,\text{s}$ for
+$w = 0.9\,\text{m}$.
 
 Further tests check pre-movement delays, route choice, conservation of
 agents, that `max_density` is never exceeded, that no link passes more
@@ -295,9 +321,9 @@ $(N-1)/C$ convention, to within one time step. The SFPE hand
 calculation $C\,t$ lies one agent lower and ends at $N/C = 107.4$ s; the
 inset shows the last 13 s. (b) Two rooms feeding a
 full corridor with merge weights 1 : 3. Over 150 s the flows reach
-3 : 1. At the start, room a passes no one from 2.5 s to 17.5 s while
+3 : 1. At the start, room a passes no one from 2.0 s to 17.0 s while
 room b catches up on the share it lost before the corridor filled
-([Limitations]({{< relref "/docs/limitations#numerics" >}})).
+([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
 ## Sensitivity to max_density
 
@@ -321,9 +347,9 @@ The figure repeats the experiment with this model on a ten-storey
 building with one stair, comparing the two settings of
 `supply_reduction`. With a hard limit only, the evacuation time grows
 sharply above 3 m⁻². With supply reduction it stays almost constant.
-This shows only that supply reduction removes the effect in this model.
-The building is not the one Tsai used, so it says nothing about
-EvacuatioNZ's numbers.
+This shows only that supply reduction removes the effect in this
+building. The building is not the one Tsai used, so it says nothing
+about EvacuatioNZ's numbers.
 
 ![Evacuation time against max_density with and without supply reduction](/images/network/max_density_sweep.png)
 

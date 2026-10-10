@@ -99,15 +99,20 @@ accepts agents only up to two limits.
   not applied and only the free space counts.
 
   The node carry $\gamma_n$ keeps what was allowed but not used, so that
-  low inflow rates aren't rounded away. If the supply limit applied and
-  some candidate was refused in this step,
+  low inflow rates aren't rounded away. It starts at $\gamma_n = 0$ and,
+  after every step, whether or not an agent was ready to pass, becomes
 
   $$
-  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\in Q_n} C_\ell\,\Delta t,\ 1,\ a^\ast_n\bigr)\Bigr);
+  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\in Q_n} C_\ell\,\Delta t,\ 1,\ a^\ast_n\bigr)\Bigr).
   $$
 
-  otherwise $\gamma_n = 0$. The cap uses the same sum over links with a
-  queue as $\alpha_n$. $a^\ast_n$ is the largest area factor among the
+  A node at or below $D_\text{peak}$ has $\alpha_n = \infty$, so after
+  such a step its carry is full. Like the link carry, $\gamma_n$
+  refills at $\varphi_n \sum_{\ell\in Q_n} C_\ell\,\Delta t$ per step
+  and holds at most one cap. A node that has just passed
+  $D_\text{peak}$ can take one cap at once, then takes the share
+  $\varphi_n$. The cap uses the same sum over links with a queue as
+  $\alpha_n$. $a^\ast_n$ is the largest area factor among the
   agents still waiting at the head of a queue into $n$ after this
   step's admissions, 0 if nobody waits. The cap lets a node save enough
   supply for an agent with a large area factor, so that agent waits but

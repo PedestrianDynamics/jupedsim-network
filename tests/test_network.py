@@ -198,14 +198,18 @@ def test_supply_ignores_idle_feeder():
     assert result.evacuation_time == 660.0
 
 
-def room_swap(count, area_factor, side_door):
-    """Rooms A and B (20 m²) swap occupants through a 1 m door."""
+def room_swap(count, area_factor, side_door, two_way=True):
+    """Rooms A and B (20 m²) swap occupants through 1 m doors."""
     net = Network()
     for name in ("A", "B"):
         net.add_room(name, area=20.0)
     net.add_safe("exitA")
     net.add_safe("exitB")
-    net.connect("A", "B", width=1.0, length=2.0)
+    if two_way:
+        net.connect("A", "B", width=1.0, length=2.0)
+    else:
+        net.connect("A", "B", width=1.0, length=2.0, bidirectional=False)
+        net.connect("B", "A", width=1.0, length=2.0, bidirectional=False)
     if side_door:
         net.add_room("S", area=20.0)
         net.connect("A", "S", width=2.0, length=2.0)
@@ -224,35 +228,78 @@ def door_passages(result, link):
     return list(result.times[column == 1])
 
 
+def ramp_passages(start, density, area_factor, count):
+    """Passage times at the supply share phi of one 1 m door (C dt = 0.455).
+
+    The k-th agent passes once the node has accrued k * area_factor at
+    phi * C * dt per step from the first step with a queue, ``start``.
+    """
+    phi = (2.75 - density) / (2.75 - hydraulic.PEAK_FLOW_DENSITY)
+    rate = phi * 1.3 * (1.0 - 0.3) * 0.5
+    steps = [math.ceil(k * area_factor / rate) for k in range(1, count + 1)]
+    return [start + 0.5 * n for n in steps]
+
+
 @pytest.mark.parametrize(
-    (
-        "count",
-        "area_factor",
-        "side_door",
-        "first_exit",
-        "total",
-        "first",
-        "gap",
-    ),
+    ("count", "area_factor", "side_door", "first_exit", "total", "start"),
     [
-        # phi * C * dt = 0.392 per step; the 2nd area saved after 6 steps.
-        (20, 2.0, True, 82.5, 127.5, 6.0, 3.5),
+        # phi * C * dt = 0.392 per step; 2 area saved after 6 steps.
+        (20, 2.0, True, 82.5, 115.5, 3.0),
         # phi * C * dt = 0.418 per step; 1.5 saved after 4 steps.
-        (26, 1.5, False, 79.0, 122.0, 4.5, 2.5),
+        (26, 1.5, False, 79.0, 110.5, 2.5),
     ],
     ids=["side_door_af2", "no_side_door_af1_5"],
 )
 def test_supply_carry_admits_large_agent_swap(
-    count, area_factor, side_door, first_exit, total, first, gap
+    count, area_factor, side_door, first_exit, total, start
 ):
     # A capped at max(C * dt, 1) stalls: alpha <= 1 + phi * C * dt < a.
     result = room_swap(count, area_factor, side_door)
-    expected = [first + gap * k for k in range(count)]
+    density = 2 * count * area_factor / 40.0
+    expected = ramp_passages(start, density, area_factor, count)
     assert door_passages(result, "A->B") == expected
     assert door_passages(result, "B->A") == expected
     assert np.nanmin(result.exit_times) == first_exit
     assert result.evacuated == 2 * count
     assert result.evacuation_time == total
+
+
+def test_supply_ramp_holds_between_passages():
+    # D = 2.25 m⁻²: S = 0.5621 m/s, 2 m in 8 steps, first queue at 3.5 s.
+    # The node keeps its carry between passages, so the doors pass at
+    # the share phi = 0.5745 of C, not one step later after each reset.
+    result = room_swap(45, 1.0, False, two_way=False)
+    assert result.link_flow.max() == 1
+    expected = ramp_passages(3.5, 2.25, 1.0, 45)
+    assert door_passages(result, "A->B") == expected
+    assert door_passages(result, "B->A") == expected
+    # 50 m in ceil(50 / 0.28105) = 178 steps after the first passage.
+    assert np.nanmin(result.exit_times) == 94.5
+    assert result.evacuated == 90
+    assert result.evacuation_time == 150.0
+
+
+@pytest.mark.parametrize(
+    ("width", "count", "t_max", "window"),
+    [(0.7, 600, 800.0, 500.0), (0.9, 900, 1000.0, 800.0)],
+    ids=["inside_ramp", "near_peak"],
+)
+def test_supply_ramp_sets_steady_density(width, count, t_max, window):
+    # phi(D) * C_in = C_out gives D = D_max - (D_max - D_peak) C_out / C_in.
+    net = Network()
+    net.add_room("C", area=40.0)
+    net.add_room("R", area=1000.0)
+    net.add_safe("exit")
+    net.connect("R", "C", width=1.0, bidirectional=False)
+    net.connect("C", "exit", width=width, bidirectional=False)
+    sim = NetworkSimulation(net, [Population("R", count)], t_max=t_max)
+    result = sim.run(seed=1)
+    ratio = (width - 0.3) / (1.0 - 0.3)
+    expected = 40.0 * (2.75 - (2.75 - hydraulic.PEAK_FLOW_DENSITY) * ratio)
+    occupancy = result.node_occupancy[:, result.node_names.index("C")]
+    steady = occupancy[result.times >= window]
+    assert steady.mean() == pytest.approx(expected, abs=0.5)
+    assert steady.max() <= math.ceil(expected)
 
 
 def test_same_seed_gives_same_result():
@@ -565,7 +612,7 @@ def two_stair_building(stairs=("A", "B")):
     return net
 
 
-@pytest.mark.parametrize("pre, evacuation", [(60.0, 422.5), (0.0, 362.5)])
+@pytest.mark.parametrize("pre, evacuation", [(60.0, 423.0), (0.0, 363.0)])
 def test_split_ties_match_split_by_hand(pre, evacuation):
     # Main sends all 600 agents down stair A: 752.0 s and 692.0 s.
     net = two_stair_building()
