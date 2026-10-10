@@ -66,8 +66,8 @@ The 500 runs take about 15 s on a laptop (Apple M3 Pro).
   times.
 
 `bidirectional=False` creates each link in the walking direction only.
-The default creates the reverse link as well, which matters when a
-door is used in both directions, since counterflow is not modelled
+The default creates the reverse link as well; the two directions then
+share one door
 ([Networks]({{< relref "/docs/using/networks#one-way-and-two-way-links" >}})).
 
 ## Check that every run finished

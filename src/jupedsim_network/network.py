@@ -75,6 +75,8 @@ class Network:
         self._nodes: list[Node] = []
         self._links: list[Link] = []
         self._by_name: dict[str, Node] = {}
+        # Reverse link of each link of a two-way connection (shared door).
+        self._reverse: dict[int, int] = {}
 
     @property
     def nodes(self) -> tuple[Node, ...]:
@@ -154,7 +156,9 @@ class Network:
             boundary_layer: per side in m. Defaults to 0.15 for doors and
                 stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
-            bidirectional: also create the link from target to source
+            bidirectional: also create the link from target to source;
+                the two links share one door (``counterflow`` of
+                ``NetworkSimulation``)
 
         Returns:
             The created links.
@@ -190,6 +194,9 @@ class Network:
             )
             self._links.append(link)
             links.append(link)
+        if len(links) == 2:
+            self._reverse[links[0].index] = links[1].index
+            self._reverse[links[1].index] = links[0].index
         return tuple(links)
 
     def route_table(self, target: str | None = None) -> list[int | None]:

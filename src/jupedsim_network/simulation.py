@@ -12,12 +12,20 @@ Each time step of length ``dt`` is processed synchronously:
    queue, keeping the fractional remainder for the next step; a link that
    has been idle for at least ``1 / capacity`` lets the first arriving agent
    through at once; no link passes more than ``1 + capacity * t`` agents in
-   any interval ``t``. Above the peak-flow density a node accepts a share
-   of the summed capacity of its incoming links that have a queue in this
-   step; the share falls linearly to zero at ``max_density``, which the
-   node never exceeds. A node keeps unused supply, whether or not an
-   agent was ready to pass, up to one step of inflow, one agent or the
-   largest area factor waiting at its links, whichever is largest. When
+   any interval ``t``. The two links of a two-way connection share one
+   door: they always hold one carry, so a passage in one direction uses
+   credit the other direction would have had, and while both have a queue
+   they pass together ``g * capacity * dt`` (``g`` set by ``counterflow``
+   and the minor share of the queues), split by queue share with a
+   minimum for each direction. Under ``counterflow="independent"`` each
+   link keeps its own carry and passes its full capacity. Above the
+   peak-flow density a node accepts a share of the summed rate of its
+   incoming links that have a queue in this step (their share of the
+   door during counterflow); the share falls linearly to zero at
+   ``max_density``, which the node never exceeds. A node keeps unused
+   supply, whether or not an agent was ready to pass, up to one step of
+   inflow, one agent or the largest area factor waiting at its links,
+   whichever is largest. When
    several links compete for what a node accepts, it is shared in
    proportion to their merge weights.
 5. All transfers are applied at once, so the result does not depend on the
@@ -44,13 +52,32 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from jupedsim_network import hydraulic
-from jupedsim_network.network import SAFE, Network
+from jupedsim_network.network import SAFE, STAIR, Network
 from jupedsim_network.sampling import Distribution, as_distribution
 
 _WAITING = 0
 _WALKING = 1
 _QUEUED = 2
 _SAFE = 3
+
+# Counterflow at the two links of one two-way connection (shared door):
+# y0, the minimum pass share of a direction, then (g0, g_half) for doors
+# and openings and for stairs: the two-way total in units of the one-way
+# capacity at a vanishing minor share and at balance, linear in between.
+# y0 = 0.17: Navin & Wheeler (1969), width share 17 % + 0.64 V.
+# "bounding", low end of the walkway data: g_half = 0.94, balanced walkway
+# total (HRR 355; Wong et al. 2010); door g0 = 0.84 (Navin & Wheeler
+# Table III; HCM 2000); stair g0 = 0.75 (Tofilo et al. 2014 recommend
+# 75 % of the flow without counterflow; Cheung & Lam 1997). "estimate",
+# centre of the data: door 0.90 -> 1.00 (Cheung & Lam 1997; Fruin 1987);
+# stair 0.80 -> 1.00 (Tofilo et al. 2014 Fig. 6; Cheung & Lam 1997).
+# Door values are borrowed from walkways.
+# "independent": full capacity each way.
+_COUNTERFLOW = {
+    "bounding": (0.17, (0.84, 0.94), (0.75, 0.94)),
+    "estimate": (0.17, (0.90, 1.00), (0.80, 1.00)),
+    "independent": None,
+}
 
 
 @dataclass(frozen=True)
@@ -169,6 +196,16 @@ class NetworkSimulation:
         split_ties: split agents evenly between equally short routes;
             ``False`` sends all of them along the first route found and
             issues a ``UserWarning`` if a population can reach a tie
+        counterflow: how the two links of a two-way connection share one
+            door. ``"bounding"`` (low end of the walkway data; stairs:
+            Tofilo et al.'s 75 %) and ``"estimate"`` (centre of the
+            data): the two links always share one carry, whether or not
+            both have a queue; while both have a queue they pass
+            together ``g * C`` with ``g`` between 0.75 and 1.0, split by
+            queue share with at least 0.17 of the passages for each
+            direction. ``"independent"``: each link keeps its own carry
+            and passes its full capacity each way, twice what one door
+            passes
     """
 
     def __init__(
@@ -181,12 +218,18 @@ class NetworkSimulation:
         max_density: float = 2.75,
         supply_reduction: bool = True,
         split_ties: bool = True,
+        counterflow: str = "bounding",
     ) -> None:
         if dt <= 0 or t_max <= 0:
             raise ValueError("dt and t_max must be positive.")
         if not 0 < max_density < hydraulic.JAM_DENSITY:
             raise ValueError(
                 f"max_density must be in (0, {hydraulic.JAM_DENSITY:.2f})."
+            )
+        if counterflow not in tuple(_COUNTERFLOW):
+            raise ValueError(
+                "counterflow must be one of 'bounding', 'estimate', "
+                f"'independent'; got {counterflow!r}."
             )
         if not populations:
             raise ValueError("At least one population is required.")
@@ -197,6 +240,7 @@ class NetworkSimulation:
         self.max_density = max_density
         self.supply_reduction = supply_reduction
         self.split_ties = split_ties
+        self.counterflow = counterflow
         self._routes = _route_tables(network, self.populations)
         self._choices = {t: network._route_choices(t) for t in self._routes}
         for pop in self.populations:
@@ -332,6 +376,7 @@ class _Run:
         self.link_weight = np.array([lk.merge_weight for lk in net.links])
         # A fresh link lets the first agent through without waiting.
         self.carry = np.ones(len(net.links))
+        self._init_pairs(net, _COUNTERFLOW[sim.counterflow])
         self.node_carry = np.zeros(len(self.area))
         # Served agents per merge weight; keeps merge shares across steps.
         self.virtual_time = np.zeros(len(net.links))
@@ -348,6 +393,20 @@ class _Run:
         self.occupancy_series: list[np.ndarray] = []
         self.flow_series: list[np.ndarray] = []
         self.times: list[float] = []
+
+    def _init_pairs(self, net: Network, preset) -> None:
+        """Partner of each two-way link (-1: none) and the pair constants."""
+        pairs = net._reverse if preset is not None else {}
+        n = len(net.links)
+        self.partner = np.array([pairs.get(i, -1) for i in range(n)], dtype=int)
+        self.paired = bool(pairs)
+        y0, door, stair = preset or (0.0, (1.0, 1.0), (1.0, 1.0))
+        stairs = np.array([lk.kind == STAIR for lk in net.links], dtype=bool)
+        self.pair_y0 = y0
+        self.pair_g0 = np.where(stairs, stair[0], door[0])
+        self.pair_g_half = np.where(stairs, stair[1], door[1])
+        # Passages per pass share in the current counterflow episode.
+        self.pair_time = np.zeros(n)
 
     def _tie_links(self) -> dict[int, np.ndarray]:
         n = len(self.area)
@@ -446,30 +505,89 @@ class _Run:
         a = self.agents
         queued = np.flatnonzero(a.state == _QUEUED)
         queued = queued[np.lexsort((queued, a.arrival[queued], a.link[queued]))]
-        budget = self.carry + self.link_rate
+        count = np.bincount(a.link[queued], minlength=len(self.link_rate))
+        queuing = count > 0
+        active, share, pair_rate = self._pair_state(count)
+        budget = self.carry + pair_rate
+        # Effective rate: an active link's share of the pair rate.
+        rate = np.where(active, share * pair_rate, self.link_rate)
         wanted = self._wanted(queued, budget)
-        queuing = np.bincount(a.link[queued], minlength=len(budget)) > 0
-        # Links whose capacity enters the supply limit of their target.
-        supply_links = queuing.copy()
-        offered = self._offered(supply_links)
+        # Links whose rate enters the supply limit of their target.
+        supply_links = queuing & (rate > 0)
+        offered = self._offered(supply_links, rate)
         allowance = self._allowance(density, offered)
         free = self.sim.max_density * self.area - load
         passed = self._admit(wanted, np.minimum(free, allowance))
+        passed = self._trim_pairs(passed, budget, active, share)
         flow = np.bincount(a.link[passed], minlength=len(budget))
-        self._update_carry(budget, flow)
-        head = self._head_area(queued, passed)
+        self._update_carry(budget, flow, queuing)
+        self._update_pair_time(flow, active, share)
+        head = self._head_area(queued[supply_links[a.link[queued]]], passed)
         self._update_node_carry(allowance, offered, head, passed)
         self._update_virtual_time(flow, queuing)
         self._move(passed, t)
         return flow
 
-    def _offered(self, links: np.ndarray) -> np.ndarray:
-        """Summed per-step rate of the selected links into each node."""
+    def _offered(self, links: np.ndarray, rate: np.ndarray) -> np.ndarray:
+        """Summed per-step ``rate`` of the selected links into each node."""
         return np.bincount(
             self.link_target[links],
-            weights=self.link_rate[links],
+            weights=rate[links],
             minlength=len(self.area),
         )
+
+    def _pair_state(self, count: np.ndarray):
+        """Active pairs, pass shares and pair rates for queue sizes ``count``.
+
+        A pair is active when both links have a queue. Its rate is
+        ``g * C * dt`` with ``g = g0 + (g_half - g0) * 2 * phi`` for the
+        minor queue share ``phi``; a link's pass share is
+        ``y0 + (1 - 2 * y0) * its queue share``. Otherwise ``C * dt``.
+        """
+        if not self.paired:
+            n = len(self.link_rate)
+            return np.zeros(n, dtype=bool), np.ones(n), self.link_rate
+        has = self.partner >= 0
+        other = np.where(has, count[np.maximum(self.partner, 0)], 0)
+        active = has & (count > 0) & (other > 0)
+        phi = count / np.maximum(count + other, 1)
+        minor = np.minimum(phi, 1 - phi)
+        g = self.pair_g0 + (self.pair_g_half - self.pair_g0) * 2 * minor
+        share = self.pair_y0 + (1 - 2 * self.pair_y0) * phi
+        pair_rate = np.where(active, g * self.link_rate, self.link_rate)
+        return active, share, pair_rate
+
+    def _trim_pairs(self, passed, budget, active, share) -> np.ndarray:
+        """Keep at most floor(budget) passages per active pair.
+
+        Passages are kept in order of the pair key, ties to the lower link
+        index; trimmed agents stay queued.
+        """
+        if not active.any() or passed.size == 0:
+            return passed
+        links = self.agents.link[passed]
+        keep = np.ones(passed.size, dtype=bool)
+        for link in np.unique(links[active[links]]):
+            mate = self.partner[link]
+            if link > mate:
+                continue
+            pair = np.flatnonzero((links == link) | (links == mate))
+            excess = self._pair_excess(pair, links[pair], budget[link], share)
+            keep[excess] = False
+        return passed[keep]
+
+    def _pair_excess(self, pair, links, budget, share) -> np.ndarray:
+        """Members of ``pair`` beyond its floor(budget) passages."""
+        q = int(budget + 1e-9)
+        if pair.size <= q:
+            return pair[:0]
+        keys = np.empty(pair.size)
+        for link in np.unique(links):
+            own = links == link
+            rank = np.arange(own.sum())
+            keys[own] = self.pair_time[link] + (rank + 1.0) / share[link]
+        order = np.lexsort((links, keys))
+        return pair[order[q:]]
 
     def _allowance(
         self, density: np.ndarray, offered: np.ndarray
@@ -550,9 +668,29 @@ class _Run:
             fits[mask] = used <= free[node] + 1e-9
         return fits
 
-    def _update_carry(self, budget, flow) -> None:
-        """Keep unused budget, at most one agent; refills at rate C."""
-        self.carry = np.clip(budget - flow, 0.0, 1.0)
+    def _update_carry(self, budget, flow, queuing) -> None:
+        """Keep unused budget, at most one agent; refills at rate C.
+
+        The two links of a pair hold one carry: the budget left after both
+        directions, taken from the link with a queue if only one has one.
+        """
+        own = np.clip(budget - flow, 0.0, 1.0)
+        if not self.paired:
+            self.carry = own
+            return
+        has = self.partner >= 0
+        mate = np.maximum(self.partner, 0)
+        pair = np.clip(budget - flow - np.where(has, flow[mate], 0), 0.0, 1.0)
+        other_queuing = has & queuing[mate]
+        shared = np.where(queuing | ~other_queuing, pair, pair[mate])
+        self.carry = np.where(has, shared, own)
+
+    def _update_pair_time(self, flow, active, share) -> None:
+        """Advance the pair keys of active pairs; reset the others."""
+        if not self.paired:
+            return
+        served = flow / np.where(active, share, 1.0)
+        self.pair_time = np.where(active, self.pair_time + served, 0.0)
 
     def _update_virtual_time(self, flow, active) -> None:
         """Advance served links; idle links catch up to avoid banking."""

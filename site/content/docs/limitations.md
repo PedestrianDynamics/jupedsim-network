@@ -38,10 +38,14 @@ validation {{< cite 1 "p. 2171" >}}.
 
 ### Defaults compared with bounding defaults
 
-No default of this model is a bounding default in the sense of Gwynne
-et al. They give their values as "the first iteration of values that
-might then be modified", and their approach gives "relative
-conservatism (within the application of each model)"
+One default of this model, `counterflow="bounding"`, is chosen as a
+bound in Gwynne et al.'s first sense: values "derived from relevant
+empirical data" {{< cite 11 "pp. 335–336" >}}, not extreme outliers
+{{< cite 11 "p. 343" >}}. Gwynne et al. propose no counterflow value
+themselves. The other defaults are not bounding defaults. Gwynne et
+al. give their values as "the first iteration of values that might
+then be modified", and their approach gives "relative conservatism
+(within the application of each model)"
 {{< cite 11 "p. 343" >}}. The paper does not test the values in a
 simulation.
 
@@ -52,6 +56,7 @@ simulation.
 | Route availability and usage | Optimistic (availability); not established (usage) | Every safe node can be used; shortest distance to the nearest one | All agents to the narrowest, most remote final exit {{< cite 11 "pp. 346–347; Table II, p. 349" >}} |
 | Ties between routes | Not established (see Ties below) | `split_ties=True`: agents alternate between tied links | "all agents are randomly assigned to one of those final exits" {{< cite 11 "p. 347" >}} |
 | Door flow | Design value; disputed | $F_s = 1.3$ persons/s/m of effective width, $b = 0.15$ m per side | 0.67 persons/s per single-leaf door of regulated minimum width, not scaled with width {{< cite 11 "p. 348" >}} |
+| Counterflow at two-way connections | Low end of the walkway data; stairs: Tofiło et al.'s 75 %; while both directions queue | `counterflow="bounding"`: total 0.84–0.94 $C$ (doors, openings), 0.75–0.94 $C$ (stairs) | None proposed. The paper mentions counterflow only as a side effect of longest-route assignment {{< cite 11 "p. 347" >}} |
 | Merge weights | Not established | 1 for every link | None proposed |
 | `max_density`, supply reduction | Not established | 2.75 m⁻², on | None proposed |
 
@@ -83,6 +88,15 @@ simulation.
   {{< cite 1 "Table 67.5, p. 2176" >}}. Gwynne et al. and SFPE differ
   on whether the door data are conservative; see "Doors are open and
   the data are old" under [Movement and capacity](#movement-and-capacity).
+- **Counterflow.** While both directions queue, `"bounding"` takes the
+  low end of the walkway data; stairs: Tofiło et al.'s 75 %
+  {{< cite 29 "p. 520" >}}. With a sparse minor stream
+  the realised total is higher. Door values below a 50/50 split are
+  borrowed from walkways, and at 50/50 the value lies below the only
+  door measurement. Mixed with design-value defaults, it gives a mixed
+  default set {{< cite 11 "p. 342" >}}. `"estimate"` is the
+  alternative
+  ([Counterflow]({{< relref "/docs/model/counterflow#bounding-or-estimate" >}})).
 - **Merge weights.** Gwynne et al. propose no bound; SFPE calls equal
   shares not conservative {{< cite 1 "p. 2178" >}}.
 - **`max_density` and supply reduction.** Gwynne et al. propose no
@@ -138,22 +152,49 @@ simulation.
   experiments. It is off when `max_density` ≤ 1.88 m⁻².
   `max_density` must stay below the jam density of 3.76 m⁻².
 - **Supply depends on which links have a queue.** Above 1.88 m⁻² a node
-  accepts a share of the summed capacity of its incoming links that have
-  a queue in this step. At the same density, a node fed through one
+  accepts a share of the summed rate of its incoming links that have
+  a queue in this step; a link of a pair in counterflow counts with its
+  share $y\,g\,C$ of the door. At the same density, a node fed through one
   queued link therefore accepts less than one fed through two
   ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
-- **Counterflow isn't modelled.** The two directions of a two-way
-  connection are separate links, each with the full capacity, so a door
-  used both ways passes twice its capacity. In trials, the flow per
-  direction under counterflow was about 13–20 % above half the
-  one-way flow {{< cite 6 "pp. 6, 10–11" >}}, so the model overpredicts
-  it by about 1.7 times (our estimate from these trials)
-  ([issue #8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)).
-  When every link has a positive length, default routing (no `target`)
-  sends no agents both ways along a link, because every shortest route
-  moves closer to a safe node, or as close over fewer links.
-  Counterflow then arises only when populations have different
+- **Counterflow at links follows a model rule.** SFPE has none. Door
+  data exist only at a 50/50 split, from one door {{< cite 6 "pp. 5–6" >}};
+  door values below 50/50 are borrowed from walkways; there are no
+  emergency data. The rule is not validated
+  ([Counterflow]({{< relref "/docs/model/counterflow" >}}),
+  [issue #8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)).
+- **The anchors are partly open.** Whether Navin and Wheeler's 17 %
+  width intercept applies as a minimum share of passages ($y_0$) is
+  not established. The stair value $g_0 = 0.75$ is a fraction of the
+  measured no-counterflow flow on one stair, not of capacity
+  {{< cite 29 "p. 520" >}}.
+- **Counterflow inside nodes is not modelled.** Corridors and stair
+  flights are nodes; their speed stays $k(1 - aD)$ with all agents
+  counted, whatever their direction. Experiments show a speed loss in
+  bidirectional streams {{< cite 32 "pp. 10–11" 28 "" >}}.
+- **Shares count agents, not area factors.** The queue and pass shares
+  of a pair use head counts.
+- **Equal pair keys go to the direction created first.** A result can
+  therefore depend on the argument order of `connect`, as it can on the
+  population order ([Numerics](#numerics)). In the balanced door swap of
+  [Verification]({{< relref "/docs/verification#tests" >}}) the first
+  passage goes A→B because `connect("A", "B")` created A→B first;
+  swapping the arguments mirrors the result.
+- **Only the two links of one `connect` call form a pair.** Two one-way
+  `connect` calls between the same nodes are two doors, each with full
+  capacity.
+- **The pair remembers recent use in either direction.** The two links
+  share one carry, so an agent can wait one step longer after an agent
+  passed the other way.
+- **Default routing creates no counterflow.** Default routing (no
+  `target`) sends no agents both ways along a link, because every
+  shortest route moves closer to a safe node, or as close over fewer
+  links. Counterflow arises only when populations have different
   `target`s.
+- **Re-entry from a safe node cannot be represented.** `connect`
+  creates no link out of a safe node, and a population cannot start in
+  one. Responders start in a room, such as a lobby, and target a safe
+  node.
 - **Doors are open and the data are old.** $F_s = 1.3$ persons/s/m
   assumes doors held open; for doors that are not, SFPE suggests
   50 persons/min per door leaf. SFPE also notes that the door data are
@@ -239,6 +280,13 @@ simulation.
   that group is listed first and at 43.0 s when it is listed second.
   At a route tie, the population order also decides which agents take
   which of the tied links.
+- **Pairs cost run time.** Medians on an Apple M3 Pro: one run of the
+  ten-storey building, which has no two-way connections, takes 0.076 s
+  against 0.073 s before the counterflow rule (+4 %), the same under
+  `"independent"` and `"bounding"`. A swap of 200 + 200 agents through
+  one two-way door takes 0.028 s under `"independent"` (0.027 s before)
+  and 0.079 s under `"bounding"`, with a pair in counterflow in every
+  step: about three times slower.
 
 ## Monte Carlo
 
@@ -266,3 +314,6 @@ simulation.
 - **`node_occupancy` counts heads.** It counts agents, not area factors,
   so it differs from the density the model uses when area factors other
   than 1 are present.
+- **No counterflow output.** `SimulationResult` does not report in
+  which steps a pair was in counterflow or its minor share
+  ([issue #40](https://github.com/PedestrianDynamics/jupedsim-network/issues/40)).

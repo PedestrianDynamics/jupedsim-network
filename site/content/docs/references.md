@@ -95,6 +95,70 @@ table, for example [1, Eq. 67.3, p. 2174].
     computer program to determine optimal building evacuation plans",
     *Fire Safety Journal* 9(2), 211–220, 1985.
     [doi:10.1016/0379-7112(85)90009-8](https://doi.org/10.1016/0379-7112(85)90009-8)
+21. <a id="ref-21"></a>F. P. D. Navin and R. J. Wheeler, "Pedestrian
+    flow characteristics", *Traffic Engineering* 39(9), 30–36, 1969.
+22. <a id="ref-22"></a>J. J. Fruin, "Designing for pedestrians: a
+    level-of-service concept", *Highway Research Record* 355, 1–15, 1971.
+23. <a id="ref-23"></a>J. J. Fruin, *Pedestrian Planning and Design*,
+    rev. ed., Elevator World, Mobile, AL, 1987. Printed page numbers.
+24. <a id="ref-24"></a>C. Y. Cheung and W. H. K. Lam, "A study of the
+    bi-directional pedestrian flow characteristics in Hong Kong mass
+    transit railway stations", *Journal of the Eastern Asia Society for
+    Transportation Studies* 2(5), 1607–1619, 1997.
+25. <a id="ref-25"></a>W. H. K. Lam, J. Y. S. Lee and C. Y. Cheung, "A
+    study of the bi-directional pedestrian flow characteristics at Hong
+    Kong signalized crosswalk facilities", *Transportation* 29(2),
+    169–192, 2002.
+    [doi:10.1023/A:1014226416702](https://doi.org/10.1023/A:1014226416702)
+26. <a id="ref-26"></a>W. H. K. Lam, J. Y. S. Lee, K. S. Chan and
+    P. K. Goh, "A generalised function for modeling bi-directional flow
+    effects on indoor walkways in Hong Kong", *Transportation Research
+    Part A* 37(9), 789–810, 2003.
+    [doi:10.1016/S0965-8564(03)00058-2](https://doi.org/10.1016/S0965-8564(03)00058-2)
+27. <a id="ref-27"></a>J. Y. S. Lee and W. H. K. Lam, "Variation of
+    walking speeds on a unidirectional walkway and on a bidirectional
+    stairway", *Transportation Research Record* 1982, 122–131, 2006.
+    Cited by section and figure.
+    [doi:10.1177/0361198106198200116](https://doi.org/10.1177/0361198106198200116)
+28. <a id="ref-28"></a>S. C. Wong, W. L. Leung, S. H. Chan, W. H. K. Lam,
+    N. H. C. Yung, C. Y. Liu and P. Zhang, "Bidirectional pedestrian
+    stream model with oblique intersecting angle", *Journal of
+    Transportation Engineering* 136(3), 234–242, 2010.
+    [doi:10.1061/(ASCE)TE.1943-5436.0000086](https://doi.org/10.1061/(ASCE)TE.1943-5436.0000086)
+29. <a id="ref-29"></a>P. Tofiło, M. Cisek and K. Łącki, "The study on
+    the effects of the counter-flow on the evacuation of people from tall
+    buildings", in U. Weidmann, U. Kirsch and M. Schreckenberg (eds.),
+    *Pedestrian and Evacuation Dynamics 2012*, Springer, Cham, 2014,
+    pp. 509–520.
+    [doi:10.1007/978-3-319-02447-9_42](https://doi.org/10.1007/978-3-319-02447-9_42)
+30. <a id="ref-30"></a>I. Cłapa, M. Cisek, P. Tofiło and M. Dziubiński,
+    "Firefighters ascending and evacuation speeds during counter flow on
+    staircase", *Safety Science* 78, 35–40, 2015.
+    [doi:10.1016/j.ssci.2015.04.002](https://doi.org/10.1016/j.ssci.2015.04.002)
+31. <a id="ref-31"></a>Transportation Research Board, *Highway Capacity
+    Manual 2000*, National Research Council, Washington, DC, 2000.
+    ISBN 978-0-309-06681-5.
+32. <a id="ref-32"></a>J. Zhang, W. Klingsch, A. Schadschneider and
+    A. Seyfried, "Ordering in bidirectional pedestrian flows and its
+    influence on the fundamental diagram", *Journal of Statistical
+    Mechanics* P02002, 2012.
+    [doi:10.1088/1742-5468/2012/02/P02002](https://doi.org/10.1088/1742-5468/2012/02/P02002)
+33. <a id="ref-33"></a>T. Kretz, A. Grünebohm, M. Kaufman, F. Mazur and
+    M. Schreckenberg, "Experimental study of pedestrian counterflow in a
+    corridor", *Journal of Statistical Mechanics* P10001, 2006.
+    [doi:10.1088/1742-5468/2006/10/P10001](https://doi.org/10.1088/1742-5468/2006/10/P10001)
+34. <a id="ref-34"></a>X. Liu, W. Song and W. Lv, "Empirical data for
+    pedestrian counterflow through bottlenecks in the channel",
+    *Transportation Research Procedia* 2, 34–42, 2014.
+    [doi:10.1016/j.trpro.2014.09.006](https://doi.org/10.1016/j.trpro.2014.09.006)
+35. <a id="ref-35"></a>C. Feliciani, H. Murakami and K. Nishinari, "A
+    universal function for capacity of bidirectional pedestrian streams:
+    filling the gaps in the literature", *PLOS ONE* 13(12), e0208496,
+    2018.
+    [doi:10.1371/journal.pone.0208496](https://doi.org/10.1371/journal.pone.0208496)
+36. <a id="ref-36"></a>Thunderhead Engineering, *Pathfinder Technical
+    Reference*, section "SFPE", version 2026.1.
+    [thunderheadeng.com/docs/2026-1/pathfinder/appendices/technical-reference/sfpe](https://www.thunderheadeng.com/docs/2026-1/pathfinder/appendices/technical-reference/sfpe)
 
 ## SFPE Handbook editions
 
