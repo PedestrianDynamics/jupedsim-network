@@ -711,3 +711,39 @@ def test_stair_inside_sfpe_range_is_silent(riser, tread):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         net.add_stair("flight", area=10.0, riser=riser, tread=tread)
+
+
+def network_with_island():
+    net = single_room(area=10.0)
+    net.add_room("island", area=10.0)
+    return net
+
+
+@pytest.mark.parametrize("target", [None, "exit"])
+def test_second_population_without_route_is_rejected(target):
+    populations = [
+        Population("room", 1, target=target),
+        Population("island", 1, target=target),
+    ]
+    with pytest.raises(ValueError, match="No route from 'island'"):
+        NetworkSimulation(network_with_island(), populations)
+
+
+@pytest.mark.parametrize("target", [None, "exit"])
+def test_second_population_in_safe_node_is_rejected(target):
+    populations = [
+        Population("room", 1, target=target),
+        Population("exit", 1, target=target),
+    ]
+    with pytest.raises(ValueError, match="starts in safe node 'exit'"):
+        NetworkSimulation(single_room(), populations)
+
+
+@pytest.mark.parametrize("target", [None, "exit"])
+def test_second_population_in_unknown_node_is_rejected(target):
+    populations = [
+        Population("room", 1, target=target),
+        Population("nowhere", 1, target=target),
+    ]
+    with pytest.raises(ValueError, match="Unknown node .nowhere."):
+        NetworkSimulation(single_room(), populations)

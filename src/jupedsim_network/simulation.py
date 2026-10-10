@@ -224,9 +224,8 @@ class NetworkSimulation:
 def _route_tables(network, populations) -> dict:
     tables = {}
     for pop in populations:
-        if pop.target in tables:
-            continue
-        tables[pop.target] = network.route_table(pop.target)
+        if pop.target not in tables:
+            tables[pop.target] = network.route_table(pop.target)
         node = network.node(pop.node)
         if node.kind == SAFE:
             raise ValueError(f"Population starts in safe node '{pop.node}'.")
