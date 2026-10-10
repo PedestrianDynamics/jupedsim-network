@@ -60,6 +60,29 @@ table, for example [1, Eq. 67.3, p. 2174].
     *SFPE Handbook of Fire Protection Engineering*, 5th ed., Springer,
     New York, 2016, pp. 2115–2151.
     [doi:10.1007/978-1-4939-2565-0_59](https://doi.org/10.1007/978-1-4939-2565-0_59)
+14. <a id="ref-14"></a>R. L. Francis and P. B. Saunders, *EVACNET:
+    Prototype network optimization models for building evacuation*,
+    NBSIR 79-1738, National Bureau of Standards, Washington, D.C.,
+    October 1979. Printed page numbers. [17, p. 82] gives the report
+    number as 79-1593.
+    [doi:10.6028/NBS.IR.79-1738](https://doi.org/10.6028/NBS.IR.79-1738)
+15. <a id="ref-15"></a>R. F. Fahy, "EXIT89: An evacuation model for
+    high-rise buildings", *Fire Safety Science* 3, 815–823, 1991.
+    [doi:10.3801/IAFSS.FSS.3-815](https://doi.org/10.3801/IAFSS.FSS.3-815)
+16. <a id="ref-16"></a>S. Gwynne, E. R. Galea, M. Owen, P. J. Lawrence
+    and L. Filippidis, "A review of the methodologies used in the
+    computer simulation of evacuation from the built environment",
+    *Building and Environment* 34(6), 741–749, 1999. Cited as [6] in [7]
+    with a different author order. The review classes EXIT89 as treating
+    the population as a homogeneous ensemble (§2.3, p. 745); the EXIT89
+    paper records each occupant's location [15, pp. 815, 818].
+    [doi:10.1016/S0360-1323(98)00057-2](https://doi.org/10.1016/S0360-1323(98)00057-2)
+17. <a id="ref-17"></a>E. D. Kuligowski, "Review of 28 egress models",
+    §4.4 in R. D. Peacock and E. D. Kuligowski (eds.), *Workshop on
+    Building Occupant Movement During Fire Emergencies, June 10–11,
+    2004*, NIST Special Publication 1032, 2005, pp. 66–88. Page numbers
+    are the printed footers; [7] gives pp. 68–90.
+    [doi:10.6028/NIST.SP.1032](https://doi.org/10.6028/NIST.SP.1032)
 
 ## SFPE Handbook editions
 

@@ -94,7 +94,9 @@ validation {{< cite 1 "p. 2171" >}}.
   can stall until the shares are balanced again, for example room a in
   the [merge figure]({{< relref "/docs/verification#door-flow-and-merging" >}}).
 - **Nodes are well mixed.** All walkers in a node share one density and
-  one speed, so local crowding inside a large room isn't seen. Queued
+  one speed, so local crowding inside a large room isn't seen.
+  Positions inside a node are not represented, so overtaking and local
+  conflicts are not modelled {{< cite 16 "§2.2, p. 745" >}}. Queued
   agents are taken to stand at the constriction, and a long queue
   doesn't add walking distance. Splitting large spaces into several
   nodes helps.

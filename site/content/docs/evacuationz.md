@@ -4,7 +4,10 @@ linkTitle: EvacuatioNZ
 weight: 7
 ---
 
-EvacuatioNZ is a network evacuation model by M. Spearpoint. This model
+EvacuatioNZ is a network evacuation model by M. Spearpoint. It uses
+what its author calls "the well established network method"
+{{< cite 7 "manuscript p. 3" >}}; its sources are listed under
+[network models]({{< relref "/docs/model#network-models" >}}). This model
 follows the same approach but is not equivalent to it: several
 algorithms differ, and no EvacuatioNZ runs were made for this
 comparison. No licensed copy of EvacuatioNZ was used. EvacuatioNZ has
