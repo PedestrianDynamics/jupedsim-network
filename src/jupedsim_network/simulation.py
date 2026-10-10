@@ -24,6 +24,13 @@ Each time step of length ``dt`` is processed synchronously:
    can depend on it too, when tied agents differ in speed, area factor or
    target.
 
+Agents move on to the next link of their route. Where several routes to
+safety are equally short (up to floating-point rounding), the agents
+taking a decision at that node alternate between the tied links in
+creation order: at the start in population order, later in order of
+arrival at the link they passed. Which agent takes which link therefore
+also depends on population order.
+
 Space freed by agents leaving a node becomes available in the next step.
 """
 
@@ -155,6 +162,9 @@ class NetworkSimulation:
         max_density: hard limit of agents per m² in a node
         supply_reduction: reduce link capacity when the target node is
             above the peak-flow density
+        split_ties: split agents evenly between equally short routes;
+            ``False`` sends all of them along the first route found and
+            issues a ``UserWarning`` if a population can reach a tie
     """
 
     def __init__(
@@ -166,6 +176,7 @@ class NetworkSimulation:
         t_max: float = 3600.0,
         max_density: float = 2.75,
         supply_reduction: bool = True,
+        split_ties: bool = True,
     ) -> None:
         if dt <= 0 or t_max <= 0:
             raise ValueError("dt and t_max must be positive.")
@@ -181,7 +192,11 @@ class NetworkSimulation:
         self.t_max = t_max
         self.max_density = max_density
         self.supply_reduction = supply_reduction
+        self.split_ties = split_ties
         self._routes = _route_tables(network, self.populations)
+        self._choices = {t: network._route_choices(t) for t in self._routes}
+        if not split_ties:
+            _warn_unsplit_ties(self)
 
     def run(self, seed=None, *, record: bool = True) -> SimulationResult:
         """Run one realisation.
@@ -218,6 +233,35 @@ def _route_tables(network, populations) -> dict:
         if tables[pop.target][node.index] is None:
             raise ValueError(f"No route from '{pop.node}' to safety.")
     return tables
+
+
+def _warn_unsplit_ties(sim) -> None:
+    names = set()
+    for pop in sim.populations:
+        names |= _reachable_ties(sim, pop)
+    if not names:
+        return
+    warnings.warn(
+        f"Routes are tied at {sorted(names)}; with split_ties=False every "
+        "agent there takes the first route found.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _reachable_ties(sim, pop) -> set[str]:
+    """Nodes with tied links that agents of ``pop`` can reach."""
+    net = sim.network
+    links, table = net.links, sim._routes[pop.target]
+    choices = sim._choices[pop.target]
+    stack, seen = [net.node(pop.node).index], set()
+    while stack:
+        u = stack.pop()
+        if u in seen or table[u] is None:
+            continue
+        seen.add(u)
+        stack.extend(links[i].target for i in (table[u], *choices[u]))
+    return {net.nodes[u].name for u in seen if len(choices[u]) > 1}
 
 
 @dataclass
@@ -263,10 +307,31 @@ class _Run:
         self.route_matrix = np.array(
             [_as_index_array(sim._routes[t]) for t in self.targets]
         )
+        # Tied links per route and node code (route * nodes + node), and
+        # the number of agents each has assigned so far.
+        self.ties = self._tie_links() if sim.split_ties else {}
+        self.tie_codes = np.array(sorted(self.ties), dtype=int)
+        self.tie_count: dict[int, int] = {}
         self.agents = self._spawn()
         self.occupancy_series: list[np.ndarray] = []
         self.flow_series: list[np.ndarray] = []
         self.times: list[float] = []
+
+    def _tie_links(self) -> dict[int, np.ndarray]:
+        n = len(self.area)
+        return {
+            route * n + node: np.array(tied, dtype=int)
+            for route, t in enumerate(self.targets)
+            for node, tied in enumerate(self.sim._choices[t])
+            if len(tied) > 1
+        }
+
+    def _choose(self, code: int, count: int) -> np.ndarray:
+        """Next links of ``count`` agents at a tie, alternating in order."""
+        tied = self.ties[code]
+        first = self.tie_count.get(code, 0)
+        self.tie_count[code] = first + count
+        return tied[(first + np.arange(count)) % tied.size]
 
     def execute(self) -> SimulationResult:
         t = 0.0
@@ -289,14 +354,17 @@ class _Run:
         node = self.sim.network.node(pop.node).index
         count = int(round(as_distribution(pop.count).sample(self.rng, 1)[0]))
         route = self.targets.index(pop.target)
-        link = self.route_matrix[route, node]
+        link = np.full(count, self.route_matrix[route, node], dtype=int)
+        code = route * len(self.area) + node
+        if code in self.ties:
+            link = self._choose(code, count)
         start = as_distribution(pop.start_distance).sample(self.rng, count)
         speed = as_distribution(pop.speed).sample(self.rng, count)
         if (speed <= 0).any():
             raise ValueError("Agent speeds must be positive.")
         return [
             np.full(count, node, dtype=int),
-            np.full(count, link, dtype=int),
+            link,
             np.full(count, _WAITING, dtype=int),
             start + self.link_length[link],
             speed,
@@ -454,6 +522,19 @@ class _Run:
         a.link[onward] = next_link
         a.distance[onward] = self.link_length[next_link]
         a.state[onward] = _WALKING
+        self._split_ties(onward)
+
+    def _split_ties(self, onward: np.ndarray) -> None:
+        """Reassign agents entering a tie, in order of arrival and index."""
+        if not self.ties or onward.size == 0:
+            return
+        a = self.agents
+        onward = onward[np.lexsort((onward, a.arrival[onward]))]
+        codes = a.route[onward] * len(self.area) + a.node[onward]
+        for code in np.intersect1d(codes, self.tie_codes):
+            members = onward[codes == code]
+            a.link[members] = self._choose(int(code), members.size)
+            a.distance[members] = self.link_length[a.link[members]]
 
     def _record(self, t: float, flow: np.ndarray) -> None:
         if not self.record:

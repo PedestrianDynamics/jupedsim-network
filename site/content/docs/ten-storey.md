@@ -18,10 +18,12 @@ in `scripts/figures/`.
   entered as the walking distance along the incline, as SFPE measures
   stair distances ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
 - All links are one way (`bidirectional=False`).
-- Half of each floor is sent to each stair with `target`, because the
-  two stairs are at the same distance and nearest-exit routing would
-  send everyone down one of them
-  ([Limitations]({{< relref "/docs/limitations#routes" >}})).
+- Half of each floor is sent to each stair with `target`. Nearest-exit
+  routing would split the two tied stairs in the same way
+  ([Networks]({{< relref "/docs/using/networks#routes" >}})), but with
+  random pre-movement times the two set-ups send different agents to
+  each stair, so the sampled results below would change, although the
+  model is the same.
 
 The network and populations are built by `building()` and
 `building_populations()` in `scripts/figures/scenarios.py`. One run

@@ -4,6 +4,7 @@
 import heapq
 import math
 import warnings
+from collections import Counter
 from dataclasses import dataclass
 
 from jupedsim_network import hydraulic
@@ -16,6 +17,10 @@ DOOR = "door"
 OPENING = "opening"
 
 _BOUNDARY_LAYERS = {DOOR: 0.15, OPENING: 0.0, STAIR: 0.15}
+
+# Route distances agreeing to this fraction of their length, or to this
+# many m if larger, are tied: equal up to floating-point rounding.
+TIE_TOLERANCE = 1e-9
 
 
 @dataclass(frozen=True)
@@ -193,6 +198,9 @@ class Network:
         Arguments:
             target: name of one safe node; ``None`` uses the nearest one
 
+        Of several equally short routes the first link found is kept;
+        ``NetworkSimulation`` splits such ties between their links.
+
         Returns:
             For each node index the index of the link to take, or ``None``
             for safe nodes and nodes without a route.
@@ -218,6 +226,44 @@ class Network:
         distance[link.source] = candidate
         next_link[link.source] = link.index
         heapq.heappush(heap, (candidate, link.source))
+
+    def _route_choices(
+        self, target: str | None = None
+    ) -> list[tuple[int, ...]]:
+        """Tied next links per node: the first links of all shortest routes.
+
+        A link u -> v is tied for u if d(v) + length equals d(u) within
+        ``TIE_TOLERANCE`` and the link makes progress: v is closer to
+        safety, or as close over fewer links. A zero-length detour is thus
+        not a tie, and tied links cannot form a cycle.
+
+        Returns:
+            For each node index the tied link indices in creation order;
+            empty for safe nodes and nodes without a route.
+        """
+        distance, hops = self._distances(target)
+        choices: list[list[int]] = [[] for _ in self._nodes]
+        for link in self._links:
+            if _is_tied(link, distance, hops):
+                choices[link.source].append(link.index)
+        _check_acyclic(choices, self._links)
+        return [tuple(c) for c in choices]
+
+    def _distances(self, target) -> tuple[list[float], list[float]]:
+        """Shortest distance to safety and the fewest links on such a route."""
+        distance = [math.inf] * len(self._nodes)
+        hops = [math.inf] * len(self._nodes)
+        heap = [(0.0, 0, n.index) for n in self._targets(target)]
+        for _, _, index in heap:
+            distance[index], hops[index] = 0.0, 0
+        incoming = self._incoming()
+        while heap:
+            d, h, index = heapq.heappop(heap)
+            if (d, h) > (distance[index], hops[index]):
+                continue
+            for link in incoming[index]:
+                _relax_hops(link, (d, h), distance, hops, heap)
+        return distance, hops
 
     def _incoming(self) -> list[list[Link]]:
         incoming: list[list[Link]] = [[] for _ in self._nodes]
@@ -249,6 +295,40 @@ class Network:
         self._nodes.append(node)
         self._by_name[name] = node
         return node
+
+
+def _relax_hops(link, key, distance, hops, heap) -> None:
+    candidate = (key[0] + link.length, key[1] + 1)
+    if candidate >= (distance[link.source], hops[link.source]):
+        return
+    distance[link.source], hops[link.source] = candidate
+    heapq.heappush(heap, (*candidate, link.source))
+
+
+def _is_tied(link, distance, hops) -> bool:
+    here, there = distance[link.source], distance[link.target]
+    if not math.isfinite(here):
+        return False
+    tol = TIE_TOLERANCE
+    if not math.isclose(there + link.length, here, rel_tol=tol, abs_tol=tol):
+        return False
+    closer = there < here - tol * max(1.0, here)
+    return closer or hops[link.target] < hops[link.source]
+
+
+def _check_acyclic(choices, links) -> None:
+    """Raise if tied links form a cycle (Kahn's algorithm)."""
+    targets = [[links[i].target for i in tied] for tied in choices]
+    indegree = Counter(v for vs in targets for v in vs)
+    ready = [u for u in range(len(choices)) if indegree[u] == 0]
+    removed = 0
+    while ready:
+        u = ready.pop()
+        removed += 1
+        indegree.subtract(targets[u])
+        ready.extend({v for v in targets[u] if indegree[v] == 0})
+    if removed < len(choices):
+        raise RuntimeError("Tied routes form a cycle.")
 
 
 def _area(area, length, width) -> float:

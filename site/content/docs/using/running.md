@@ -19,6 +19,7 @@ NetworkSimulation(
     t_max=3600.0,
     max_density=2.75,
     supply_reduction=True,
+    split_ties=True,
 )
 ```
 
@@ -28,6 +29,7 @@ NetworkSimulation(
 | `t_max` | 3600 s | A run stops here, finished or not |
 | `max_density` | 2.75 m⁻² | Hard limit of agents (weighted by area factor) per m² in a node; must lie in (0, 3.76) |
 | `supply_reduction` | `True` | Reduce what a node accepts above the peak-flow density of 1.88 m⁻² |
+| `split_ties` | `True` | Alternate agents between equally short routes; `False` takes the route found first and warns ([Networks]({{< relref "/docs/using/networks#routes" >}})) |
 
 Routes are computed when the simulation is created, so a population
 without a route raises `ValueError` here, before any run.

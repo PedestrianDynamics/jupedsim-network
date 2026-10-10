@@ -25,17 +25,23 @@ validation {{< cite 1 "p. 2171" >}}.
 
 ## Routes
 
-- **Ties between equally distant exits are not split.** With two stairs
-  at the same distance, every agent takes the stair found first, and the
-  second stair stays empty. Split the populations by hand with `target`
-  ([issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
+- **Ties are split by count, not by capacity.** Where two routes are
+  equally short, agents alternate between them, so each tied link gets
+  the same number of agents whatever its width
+  ([Networks]({{< relref "/docs/using/networks#routes" >}}),
+  [issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
+  Routes that differ by more than floating-point rounding (10⁻⁹ of their
+  length) are not tied, however small the difference. With
+  `split_ties=False` every agent takes the route found first.
 
-  ![Cumulative evacuation curves showing that a tie sends everyone down one stair](/images/network/route_tie.png)
+  ![Cumulative evacuation curves with ties split, with split_ties=False and with one stair](/images/network/route_tie.png)
 
   The ten-storey building of the [case study]({{< relref "/docs/ten-storey" >}})
-  with pre-movement U(30, 120) s, seed 1. Nearest-exit routing evacuates
-  as slowly as a building with a single stair (725.5 s). Splitting the
-  targets by hand cuts the time by 44 % (407.5 s).
+  with pre-movement U(30, 120) s, seed 1. With ties split, 300 agents
+  take each stair and the building is clear after 407.5 s. With
+  `split_ties=False` all 600 take one stair and evacuate as slowly as a
+  building with a single stair (725.5 s); splitting the tie cuts the
+  time by 44 %.
 
 - **Routes are static and use distance only.** They are computed once
   from link lengths. Agents don't react to queues, blocked exits, signs
@@ -140,11 +146,13 @@ validation {{< cite 1 "p. 2171" >}}.
   kept by design ([issue #1](https://github.com/PedestrianDynamics/jupedsim-network/issues/1)).
   Individual exit times, and aggregate results when the tied agents
   differ in speed, area factor or target, can therefore depend on the
-  order of the population list. In a small test, a 100 m² room with two 1 m doors
-  of zero length to two safe nodes holds 20 agents of area factor 1 and
+  order of the population list. In a small test, a 100 m² room with one 1 m door
+  of zero length to a safe node holds 20 agents of area factor 1 and
   20 of area factor 2. The evacuation time is 43.0 s in both orders,
   but the last agent of the area-factor-1 group leaves at 21.0 s when
   that group is listed first and at 43.0 s when it is listed second.
+  At a route tie, the population order also decides which agents take
+  which of the tied links.
 
 ## Monte Carlo
 
