@@ -232,8 +232,8 @@ def test_fedg_last_exit_bound():
 # §2.5, pp. 15-17: SFPE nine-storey building. The report gives the top
 # floor only. The occupants (300 per floor on floors 2-9) and the 36 in
 # door at each stair exit come from the SFPE example it reproduces (SFPE
-# Handbook 6th ed., p. 2181). Stand-in for an even use of the two tied
-# stairs: one office zone per floor goes to each stair. Landings are
+# Handbook 6th ed., p. 2181). The two stairs are tied at each corridor,
+# so 150 per floor go to each, as in SFPE Solution B. Landings are
 # nodes, so the 4.8 m of landing travel is walked at level speed and
 # corridor->landing is 4.8 m shorter below the top floor.
 
@@ -314,9 +314,9 @@ def sfpe_building():
     for f in range(2, 10):
         sfpe_floor(net, f)
     pops = [
-        Population(f"Room_{f}.{r}", 150, speed=1.2, target=f"Exit{s}")
+        Population(f"Room_{f}.{r}", 150, speed=1.2)
         for f in range(2, 10)
-        for r, s in ((1, "R"), (2, "L"))
+        for r in (1, 2)
     ]
     return net, NetworkSimulation(net, pops, dt=DT).run(seed=1)
 
@@ -340,6 +340,8 @@ def test_sfpe_nine_storey():
             assert down.capacity == pytest.approx(stair, rel=1e-3)
             run = links[f"Stairs_{f}{s}->Landing_{f - 1}{s}"]
             assert run.length == pytest.approx(SFPE_STAIR)
+            used = result.link_names.index(f"Corridor_{f}->Landing_{f}{s}")
+            assert result.link_flow[:, used].sum() == 150
     for s in "RL":
         flow = result.link_flow[
             :, result.link_names.index(f"Landing_1{s}->Exit{s}")
@@ -359,9 +361,10 @@ def test_sfpe_nine_storey():
     assert_invariants(result, net, 2400)
 
 
-# §2.6, pp. 18-20: SFPE Guide on Human Behavior, example 1. Stand-in for
-# EvacuatioNZ's least-populated-connection rule: two populations of 150,
-# each with its own exit. The 32 in door (0.682/s) limits room->stair.
+# §2.6, pp. 18-20: SFPE Guide on Human Behavior, example 1. The two stairs
+# are tied and agents alternate between them, 150 each; EvacuatioNZ gets
+# its 50:50 from a least-populated-connection rule instead. The 32 in door
+# (0.682/s) limits room->stair.
 
 GUIDE_K = stair_k(7 * IN, 11 * IN)
 
@@ -388,13 +391,8 @@ def guide(start):
             specific_flow=FS,
         )
     speed = 275 * FT / 60
-    pops = [
-        Population(
-            "room", 150, speed=speed, start_distance=start, target=f"exit{i}"
-        )
-        for i in (1, 2)
-    ]
-    return net, NetworkSimulation(net, pops, dt=DT).run(seed=1)
+    pop = Population("room", 300, speed=speed, start_distance=start)
+    return net, NetworkSimulation(net, [pop], dt=DT).run(seed=1)
 
 
 @pytest.mark.parametrize("start", [0.0, 200 * FT])
@@ -406,6 +404,9 @@ def test_sfpe_guide_example_1(start):
     walk = start / min(room_speed, 275 * FT / 60)
     hand = walk + 149 / door + 50.1 * FT / free_speed(GUIDE_K)
     assert hand <= result.evacuation_time <= hand + 2 * DT
+    for i in (1, 2):
+        used = result.link_names.index(f"room->stair{i}")
+        assert result.link_flow[:, used].sum() == 150
     assert_invariants(result, net, 300)
 
 

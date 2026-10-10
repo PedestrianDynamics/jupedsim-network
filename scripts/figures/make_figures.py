@@ -8,6 +8,7 @@ the first argument. ``jupedsim_network`` must be importable::
 """
 
 import sys
+import warnings
 from pathlib import Path
 
 import matplotlib
@@ -375,18 +376,20 @@ def density_sweep(out, runs=30):
 def route_tie(out):
     cases = [
         (
-            "two stairs, nearest exit (tie → one stair)",
+            "two stairs, ties split (default)",
+            building(),
+            building_populations(),
+            PAL[3],
+            "--",
+            True,
+        ),
+        (
+            "two stairs, split_ties=False (tie → one stair)",
             building(),
             building_populations(),
             RED,
             "-",
-        ),
-        (
-            "two stairs, targets split 50/50",
-            building(),
-            building_populations(split="AB"),
-            PAL[3],
-            "--",
+            False,
         ),
         (
             "one stair",
@@ -394,11 +397,15 @@ def route_tie(out):
             building_populations(),
             GREY,
             ":",
+            True,
         ),
     ]
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    for label, net, pops, color, ls in cases:
-        r = NetworkSimulation(net, pops).run(seed=1)
+    for label, net, pops, color, ls, split in cases:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            sim = NetworkSimulation(net, pops, split_ties=split)
+        r = sim.run(seed=1)
         e = np.sort(r.exit_times)
         ax.step(
             e,
@@ -412,7 +419,7 @@ def route_tie(out):
     ax.set(
         xlabel="time (s)",
         ylabel="agents evacuated",
-        title="Equal-distance exits are not split",
+        title="Agents alternate between equal-distance exits",
     )
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fontsize=11)
     frame(ax)

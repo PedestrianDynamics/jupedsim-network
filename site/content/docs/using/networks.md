@@ -146,8 +146,22 @@ the run starts and is never updated.
 
 - Routes use distance only. Walking speed, stairs and queues play no
   part.
-- Equal distances are not split. Zero-length links make ties likely,
-  and every agent then takes the route found first
+- Equally short routes are split. A node where several links start a
+  shortest route is a tie; route lengths count as equal if they agree
+  to within 10⁻⁹ of their length (at least 10⁻⁹ m), that is, up to
+  floating-point rounding. Agents deciding at a tie alternate between the
+  tied links in the order the links were created: at the start in
+  population order, later in the order they reached the link they just
+  passed. With two tied links, half the agents take each, the first
+  link getting one more if their number is odd. Ties are split wherever
+  they occur along a route, and with `target` within the routes to that
+  safe node. No random numbers are drawn.
+- A zero-length link counts towards a tie only if it brings agents
+  closer to safety, or as close over fewer links. A zero-length detour
+  is therefore not a tie, and agents cannot walk in circles.
+- `NetworkSimulation(..., split_ties=False)` sends every agent along the
+  route found first, as `route_table` returns it, and issues a
+  `UserWarning` naming the tied nodes the populations can reach
   ([Limitations]({{< relref "/docs/limitations#routes" >}}),
   [issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
 - `start_distance` of a population is added to the walk but not to the

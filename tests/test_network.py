@@ -312,13 +312,8 @@ def test_default_specific_flow_is_used_when_none():
     assert net.links[0].capacity == pytest.approx(0.91, abs=1e-12)
 
 
-def two_doors_two_groups(first_area_factor):
-    net = Network()
-    net.add_room("room", area=100.0)
-    net.add_safe("s1")
-    net.add_safe("s2")
-    net.connect("room", "s1", width=1.0)
-    net.connect("room", "s2", width=1.0)
+def one_door_two_groups(first_area_factor):
+    net = single_room()
     factors = [first_area_factor, 3 - first_area_factor]
     pops = [Population("room", 20, area_factor=f) for f in factors]
     return NetworkSimulation(net, pops).run(seed=1)
@@ -326,12 +321,226 @@ def two_doors_two_groups(first_area_factor):
 
 @pytest.mark.parametrize("first, last_exit", [(1, 21.0), (2, 43.0)])
 def test_simultaneous_arrivals_are_served_in_population_order(first, last_exit):
-    # Route tie: only one door is used, C dt = 0.455. Agent k passes in the
-    # first step m with 1 + 0.455 m >= k: k = 20 at 21.0 s, k = 40 at 43.0 s.
-    result = two_doors_two_groups(first)
+    # One door, C dt = 0.455. Agent k passes in the first step m with
+    # 1 + 0.455 m >= k: k = 20 at 21.0 s, k = 40 at 43.0 s.
+    result = one_door_two_groups(first)
     group = slice(0, 20) if first == 1 else slice(20, 40)
     assert result.exit_times[group].max() == last_exit
     assert result.evacuation_time == 43.0
+
+
+# Route ties (issue #7). A 1 m door passes C dt = 0.91 x 0.5 = 0.455 agents
+# per step; the n-th agent of a full queue leaves at the end of step
+# ceil((n - 1)/0.455): n = 10 -> 20, n = 11 -> 22, n = 20 -> 42.
+
+
+def two_doors(length=0.0):
+    net = Network()
+    net.add_room("room", area=100.0)
+    net.add_safe("s1")
+    net.add_safe("s2")
+    net.connect("room", "s1", width=1.0, length=length)
+    net.connect("room", "s2", width=1.0, length=length)
+    return net
+
+
+def flows(result):
+    return dict(zip(result.link_names, result.link_flow.sum(axis=0).tolist()))
+
+
+@pytest.mark.parametrize(
+    "n, split, last_exit", [(20, (10, 10), 10.0), (21, (11, 10), 11.0)]
+)
+def test_tie_at_start_node_is_split(n, split, last_exit):
+    # Main sends all agents through s1: 21.0 s for 20, 22.0 s for 21.
+    result = NetworkSimulation(two_doors(), [Population("room", n)]).run(1)
+    assert (flows(result)["room->s1"], flows(result)["room->s2"]) == split
+    assert result.evacuation_time == last_exit
+
+
+def test_tie_with_walking_is_split():
+    # 5 m at 1.199 m/s are reached in the step starting at 4.0 s; then
+    # 10 per door: 4.0 + 20 x 0.5 = 14.0 s (main: 4.0 + 42 x 0.5 = 25.0 s).
+    net = two_doors(length=5.0)
+    result = NetworkSimulation(net, [Population("room", 20)]).run(1)
+    assert (flows(result)["room->s1"], flows(result)["room->s2"]) == (10, 10)
+    assert result.evacuation_time == 14.0
+
+
+def test_tie_at_intermediate_node_is_split():
+    # The 40 m opening passes all 20 into the hall at 0.5 s; its 5 m are
+    # reached in the step starting at 4.5 s: 4.5 + 20 x 0.5 = 14.5 s
+    # (main: 4.5 + 42 x 0.5 = 25.5 s).
+    net = Network()
+    net.add_room("room", area=100.0)
+    net.add_room("hall", area=100.0)
+    net.add_safe("s1")
+    net.add_safe("s2")
+    net.connect("room", "hall", width=40.0, kind="opening", bidirectional=False)
+    for exit_ in ("s1", "s2"):
+        net.connect("hall", exit_, width=1.0, length=5.0, bidirectional=False)
+    result = NetworkSimulation(net, [Population("room", 20)]).run(1)
+    assert (flows(result)["hall->s1"], flows(result)["hall->s2"]) == (10, 10)
+    assert result.evacuation_time == 14.5
+
+
+def test_tie_is_taken_in_order_of_arrival():
+    # Both agents enter the hall in the first step: a (listed first) after
+    # 0.25 / 0.6 = 0.42 s, b after 0.1 / 1.2 = 0.08 s. b arrived first and
+    # takes hall->s1, so s1 passes the fast agent (5 m in 4.2 s) and s2 the
+    # slow one (5 m in 8.3 s).
+    net = Network()
+    for room in ("a", "b", "hall"):
+        net.add_room(room, area=100.0)
+    net.add_safe("s1")
+    net.add_safe("s2")
+    net.connect("a", "hall", width=2.0, length=0.25, bidirectional=False)
+    net.connect("b", "hall", width=2.0, length=0.1, bidirectional=False)
+    for exit_ in ("s1", "s2"):
+        net.connect("hall", exit_, width=1.0, length=5.0, bidirectional=False)
+    pops = [Population("a", 1, speed=0.6), Population("b", 1, speed=1.2)]
+    result = NetworkSimulation(net, pops).run(1)
+    passed = dict(zip(result.link_names, result.link_flow.T))
+    first_s1 = np.flatnonzero(passed["hall->s1"])[0]
+    first_s2 = np.flatnonzero(passed["hall->s2"])[0]
+    assert first_s1 < first_s2
+
+
+def test_odd_tie_split_is_reproducible():
+    # 21 agents end the alternation on s1; a tie counter kept across runs
+    # would start the second run on s2.
+    pop = Population("room", 21, pre_movement=Uniform(0, 30))
+    sim = NetworkSimulation(two_doors(), [pop])
+    first, again = sim.run(3), sim.run(3)
+    fresh = NetworkSimulation(two_doors(), [pop]).run(3)
+    for other in (again, fresh):
+        np.testing.assert_array_equal(first.link_flow, other.link_flow)
+        np.testing.assert_array_equal(first.exit_times, other.exit_times)
+    assert (flows(first)["room->s1"], flows(first)["room->s2"]) == (11, 10)
+
+
+def two_stair_building(stairs=("A", "B")):
+    """Ten floors of 400 m², a 0.9 m door 25 m away to each stair."""
+    net = Network()
+    for s in stairs:
+        net.add_safe(f"exit{s}")
+    for f in range(1, 11):
+        net.add_room(f"F{f}", area=400.0)
+    cells = [(f, s) for f in range(1, 11) for s in stairs]
+    for f, s in cells:
+        net.add_stair(f"{s}{f}", riser=0.18, tread=0.28, area=1.2 * 9.0)
+    for f, s in cells:
+        below = f"{s}{f - 1}" if f > 1 else f"exit{s}"
+        net.connect(
+            f"F{f}", f"{s}{f}", width=0.9, length=25.0, bidirectional=False
+        )
+        net.connect(
+            f"{s}{f}",
+            below,
+            width=1.2,
+            kind="stair",
+            length=9.0,
+            bidirectional=False,
+        )
+    return net
+
+
+@pytest.mark.parametrize("pre, evacuation", [(60.0, 422.5), (0.0, 362.5)])
+def test_split_ties_match_split_by_hand(pre, evacuation):
+    # Main sends all 600 agents down stair A: 752.0 s and 692.0 s.
+    net = two_stair_building()
+    plain = [Population(f"F{f}", 60, pre_movement=pre) for f in range(1, 11)]
+    by_hand = [
+        Population(f"F{f}", 30, pre_movement=pre, target=f"exit{s}")
+        for f in range(1, 11)
+        for s in "AB"
+    ]
+    split = NetworkSimulation(net, plain).run(1)
+    hand = NetworkSimulation(net, by_hand).run(1)
+    np.testing.assert_array_equal(
+        np.sort(split.exit_times), np.sort(hand.exit_times)
+    )
+    np.testing.assert_array_equal(split.node_occupancy, hand.node_occupancy)
+    np.testing.assert_array_equal(split.link_flow, hand.link_flow)
+    assert split.evacuation_time == evacuation
+    flow = flows(split)
+    for f in range(1, 11):
+        assert flow[f"F{f}->A{f}"] == flow[f"F{f}->B{f}"] == 30
+    assert flow["A1->exitA"] == flow["B1->exitB"] == 300
+
+
+def test_unsplit_ties_keep_first_route_and_warn():
+    with pytest.warns(UserWarning, match=r"tied at \['room'\]"):
+        sim = NetworkSimulation(
+            two_doors(), [Population("room", 20)], split_ties=False
+        )
+    result = sim.run(1)
+    assert (flows(result)["room->s1"], flows(result)["room->s2"]) == (20, 0)
+    assert result.evacuation_time == 21.0
+
+
+def test_unsplit_routes_without_ties_are_silent():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        NetworkSimulation(
+            single_room(), [Population("room", 20)], split_ties=False
+        )
+
+
+def test_tied_zero_length_links_do_not_cycle():
+    # a <-> b has zero length and both are 1 m from safety: each agent
+    # leaves through its own 1 m door.
+    net = Network()
+    net.add_room("a", area=50.0)
+    net.add_room("b", area=50.0)
+    net.add_safe("s")
+    net.connect("a", "b", width=1.0)
+    net.connect("a", "s", width=1.0, length=1.0)
+    net.connect("b", "s", width=1.0, length=1.0)
+    pops = [Population("a", 10), Population("b", 10)]
+    result = NetworkSimulation(net, pops).run(1)
+    flow = flows(result)
+    assert flow["a->b"] == flow["b->a"] == 0
+    assert flow["a->s"] == flow["b->s"] == 10
+    assert result.evacuation_time == 10.5
+
+
+def test_zero_length_detour_is_not_a_tie():
+    net = Network()
+    net.add_room("c", area=50.0)
+    net.add_room("a", area=50.0)
+    net.add_safe("s")
+    net.connect("c", "a", width=1.0, bidirectional=False)
+    net.connect("a", "s", width=1.0, length=1.0)
+    (direct,) = net.connect("c", "s", width=1.0, length=1.0)
+    assert net._route_choices()[net.node("c").index] == (direct.index,)
+
+
+@pytest.mark.parametrize("delta, tied", [(0.0, True), (1e-6, False)])
+def test_ties_within_rounding_only(delta, tied):
+    # 0.1 + 0.2 differs from 0.3 in floating point but is a tie.
+    net = Network()
+    net.add_room("room", area=50.0)
+    net.add_room("hall", area=50.0)
+    net.add_safe("s")
+    net.connect("room", "hall", width=1.0, length=0.1, bidirectional=False)
+    net.connect("hall", "s", width=1.0, length=0.2)
+    net.connect("room", "s", width=1.0, length=0.3 + delta)
+    choices = net._route_choices()[net.node("room").index]
+    assert (len(choices) == 2) is tied
+
+
+def test_split_ties_draw_no_random_numbers():
+    pop = Population("room", 40, pre_movement=Uniform(0, 30))
+    sim = NetworkSimulation(two_doors(), [pop])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        unsplit = NetworkSimulation(two_doors(), [pop], split_ties=False)
+    first, again = sim.run(3), sim.run(3)
+    np.testing.assert_array_equal(first.exit_times, again.exit_times)
+    np.testing.assert_array_equal(
+        first.pre_movement_times, unsplit.run(3).pre_movement_times
+    )
 
 
 @pytest.mark.parametrize(
