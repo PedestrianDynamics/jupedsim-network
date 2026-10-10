@@ -573,10 +573,9 @@ known limitation of the model. The ones that matter here:
   doors held open ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 - **No counterflow and no supply reduction in the run with seed 1.**
   The corridor links carry no agent, and no node exceeds 1.88 per m².
-  Issues
+  Issue
   [#8](https://github.com/PedestrianDynamics/jupedsim-network/issues/8)
-  and [#9](https://github.com/PedestrianDynamics/jupedsim-network/issues/9)
-  therefore do not affect that run.
+  therefore does not affect that run.
 
 ## Next steps
 

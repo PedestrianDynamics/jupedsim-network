@@ -20,7 +20,7 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `139 passed`, followed by the run
+The last line of the output reads `144 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"

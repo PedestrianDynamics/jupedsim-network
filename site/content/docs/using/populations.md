@@ -54,6 +54,9 @@ the free space of a node. A value of 2 counts the agent as two average
 adults, for example for a wheelchair user. The factor is a choice of
 this model and is not calibrated
 ([Model elements]({{< relref "/docs/model/elements#agents" >}})).
+Above 1.88 m⁻² an agent with a large area factor waits until the node
+has saved supply for its whole area
+([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
 
 ## Distributions
 

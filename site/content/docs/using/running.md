@@ -167,7 +167,9 @@ RuntimeWarning: 59 of 500 runs did not finish before t_max = 500 s; quantiles ab
 
 The median is the same as with the default `t_max`. The 95th
 percentile needs some of the 59 unfinished runs, so it is `inf`. Raise
-`t_max` until `runs.incomplete` is 0.
+`t_max` until `runs.incomplete` is 0. A run whose nodes lock up stays
+`nan` whatever `t_max` is
+([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
 Runs close to the default `t_max` are realistic: in the
 [max_density sweep]({{< relref "/docs/verification#sensitivity-to-max_density" >}})
@@ -185,6 +187,7 @@ with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
 | `The network has no safe node.` | No `add_safe` call. |
 | `Population starts in safe node '...'.` | The start node of a population is safe. |
 | `No route from '...' to safety.` | No chain of links from the start node to a safe node, or to the `target`. |
+| `area_factor ... of the population in '...' exceeds max_density * area = ... of '...' on its route.` | An agent of the population would not fit into a node it may enter, even when that node is empty. With `split_ties=True` every tied route counts, so a run is rejected even if alternation might have kept the population off that node. |
 | `runs must be at least 1.` | Raised by `run_many()` with fewer than one run. |
 | `Initial population exceeds max_density in [...]` | Raised by `run()`: too many agents (weighted by area factor) in a start node. |
 | `Agent speeds must be positive.` | Raised by `run()`: a speed distribution produced 0, or a negative value with `lower=None`. |

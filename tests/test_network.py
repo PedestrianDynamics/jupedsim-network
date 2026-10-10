@@ -148,6 +148,113 @@ def test_merge_weights_split_flow():
     assert ratio == pytest.approx(3.0, rel=0.15)
 
 
+def fed_corridor(feeders):
+    """Corridor C (40 m²) fed by one-way openings, out through a 1 m door."""
+    net = Network()
+    net.add_room("C", area=40.0)
+    net.add_safe("exit")
+    for name, area, width in feeders:
+        net.add_room(name, area=area)
+        net.connect(name, "C", width=width, kind="opening", bidirectional=False)
+    net.connect("C", "exit", width=1.0, bidirectional=False)
+    return net
+
+
+def assert_supply_from_queued_links(result):
+    # Only R -> C (2.6/s) has a queue; the door passes 0.91/s, so the
+    # steady density is 2.75 - (2.75 - 1/(2a)) * 0.91 / 2.6 = 2.4454 m⁻²,
+    # i.e. 97.82 agents in C. Counting every incoming link gives 105.94.
+    corridor = result.node_names.index("C")
+    occupancy = result.node_occupancy[:, corridor]
+    window = (result.times >= 200.0) & (result.times <= 400.0)
+    assert occupancy[window].mean() == pytest.approx(97.82, abs=1.0)
+    assert occupancy.max() < 99
+
+
+def test_supply_ignores_unused_reverse_link():
+    net = fed_corridor([("R", 1000.0, 2.0)])
+    net.add_room("D", area=40.0)
+    net.add_safe("exit2")
+    net.connect("C", "D", width=4.0, kind="opening", length=50.0)
+    net.connect("D", "exit2", width=1.0, length=1.0, bidirectional=False)
+    sim = NetworkSimulation(net, [Population("R", 600)], t_max=900.0)
+    result = sim.run(seed=1)
+    assert_supply_from_queued_links(result)
+    # Filling is unchanged until C passes the peak-flow density.
+    occupancy = result.node_occupancy[:, result.node_names.index("C")]
+    assert result.times[np.argmax(occupancy >= 76)] == 45.0
+    # Door-limited: (1 + ceil(599 / (0.91 * 0.5))) * 0.5 s.
+    assert result.evacuated == 600
+    assert result.evacuation_time == 659.0
+
+
+def test_supply_ignores_idle_feeder():
+    net = fed_corridor([("R", 1000.0, 2.0), ("R2", 100.0, 4.0)])
+    pops = [Population("R", 600), Population("R2", 1)]
+    result = NetworkSimulation(net, pops, t_max=900.0).run(seed=1)
+    assert_supply_from_queued_links(result)
+    # Door-limited: (1 + ceil(600 / (0.91 * 0.5))) * 0.5 s.
+    assert result.evacuated == 601
+    assert result.evacuation_time == 660.0
+
+
+def room_swap(count, area_factor, side_door):
+    """Rooms A and B (20 m²) swap occupants through a 1 m door."""
+    net = Network()
+    for name in ("A", "B"):
+        net.add_room(name, area=20.0)
+    net.add_safe("exitA")
+    net.add_safe("exitB")
+    net.connect("A", "B", width=1.0, length=2.0)
+    if side_door:
+        net.add_room("S", area=20.0)
+        net.connect("A", "S", width=2.0, length=2.0)
+    net.connect("A", "exitA", width=1.0, length=50.0, bidirectional=False)
+    net.connect("B", "exitB", width=1.0, length=50.0, bidirectional=False)
+    pops = [
+        Population("A", count, area_factor=area_factor, target="exitB"),
+        Population("B", count, area_factor=area_factor, target="exitA"),
+    ]
+    return NetworkSimulation(net, pops, t_max=900.0).run(seed=1)
+
+
+def door_passages(result, link):
+    column = result.link_flow[:, result.link_names.index(link)]
+    assert column.max() == 1
+    return list(result.times[column == 1])
+
+
+@pytest.mark.parametrize(
+    (
+        "count",
+        "area_factor",
+        "side_door",
+        "first_exit",
+        "total",
+        "first",
+        "gap",
+    ),
+    [
+        # phi * C * dt = 0.392 per step; the 2nd area saved after 6 steps.
+        (20, 2.0, True, 82.5, 127.5, 6.0, 3.5),
+        # phi * C * dt = 0.418 per step; 1.5 saved after 4 steps.
+        (26, 1.5, False, 79.0, 122.0, 4.5, 2.5),
+    ],
+    ids=["side_door_af2", "no_side_door_af1_5"],
+)
+def test_supply_carry_admits_large_agent_swap(
+    count, area_factor, side_door, first_exit, total, first, gap
+):
+    # A capped at max(C * dt, 1) stalls: alpha <= 1 + phi * C * dt < a.
+    result = room_swap(count, area_factor, side_door)
+    expected = [first + gap * k for k in range(count)]
+    assert door_passages(result, "A->B") == expected
+    assert door_passages(result, "B->A") == expected
+    assert np.nanmin(result.exit_times) == first_exit
+    assert result.evacuated == 2 * count
+    assert result.evacuation_time == total
+
+
 def test_same_seed_gives_same_result():
     net = corridor_with_rooms()
     pops = [Population("a", 50, pre_movement=Uniform(0, 60))]
@@ -269,6 +376,19 @@ def test_overfull_start_node_is_rejected():
     sim = NetworkSimulation(net, [Population("room", 40)])
     with pytest.raises(ValueError, match="max_density"):
         sim.run(seed=1)
+
+
+def test_agent_larger_than_node_on_route_is_rejected():
+    # max_density * area of C = 2.75 * 0.7 = 1.925 < 2: never fits.
+    net = Network()
+    net.add_room("R", area=100.0)
+    net.add_room("C", area=0.7)
+    net.add_safe("exit")
+    net.connect("R", "C", width=1.0)
+    net.connect("C", "exit", width=1.0)
+    with pytest.raises(ValueError, match=r"area_factor 2\.0 .* 1\.925 .*'C'"):
+        NetworkSimulation(net, [Population("R", 3, area_factor=2.0)])
+    NetworkSimulation(net, [Population("R", 3, area_factor=1.9)])
 
 
 def test_population_without_route_is_rejected():

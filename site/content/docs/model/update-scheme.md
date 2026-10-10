@@ -87,24 +87,31 @@ accepts agents only up to two limits.
       \frac{D_\text{max} - D_n}{D_\text{max} - D_\text{peak}},\, 0,\, 1
   \right),
   \qquad
-  \alpha_n = \gamma_n + \varphi_n \sum_{\ell \to n} C_\ell\,\Delta t
+  \alpha_n = \gamma_n + \varphi_n \sum_{\ell \in Q_n} C_\ell\,\Delta t
   \quad (\varphi_n < 1).
   $$
 
-  Here $D_\text{peak} = 1/(2a) = 1.88$ m⁻². The sum runs over every link
-  into $n$, including reverse links of two-way connections. If
-  `max_density` ≤ $D_\text{peak}$, the supply limit is not applied and
-  only the free space counts.
+  Here $D_\text{peak} = 1/(2a) = 1.88$ m⁻². The sum runs over $Q_n$,
+  the links into $n$ that have a queue in this step, the same links that compete
+  in the merge below. Links nobody is waiting at, such as the unused
+  direction of a two-way connection or a feeder whose room has emptied,
+  do not count. If `max_density` ≤ $D_\text{peak}$, the supply limit is
+  not applied and only the free space counts.
 
   The node carry $\gamma_n$ keeps what was allowed but not used, so that
   low inflow rates aren't rounded away. If the supply limit applied and
   some candidate was refused in this step,
 
   $$
-  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\to n} C_\ell\,\Delta t,\ 1\bigr)\Bigr);
+  \gamma_n = \operatorname{clip}\!\Bigl(\alpha_n - \textstyle\sum_\text{admitted} a_i,\ 0,\ \max\bigl(\sum_{\ell\in Q_n} C_\ell\,\Delta t,\ 1,\ a^\ast_n\bigr)\Bigr);
   $$
 
-  otherwise $\gamma_n = 0$.
+  otherwise $\gamma_n = 0$. The cap uses the same sum over links with a
+  queue as $\alpha_n$. $a^\ast_n$ is the largest area factor among the
+  agents still waiting at the head of a queue into $n$ after this
+  step's admissions, 0 if nobody waits. The cap lets a node save enough
+  supply for an agent with a large area factor, so that agent waits but
+  is not shut out.
 
 Candidates pass one at a time while their summed area factors stay
 within $\min(F_n, \alpha_n)$.
