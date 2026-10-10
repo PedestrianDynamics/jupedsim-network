@@ -20,7 +20,7 @@ and 2.14 {{< cite 6 "" >}}. Each row names the version where it matters.
 | Aspect | EvacuatioNZ | `jupedsim_network` |
 |--------|-------------|--------------------|
 | Speed in a node | SFPE $S = k(1-0.266D)$, $D \ge 0.54$ {{< cite 2 "§2.1.3" 3 "p. 15" >}} | same |
-| Stair speed | $k = 51.8\sqrt{T/R}$ m/min, "the FEDG approach" {{< cite 2 "§2.1.3, Eq. 2.1" 3 "p. 17" >}} | same formula |
+| Stair speed | $k = 51.8\sqrt{T/R}$ m/min {{< cite 2 "§2.1.3, Eq. 2.1" >}}, "the FEDG approach" {{< cite 3 "p. 17" >}}, from the FEDG's $k_t = 51.8\,(G/R)^{0.5}$ with tread going $G$ {{< cite 18 "p. 223" >}} | same formula |
 | Door flow | $F_s = 1.33$ default, boundary layer 0.15 m {{< cite 2 "§2.2" 3 "p. 3" >}}; door leaves and closers {{< cite 2 "§2.2" 3 "p. 14" >}} | $F_s = 1.3$ default (SFPE), configurable per link; no leaves or closers |
 | Stairs | stair node with an `enz_stairs` connection; $F_s = 1.09$ from SFPE Table 59.5 in the exercise {{< cite 3 "p. 18" >}}; landings as separate nodes {{< cite 3 "p. 20" >}} | stair node with area and $k(R,T)$; link flow $k/(4a)$ computed from the geometry |
 | Node capacity | hard maximum node density, default 2.75 m⁻² {{< cite 3 "p. 3" >}}: an agent passes into a node only if its density is below the maximum {{< cite 8 "p. 165" 10 "p. 111" >}} | hard `max_density` plus a linear supply reduction above 1.88 m⁻² |

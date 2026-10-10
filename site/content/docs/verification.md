@@ -20,7 +20,7 @@ repository:
 uv run pytest -q
 ```
 
-The last line of the output reads `109 passed`, followed by the run
+The last line of the output reads `139 passed`, followed by the run
 time.
 
 The table lists the tests with a hand-calculated expectation. "Result"
@@ -119,7 +119,7 @@ are accepted for the EvacuatioNZ cases only:
 | Door flow, IMO 4 room, 100 agents, 1 m door | §2.2, p. 9 | 107.5 s ($N/C$ with $C = 0.93$) | 108 s | 106.5 s | This model's convention is $(N-1)/C = 106.3$ s, see above |
 | Door flow, 1–3 m doors and 1 m opening, 1–100 agents | §2.2, p. 10 | $(N-1)/C$ | Fig. 2.2, graph only | table below | `test_door_flow_widths` |
 | Stair flow, 1–1000 agents, stairs 10 × 1, 200 × 1 and 200 × 5 m | §2.3, pp. 12–13 | $L/S_0 + (N-1)/C$ | Fig. 2.6, graph only | table below | `test_stair_flow_*` |
-| Fire Engineering Design Guide, 90 agents, room over one stair | §2.4, pp. 13–15 | 186 s (FEDG) | 179 s; 168 s with random start | first exit 30.5 s; last exit 129.0 s | Capacity bound $30.5 + 89/0.911 = 128.2$ s, see below. `test_fedg_first_exit`, `test_fedg_last_exit_bound` |
+| Fire Engineering Design Guide, 90 agents, room over one stair | §2.4, pp. 13–15 | 186 s (report, p. 14), the sum of the FEDG's 0.20 + 2.9 min {{< cite 18 "p. 231" >}}; no room walk | 179 s (p. 14); 168 s with random start (p. 15) | first exit 30.5 s; last exit 129.0 s | Capacity bound $30.5 + 89/0.911 = 128.2$ s; exit C is merged into the stair link (lower capacity), see below. `test_fedg_first_exit`, `test_fedg_last_exit_bound` |
 | SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE Solution A, 25.4 min; Solution B 1518 s); ≥ 1538.9 s in this model's conventions ($t_{\text{first}} + 1199/0.811$) | 1871 s (v2.11); 1471 ± 3 s in {{< cite 7 "manuscript p. 20; Fig. 10" >}} (2009, different network) | 1548.5 s | 300 per floor on floors 2–9 {{< cite 1 "p. 2181" >}} {{< cite 7 "Fig. 11" >}} and a 36 in exit door per stair from the SFPE example {{< cite 1 "p. 2181" >}}; the report gives neither, and neither EvacuatioNZ document gives the ground-floor exit. The exit door (0.811/s) controls: $70.0 + 1199/0.811$. Stair length 6.76 m from $H = 12$ ft. Landings are nodes: each link's length is walked in the node it leaves, so the 4.8 m of landing travel is level travel and corridor→landing is 4.8 m shorter below the top floor. With the landing travel walked on the stair link instead, 1915.0 s. Agents start at the room door; the report draws a random start distance. With a start $U(0, 91.44)$ m, 1542.5 s (seed 1; first exit 64.0 s instead of 70.0 s; the exit door still controls). `test_sfpe_nine_storey` |
 | SFPE Guide on Human Behavior, example 1, 300 agents, start at the door | §2.6, pp. 18–20 | 246 s (Guide); 234.95 s in this model's conventions | 221.5 s | 235.5 s | $149/0.682 + 15.27/S_0$. `test_sfpe_guide_example_1` |
 | The same, start 200 ft from the door | §2.6, pp. 18–20 | 300 s (Guide); 285.8 s in this model's conventions | 283 s | 286.0 s | Plus 60.96 m at 1.199 m/s |
@@ -173,19 +173,91 @@ per metre of effective width for both 1000-agent runs on the 200 m
 stairs, equal to the stair's $F_s = k/(4a) = 1.012$. Fig. 2.7 of the report
 shows 1.0 persons/s/m.
 
-**Fire Engineering Design Guide.** 90 agents (read from Fig. 2.8; the
-text gives no number) start 20 m from a 1.0 m door into a 10 × 1.2 m
-stair. The stair link, $1.012 \times 0.9 = 0.911$ persons/s, limits the
-exit, not the door with $1.33 \times 0.7 = 0.931$ persons/s. The first
-agent reaches the door at 19.0 s and leaves the stair at 30.5 s: 30.0 s
-at the free stair speed, slowed by the agents that follow onto the
-stair. The capacity bound for the last exit is $30.5 + 89/0.911 = 128.2$
-s; this model gives 129.0 s.
-EvacuatioNZ's 179 s is about 50 s longer. In Fig. 2.8 its stair holds
-about 33 agents from about 80 s to 133 s, and its exits run at about 0.6
-agents/s, below both capacities. In this model the stair holds at most
-14 agents. The report does not say what limits the flow out of a full
-node in EvacuatioNZ, so the difference is unexplained.
+**Fire Engineering Design Guide.** The example is the FEDG's room over
+one stair {{< cite 18 "pp. 229–231" >}}. The 10 × 10 m room holds
+$N_o = A_f D_o = 100 \times 0.9 = 90$ people, with $D_o = 0.9$ m⁻² from
+Table 11.1 {{< cite 18 "p. 229" >}}. The report starts all agents
+20 m from door B, a 1.0 m door into a 10 × 1.2 m stair
+{{< cite 2 "§2.4, p. 13" >}}, and this model's test does the same. The
+stair link, $1.012 \times 0.9 = 0.911$ persons/s, limits the exit, not
+exit C with $1.33 \times 0.7 = 0.931$ persons/s (door B has the same
+capacity). The first agent reaches
+door B at 19.0 s and leaves the stair at 30.5 s: 30.0 s at the free
+stair speed, slowed by the agents that follow onto the stair. The
+capacity bound for the last exit is $30.5 + 89/0.911 = 128.2$ s; this
+model gives 129.0 s.
+
+{{< details title="How the FEDG gets 186 s" closed="true" >}}
+
+The report's hand value is 186 s {{< cite 2 "§2.4, p. 14" >}}. The FEDG
+does not print it. It prints the stair walk $t_{ts} = 10/48.8 = 0.20$ min
+and the passage through exit C, a 1.0 m door at the foot of the stair,
+$t_{qc} = 90/31.4 = 2.9$ min {{< cite 18 "pp. 229, 231" >}}. Their sum,
+3.1 min or 186 s, is the evacuation time of 8.0 min less the response
+time of 4.9 min {{< cite 18 "pp. 230–231" >}}. Unrounded, the same chain
+gives 184.8 s, 12.3 s on the stair and 172.5 s at exit C, with
+$D_s = 0.915$ m⁻² against the printed 0.92 (our arithmetic). Spearpoint
+(2009) gives a movement time of 185 s {{< cite 7 "manuscript p. 16" >}}.
+
+The hand value contains no room walk. The FEDG assumes that the first
+person enters exit B at the start of the evacuation
+{{< cite 18 "p. 230" >}}, and Spearpoint (2009) writes that "the people
+immediately reach the top of the stairs"
+{{< cite 7 "manuscript p. 16" >}}. The FEDG's 20 m is $L_t$, the distance
+from the furthest point to exit B. It gives the last person's walk,
+0.30 min {{< cite 18 "p. 229" >}}, which is shorter than the 2.2 min
+queue at door B {{< cite 18 "p. 230" >}} and does not enter the result. Starting every agent
+20 m from the door is the report's choice
+{{< cite 2 "§2.4, p. 13" >}}.
+
+The FEDG computes the flow at door B as speed times density at the
+design density and carries it downstream: the stair density follows
+from that flow, and exit C passes the stair's specific flow
+{{< cite 18 "pp. 230–231" >}}:
+
+- door B: $F_s = 63.9 \times 0.9 = 57.5$ persons/min/m and
+  $F_a = 57.5 \times 0.7 = 40.3$ persons/min (0.67 persons/s);
+- stair: $F_s = 40.3/0.9 = 44.8$ persons/min/m gives $D_s = 0.92$ m⁻²
+  (the other root is 2.84) and $S = 48.8$ m/min;
+- exit C, effective width 0.7 m: $F_a = 44.8 \times 0.7 = 31.4$
+  persons/min (0.52 persons/s). This flow controls.
+
+The FEDG gives the stair length as $L_s = 10.0$ m and uses it as a
+walked distance, $t_{ts} = L_s/S$ {{< cite 18 "pp. 229, 231" >}}. The
+test uses 10.0 m for the stair node and the stair link, as Listing 2.10
+does (lines 17 and 40) {{< cite 2 "§2.4, pp. 13–14" >}}. The FEDG does not say
+whether 10 m is the walked length, the horizontal run or a height. Its
+plan, Fig. 11.6, draws the stair along the 10 m wall
+{{< cite 18 "p. 229" >}}, which suggests a horizontal run. The walked
+length would then be $10\sqrt{1 + (180/280)^2} = 11.9$ m, about 2 s
+more. For the convention of this model, see
+[Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}}).
+
+{{< /details >}}
+
+This model uses capacities instead: 0.931 persons/s at door B and
+0.911 persons/s on the stair link. EvacuatioNZ puts exit C, the 1.0 m
+door, on the stair connection (`enz_door` in Listing 2.10, lines 46–48)
+{{< cite 2 "§2.4, pp. 13–14" >}}. By the rule above, this model maps
+that connection to one link with the lower of the two capacities. The
+stair's 0.911 persons/s is below the door's 0.931 persons/s, so
+`fedg()` uses the stair link and exit C does not bind. The
+FEDG's lower flow at exit C (0.522 persons/s) accounts for most of
+the 57 s between 186 s and 129 s:
+$89/0.522 - 89/0.911 \approx 73$ s more, 19 s less for the room walk
+and about 1 s more on the stair (our arithmetic).
+
+EvacuatioNZ's 179 s is about 50 s longer than this model's result. In
+Fig. 2.8 its stair holds about 33 agents from about 80 s to 133 s, and
+its exits run at about 0.6 agents/s, below both capacities. In this
+model the stair holds at most 14 agents. The report does not say what
+limits the flow out of a full node in EvacuatioNZ, so the difference is
+unexplained. The two documents use different EvacuatioNZ versions and inputs:
+Spearpoint (2009) uses a zero-length room–stair connection and
+minimum, maximum or random start positions and reports 257 s, 275 s
+and 260 ± 4 s {{< cite 7 "manuscript pp. 16–17" >}}; the report uses a
+0.1 m connection and a 20 m start and gives 179 s and 168 s
+{{< cite 2 "§2.4, pp. 14–15" >}}.
 
 **Tied stairs.** EvacuatioNZ splits the agents of §2.6 between the two
 stairs with a least-populated-connection rule. This model has no such
