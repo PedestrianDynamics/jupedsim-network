@@ -264,7 +264,7 @@ python examples/office_wing.py
 ```
 
 `pip install .` installs the model from the same checkout as the script.
-Release 0.1.0 on PyPI predates the link capacity fix
+Releases before 0.2.0 predate the link capacity fix
 ([issue #18](https://github.com/PedestrianDynamics/jupedsim-network/issues/18))
 and prints other numbers.
 

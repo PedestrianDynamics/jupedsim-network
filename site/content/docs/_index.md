@@ -13,7 +13,7 @@ model. A run of a ten-storey building with 600 agents takes about 0.1 s,
 so a scenario can be sampled hundreds of times.
 
 {{< callout type="warning" >}}
-Version 0.1.0, a prototype. The model is verified against hand
+Version 0.2.0, a prototype. The model is verified against hand
 calculations and adapted IMO component tests. It is not validated against drills
 or experiments, and it is not intended for regulatory or design use. See
 [Limitations]({{< relref "/docs/limitations" >}}).

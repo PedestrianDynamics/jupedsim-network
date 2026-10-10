@@ -3,7 +3,7 @@ title: Limitations
 weight: 6
 ---
 
-This page lists every known limitation of version 0.1.0. Read it before
+This page lists every known limitation of version 0.2.0. Read it before
 using a result. SFPE asks that model results be presented with a
 description of the model's limitations, including its level of
 validation {{< cite 1 "p. 2171" >}}.
