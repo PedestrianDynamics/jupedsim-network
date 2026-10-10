@@ -15,10 +15,11 @@ Each time step of length ``dt`` is processed synchronously:
    any interval ``t``. Above the peak-flow density a node accepts a share
    of the summed capacity of its incoming links that have a queue in this
    step; the share falls linearly to zero at ``max_density``, which the
-   node never exceeds. A blocked node saves unused supply up to one
-   step of inflow, one agent or the largest area factor waiting at its
-   links, whichever is largest. When several links compete for what a
-   node accepts, it is shared in proportion to their merge weights.
+   node never exceeds. A node keeps unused supply, whether or not an
+   agent was ready to pass, up to one step of inflow, one agent or the
+   largest area factor waiting at its links, whichever is largest. When
+   several links compete for what a node accepts, it is shared in
+   proportion to their merge weights.
 5. All transfers are applied at once, so the result does not depend on the
    order in which links or nodes are processed. Agents that join the same
    queue at the same interpolated time are served in the order in which they
@@ -457,7 +458,7 @@ class _Run:
         flow = np.bincount(a.link[passed], minlength=len(budget))
         self._update_carry(budget, flow)
         head = self._head_area(queued, passed)
-        self._update_node_carry(allowance, offered, head, passed, wanted)
+        self._update_node_carry(allowance, offered, head, passed)
         self._update_virtual_time(flow, queuing)
         self._move(passed, t)
         return flow
@@ -504,20 +505,13 @@ class _Run:
         np.maximum.at(head, self.link_target[a.link[heads]], a.area[heads])
         return head
 
-    def _update_node_carry(
-        self, allowance, offered, head, passed, wanted
-    ) -> None:
+    def _update_node_carry(self, allowance, offered, head, passed) -> None:
         a = self.agents
-        candidates = np.concatenate(wanted) if wanted else passed
-        demand = self._load(
-            self.link_target[a.link[candidates]], a.area[candidates]
-        )
         admitted = self._load(self.link_target[a.link[passed]], a.area[passed])
-        blocked = np.isfinite(allowance) & (demand > admitted)
-        # Save at most one step of supply, or enough for the largest head.
+        # Save at most one step of supply, or enough for the largest head;
+        # an unlimited node (infinite allowance) holds the full cap.
         cap = np.maximum(np.maximum(offered, 1.0), head)
-        rest = np.clip(allowance - admitted, 0.0, cap)
-        self.node_carry = np.where(blocked, rest, 0.0)
+        self.node_carry = np.clip(allowance - admitted, 0.0, cap)
 
     def _wanted(
         self, queued: np.ndarray, budget: np.ndarray
