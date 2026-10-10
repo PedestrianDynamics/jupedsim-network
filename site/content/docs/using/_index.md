@@ -4,7 +4,7 @@ weight: 2
 ---
 
 How to describe a building and its occupants, run the model, and read
-the results. Signatures and defaults are those of version 0.2.0.
+the results. Signatures and defaults are those of version 0.3.0.
 
 {{< cards >}}
   {{< card link="networks" title="Networks" subtitle="Rooms, stairs, safe places and the links between them." >}}
