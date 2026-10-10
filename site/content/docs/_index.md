@@ -20,7 +20,7 @@ supply limit of a full node act
 ([Update scheme]({{< relref "/docs/model/update-scheme" >}})).
 
 {{< callout type="warning" >}}
-Version 0.2.0, a prototype. The model is verified against hand
+Version 0.3.0, a prototype. The model is verified against hand
 calculations and adapted IMO component tests. It is not validated against drills
 or experiments, and it is not intended for regulatory or design use. See
 [Limitations]({{< relref "/docs/limitations" >}}).
