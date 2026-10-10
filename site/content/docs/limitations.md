@@ -103,6 +103,20 @@ validation {{< cite 1 "p. 2171" >}}.
   depend on where in the room an agent starts, apart from the sampled
   `start_distance`. Both directions of a connection use the same
   length.
+- **A link longer than its node limits the node's flow.** An agent
+  walks a link's length $L$ inside the source node, at that node's
+  speed $S(D) = k(1 - aD)$ ($k$ the node's speed constant,
+  $a = 0.266$ m²). A node of length $\ell$ and width $w$ at density $D$
+  then passes on average at most $D\,w\,\ell\,S(D)/L$ agents per
+  second. This is largest at $D = 1/(2a)$, where it equals
+  $k\,w\,\ell/(4aL)$: the node's peak specific flow $k/(4a)$ times
+  $w\ell/L$. For $L > \ell$ the node passes less than $k w/(4a)$,
+  whatever the door widths. Putting landing travel on a stair link
+  makes $L$ longer than the stair node. In the SFPE nine-storey
+  building this lowers the exit flow from 0.811 to about 0.65
+  persons/s and raises the evacuation time from 1548.5 s to 1915.0 s
+  ([Verification]({{< relref "/docs/verification#evacuationz-verification-cases" >}})).
+  Model landings as their own nodes.
 - **The area factor is not calibrated.** It scales an agent's
   contribution to density. It is not the Predtechenskii–Milinskii
   method that SFPE describes for mixed body sizes

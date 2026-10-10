@@ -114,13 +114,13 @@ are accepted for the EvacuatioNZ cases only:
 
 | Case | Report | Hand value | EvacuatioNZ | This model | Explanation |
 |------|--------|------------|-------------|------------|-------------|
-| Travel speed, 40 m from a start distance at 1.0 m/s | §2.1.2, p. 7 | 40 s | 40.5 s | 40.0 s | `test_travel_speed_from_start_distance` |
+| Travel speed, 40 m along a link or from a start distance at 1.0 m/s | §2.1.1–2.1.2, pp. 6–7 | 40 s | 40.5 s | 40.0 s | `test_travel_speed_from_start_distance` |
 | Stair speed, 10 m of 180/280 mm steps | §2.1.3, p. 8 | 10.9 s (Eq. 2.1), 10.5 s (SFPE table) | 12 s | 11.0 s ($\Delta t = 0.1$ s), 11.5 s ($\Delta t = 0.5$ s) | At $\Delta t = 0.5$ s: 10.84 s, plus one step for the transfer into the stair, rounded up to the step. `test_stair_speed_imo_test_3`, `test_stair_flow_uncongested` |
 | Door flow, IMO 4 room, 100 agents, 1 m door | §2.2, p. 9 | 107.5 s ($N/C$ with $C = 0.93$) | 108 s | 106.5 s | This model's convention is $(N-1)/C = 106.3$ s, see above |
 | Door flow, 1–3 m doors and 1 m opening, 1–100 agents | §2.2, p. 10 | $(N-1)/C$ | Fig. 2.2, graph only | table below | `test_door_flow_widths` |
 | Stair flow, 1–1000 agents, stairs 10 × 1, 200 × 1 and 200 × 5 m | §2.3, pp. 12–13 | $L/S_0 + (N-1)/C$ | Fig. 2.6, graph only | table below | `test_stair_flow_*` |
 | Fire Engineering Design Guide, 90 agents, room over one stair | §2.4, pp. 13–15 | 186 s (FEDG) | 179 s; 168 s with random start | first exit 30.5 s; last exit 129.0 s | Capacity bound $30.5 + 89/0.911 = 128.2$ s, see below. `test_fedg_first_exit`, `test_fedg_last_exit_bound` |
-| SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE) | 1871 s | not reproduced | Pending the total occupant count of the source: the report gives neither the occupants per floor nor the ground-floor exit. Only the stair length 6.76 m from $H = 12$ ft is checked |
+| SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE Solution A, 25.4 min; Solution B 1518 s); ≥ 1538.9 s in this model's conventions ($t_{\text{first}} + 1199/0.811$) | 1871 s (v2.11); 1471 ± 3 s in {{< cite 7 "manuscript p. 20; Fig. 10" >}} (2009, different network) | 1548.5 s (stand-in) | 300 per floor on floors 2–9 {{< cite 1 "p. 2181" >}} {{< cite 7 "Fig. 11" >}} and a 36 in exit door per stair from the SFPE example {{< cite 1 "p. 2181" >}}; the report gives neither, and neither EvacuatioNZ document gives the ground-floor exit. The exit door (0.811/s) controls: $70.0 + 1199/0.811$. Stair length 6.76 m from $H = 12$ ft. Landings are nodes: each link's length is walked in the node it leaves, so the 4.8 m of landing travel is level travel and corridor→landing is 4.8 m shorter below the top floor. With the landing travel walked on the stair link instead, 1915.0 s. Agents start at the room door; the report draws a random start distance. With a start $U(0, 91.44)$ m, 1543.0 s (seed 1; first exit 64.0 s instead of 70.0 s; the exit door still controls). `test_sfpe_nine_storey` |
 | SFPE Guide on Human Behavior, example 1, 300 agents, start at the door | §2.6, pp. 18–20 | 246 s (Guide); 234.95 s in this model's conventions | 221.5 s | 235.5 s (stand-in) | $149/0.682 + 15.27/S_0$. `test_sfpe_guide_example_1` |
 | The same, start 200 ft from the door | §2.6, pp. 18–20 | 300 s (Guide); 285.8 s in this model's conventions | 283 s | 286.0 s (stand-in) | Plus 60.96 m at 1.199 m/s |
 | Distributions: fixed 45 and 120 s, $U(10, 100)$, $N(120, 30)$, log-normal mean 5, sd 2 | §3.1, pp. 21–25 | means 55, 120, 5; sd 25.98, 30, 2 | Figs. 3.1–3.3, graph only | means 54.88, 119.66, 4.97; sd 26.07, 29.82, 1.99 (20 000 samples) | `test_fixed_distribution_is_exact`, `test_distribution_moments` |
@@ -198,9 +198,14 @@ door) and 506.0 s (start 200 ft away). The report's EvacuatioNZ result
 of 221.5 s lies within 1.6 s of $150/0.682 = 219.9$ s, although the
 last agent still has about 16 s of stair to descend; the Guide's 246 s
 does not match $N/C$ at the door or the stair with these constants.
+The §2.5 row uses the same kind of stand-in: one office zone of 150 per
+floor goes to each of the two tied stairs, the same 150/150 split as the
+SFPE Solution B, which says "Divide each floor in half to produce two exit
+calculation zones" {{< cite 1 "p. 2182" >}}. Without it all 2400 agents
+take one stair and leave after 3027.5 s.
 
 In §5.1 the report gives no node sizes or widths; the test assumes 25 m²
-nodes and 1 m doors and checks only the exit used. The report's
+nodes, 1 m doors and a start $U(0, 5)$ m and checks only the exit used. The report's
 distances of 5 m to Exit 5 and 15 m to Exit 3 leave out the 1 m link
 from Room 1 to Room 2; the full paths are 6 m and 16 m.
 

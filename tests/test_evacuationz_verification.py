@@ -64,21 +64,30 @@ def assert_invariants(result, net, n, max_density=2.75):
     np.testing.assert_allclose(steps, np.round(steps), atol=1e-9)
 
 
-# §2.1.2, p. 7: one agent walks 40 m at 1.0 m/s from a start distance.
+# §2.1.1-2.1.2, pp. 6-7: one agent walks 40 m at 1.0 m/s along a link
+# (§2.1.1) or from a start distance (§2.1.2).
 
 
-def test_travel_speed_from_start_distance():
+@pytest.mark.parametrize("start, link", [(40.0, 0.0), (0.0, 40.0)])
+def test_travel_speed_from_start_distance(start, link):
     net = Network()
     net.add_room("corridor", length=40.0, width=2.0)
     net.add_safe("exit")
-    net.connect("corridor", "exit", width=2.0, kind="opening", specific_flow=FS)
-    pop = Population("corridor", 1, speed=1.0, start_distance=40.0)
+    net.connect(
+        "corridor",
+        "exit",
+        width=2.0,
+        kind="opening",
+        length=link,
+        specific_flow=FS,
+    )
+    pop = Population("corridor", 1, speed=1.0, start_distance=start)
     result = NetworkSimulation(net, [pop], dt=DT).run(seed=1)
     assert result.evacuation_time == pytest.approx(40.0 / 1.0, abs=DT)
     assert_invariants(result, net, 1)
 
 
-# §2.2, pp. 8-11: door and opening flow of the IMO 4 room (8 m x 5 m).
+# §2.2, pp. 8-12: door and opening flow of the IMO 4 room (8 m x 5 m).
 
 
 @pytest.mark.parametrize("n", [1, 10, 100])
@@ -220,15 +229,134 @@ def test_fedg_last_exit_bound():
     assert_invariants(result, net, 90)
 
 
-# §2.5, pp. 15-17: SFPE nine-storey building. Not reproduced: the report
-# gives neither the occupants per floor nor the ground-floor exit. Only
-# the stair length of the floor template is checked.
+# §2.5, pp. 15-17: SFPE nine-storey building. The report gives the top
+# floor only. The occupants (300 per floor on floors 2-9) and the 36 in
+# door at each stair exit come from the SFPE example it reproduces (SFPE
+# Handbook 6th ed., p. 2181). Stand-in for an even use of the two tied
+# stairs: one office zone per floor goes to each stair. Landings are
+# nodes, so the 4.8 m of landing travel is walked at level speed and
+# corridor->landing is 4.8 m shorter below the top floor.
+
+SFPE_STAIR = 12 * FT * math.sqrt(1 + (0.28 / 0.18) ** 2)
+LANDING = 4.8
+STARTUP_LAG = 1.5  # s; door start-up lag, measured 0.6-1.1 s for dt 0.5-0.1
 
 
 def test_sfpe_stair_length_from_height():
     height = 12 * FT
     length = height * math.sqrt(1 + (0.28 / 0.18) ** 2)
     assert length == pytest.approx(6.76, abs=0.01)
+
+
+def sfpe_floor(net, f):
+    for r in (1, 2):
+        net.add_room(f"Room_{f}.{r}", length=300 * FT, width=10.8)
+        net.connect(
+            f"Room_{f}.{r}",
+            f"Corridor_{f}",
+            width=5.79,
+            length=14.12,
+            bidirectional=False,
+            specific_flow=FS,
+        )
+    for s in "RL":
+        net.add_stair(
+            f"Stairs_{f}{s}",
+            length=SFPE_STAIR,
+            width=1.12,
+            riser=0.18,
+            tread=0.28,
+        )
+        top = f == 9
+        net.connect(
+            f"Corridor_{f}",
+            f"Landing_{f}{s}",
+            width=0.91,
+            length=45.5 if top else 45.5 - LANDING,
+            bidirectional=False,
+            specific_flow=FS,
+        )
+        net.connect(
+            f"Landing_{f}{s}",
+            f"Stairs_{f}{s}",
+            width=1.12,
+            kind="stair",
+            length=0.0 if top else LANDING,
+            bidirectional=False,
+        )
+        net.connect(
+            f"Stairs_{f}{s}",
+            f"Landing_{f - 1}{s}",
+            width=1.2,
+            kind="opening",
+            length=SFPE_STAIR,
+            bidirectional=False,
+            specific_flow=FS,
+        )
+
+
+def sfpe_building():
+    net = Network()
+    for s in "RL":
+        net.add_safe(f"Exit{s}")
+        for f in range(1, 10):
+            net.add_room(f"Landing_{f}{s}", length=LANDING, width=1.2)
+        net.connect(
+            f"Landing_1{s}",
+            f"Exit{s}",
+            width=0.91,
+            length=LANDING,
+            bidirectional=False,
+            specific_flow=FS,
+        )
+    for f in range(2, 10):
+        net.add_room(f"Corridor_{f}", length=300 * FT, width=8 * FT)
+    for f in range(2, 10):
+        sfpe_floor(net, f)
+    pops = [
+        Population(f"Room_{f}.{r}", 150, speed=1.2, target=f"Exit{s}")
+        for f in range(2, 10)
+        for r, s in ((1, "R"), (2, "L"))
+    ]
+    return net, NetworkSimulation(net, pops, dt=DT).run(seed=1)
+
+
+def test_sfpe_nine_storey():
+    net, result = sfpe_building()
+    # The 36 in exit door (1.33 x 0.61 = 0.811/s) controls, below the
+    # stair (1.012 x 0.82 = 0.830/s). Each door passes its 1200 agents in
+    # no less than (N-1)/C. Before the door queue forms, the first agents
+    # arrive slower than C; this start-up lag is about 1 s whatever dt, so
+    # the window is absolute. Valid for start 0 only.
+    door = FS * (0.91 - 0.3)
+    # The stair links carry the stair capacity, 1.012 x (1.12 - 0.3)
+    # per s, and the incline length 12 ft x sqrt(1 + (0.28/0.18)^2).
+    links = {lk.name: lk for lk in net.links}
+    stair = stair_fs(STAIR_K) * (1.12 - 0.3)
+    for f in range(2, 10):
+        for s in "RL":
+            down = links[f"Landing_{f}{s}->Stairs_{f}{s}"]
+            assert down.kind == "stair"
+            assert down.capacity == pytest.approx(stair, rel=1e-3)
+            run = links[f"Stairs_{f}{s}->Landing_{f - 1}{s}"]
+            assert run.length == pytest.approx(SFPE_STAIR)
+    for s in "RL":
+        flow = result.link_flow[
+            :, result.link_names.index(f"Landing_1{s}->Exit{s}")
+        ]
+        passed = np.cumsum(flow)
+        assert passed[-1] == 1200
+        first = result.times[np.argmax(passed >= 1)]
+        last = result.times[np.argmax(passed >= 1200)]
+        assert 1199 / door <= last - first <= 1199 / door + STARTUP_LAG
+    # Lower bound for a floor-2 agent starting at the door: 14.12 m of
+    # room and 50.3 m of corridor and landings at the free level speed,
+    # then one stair at its free speed.
+    walk = (14.12 + 40.7 + 2 * LANDING) / free_speed(K_LEVEL)
+    hand = walk + SFPE_STAIR / free_speed(STAIR_K)
+    assert hand == pytest.approx(61.0, abs=0.1)
+    assert np.min(result.exit_times) >= hand
+    assert_invariants(result, net, 2400)
 
 
 # §2.6, pp. 18-20: SFPE Guide on Human Behavior, example 1. Stand-in for
