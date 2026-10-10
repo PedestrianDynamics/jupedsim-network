@@ -55,9 +55,8 @@ validation {{< cite 1 "p. 2171" >}}.
 - **Stair length is taken along the incline.** Stair links take the
   walking distance along the line of travel, as SFPE does in its
   Example 67.1 {{< cite 1 "p. 2178" >}}. Entering the horizontal run
-  makes the walk about 16 % too short for 18/28 cm steps. How to
-  measure the length of a real stair is open
-  ([issue #5](https://github.com/PedestrianDynamics/jupedsim-network/issues/5)).
+  makes the walk about 16 % too short for 18/28 cm steps
+  ([Networks]({{< relref "/docs/using/networks#length" >}})).
 - **Densities above 1.9 m⁻².** SFPE states that such densities should
   not be assumed in engineering designs {{< cite 1 "p. 2175" >}}. The
   model allows nodes up to `max_density`, 2.75 m⁻² by default, and its
