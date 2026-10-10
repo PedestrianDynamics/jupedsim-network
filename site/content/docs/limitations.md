@@ -21,6 +21,11 @@ validation {{< cite 1 "p. 2171" >}}.
   Nearest-exit routing and equal merge weights are optimistic defaults
   in the sense of Gwynne et al., who argue for bounding defaults on
   route use, flow, pre-evacuation time and speed {{< cite 11 "" >}}.
+- **SFPE relations applied to a network.** Shestopal and Grubits write
+  that the analytical approach of Nelson and MacLennan, in the SFPE
+  Handbook, "is not intended to be extrapolated to complex network of
+  exit routes" {{< cite 19 "p. 625" >}}. This model applies those SFPE relations on
+  a network of nodes and links. The effect of this has not been tested.
 - **Prototype.** The interface may change between versions.
 
 ## Routes

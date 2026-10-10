@@ -186,8 +186,10 @@ def test_stair_throughput_is_stair_capacity(width):
     assert flow / (width - 0.3) == pytest.approx(fs, rel=0.01)
 
 
-# §2.4, pp. 13-15: Fire Engineering Design Guide, a room over one stair.
-# The stair (1.012 x 0.9 = 0.911/s) limits stairs->exit, not the door
+# §2.4, pp. 13-15: Fire Engineering Design Guide (3rd ed., pp. 229-231),
+# a room over one stair. Exit C, the 1.0 m door on the stair connection
+# (Listing 2.10, lines 46-48), is merged into the stair link: the stair
+# (1.012 x 0.9 = 0.911/s) limits stairs->exit, not exit C
 # (1.33 x 0.7 = 0.931/s).
 
 

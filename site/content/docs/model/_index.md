@@ -72,14 +72,41 @@ walking speed at high density {{< cite 15 "p. 822" >}}. Occupants take
 the shortest route on each floor; when smoke blocks a node, the routes
 on that floor are recomputed {{< cite 15 "pp. 817–819, 822" >}}.
 
+**Merging packs (WAYOUT).** The building is a tree of "twigs", each a
+compartment of constant width with its exit door, that merges towards
+one final exit. Branching flows are not modelled: the user divides the
+building along "watersheds" and computes each part separately
+{{< cite 19 "pp. 625–626" >}}. Routes are fixed by the tree. The
+authors argue that minimum-time routes have little to do with reality,
+because people choose routes by psychological factors such as the
+memory of their entry route and the marking of emergency exits
+{{< cite 19 "p. 626" >}}. Speeds follow from the density relations of
+Predtechenskii and Milinskii {{< cite 19 "pp. 625–626" >}}, with the
+density $D = Nf/(wL)$ and $f = 0.113$ m² {{< cite 19 "p. 626" >}}.
+Occupants move in compact packs. The speeds of movement within a twig
+and of entry into it follow from the population density, and there is
+no overtaking: "the newcomers join the queue" {{< cite 19 "p. 627" >}}.
+
 **This model.** Each time step updates all individual agents at once,
-with no optimisation. The node capacity of EVACNET corresponds to
-`max_density` times the node area (agents of area factor 1), and its arc flow capacity to the link
-capacity $C_\ell = F_s\,(w_\ell - 2 b_\ell)$
-([links]({{< relref "/docs/model/elements#links" >}})). Walking speeds
-and, by default, the inflow into a node depend on the node density. The
+with no optimisation. By analogy, `max_density` times the node area
+(agents of area factor 1) plays the role of EVACNET's node capacity,
+and the link capacity $C_\ell = F_s\,(w_\ell - 2 b_\ell)$
+([links]({{< relref "/docs/model/elements#links" >}})) plays the role
+of its arc flow capacity. In the example of EVACNET+, a later program
+with Francis as co-author, node capacities follow from the usable area and
+Fruin's levels of service {{< cite 20 "pp. 216–217, Table 1" >}}, and
+the dynamic capacity of an arc is its width restriction WR times the
+average flow volume AFV, per time period. WR is usually the width of
+the doorway between the two nodes; for arcs from stairwells to
+landings or from hallway to hallway it is the minimal width of the
+stairwell or hallway {{< cite 20 "pp. 217–218, Table 2" >}}. Walking speeds
+and, by default, the inflow into a node depend on the node density, as
+the entry speed into a twig does in WAYOUT. The
 movement relations are adapted from SFPE {{< cite 1 "" >}}, while EXIT89 uses those of
-Predtechenskii and Milinskii {{< cite 15 "p. 819" >}}. Routes are fixed
+Predtechenskii and Milinskii {{< cite 15 "p. 819" >}}. As in WAYOUT,
+where entry speeds into a twig at maximum density are corrected and
+newcomers join the queue {{< cite 19 "p. 627" >}}, agents wait to enter
+a full node. Routes are fixed
 before the run: the shortest walking distance to the nearest safe node or to a
 given target. In the
 code: the module docstring of `jupedsim_network.simulation`,

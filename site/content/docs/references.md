@@ -83,6 +83,18 @@ table, for example [1, Eq. 67.3, p. 2174].
     2004*, NIST Special Publication 1032, 2005, pp. 66–88. Page numbers
     are the printed footers; [7] gives pp. 68–90.
     [doi:10.6028/NIST.SP.1032](https://doi.org/10.6028/NIST.SP.1032)
+18. <a id="ref-18"></a>M. J. Spearpoint (ed.), *Fire Engineering Design
+    Guide*, 3rd ed., New Zealand Centre for Advanced Engineering,
+    Christchurch, 2008. ISBN 978-0-908993-42-0. Printed page numbers;
+    the PDF page is n + 24. Cited as [11] in [7].
+19. <a id="ref-19"></a>V. O. Shestopal and S. J. Grubits, "Evacuation
+    model for merging traffic flows in multi-room and multi-storey
+    buildings", *Fire Safety Science* 4, 625–632, 1994.
+    [doi:10.3801/IAFSS.FSS.4-625](https://doi.org/10.3801/IAFSS.FSS.4-625)
+20. <a id="ref-20"></a>T. M. Kisko and R. L. Francis, "EVACNET+: A
+    computer program to determine optimal building evacuation plans",
+    *Fire Safety Journal* 9(2), 211–220, 1985.
+    [doi:10.1016/0379-7112(85)90009-8](https://doi.org/10.1016/0379-7112(85)90009-8)
 
 ## SFPE Handbook editions
 
