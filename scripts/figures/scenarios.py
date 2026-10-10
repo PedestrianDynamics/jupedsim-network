@@ -35,7 +35,7 @@ def building(floors=10, stairs=("A", "B"), lengths=None, area=400.0):
             below,
             width=1.2,
             kind="stair",
-            length=9.0,
+            length=9.0,  # along the incline
             bidirectional=False,
         )
     return net
