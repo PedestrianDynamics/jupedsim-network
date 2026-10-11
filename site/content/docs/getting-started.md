@@ -19,6 +19,11 @@ pip install jupedsim-network
 **Check:** `python -c "import jupedsim_network"` returns without an
 error.
 
+The install also provides the `jupedsim-network` command. It runs the
+scenario below from a JSON file: `jupedsim-network init`, then
+`jupedsim-network run scenario.json`
+([Command line]({{< relref "/docs/using/command-line" >}})).
+
 ## Run a first scenario
 
 An office of 200 m² with 120 occupants empties through a 0.9 m door
@@ -56,7 +61,7 @@ Output:
 [383.25 550.05]
 ```
 
-The 500 runs take about 15 s on a laptop (Apple M3 Pro).
+The 500 runs take 15–20 s on a laptop (Apple M3 Pro).
 
 - `323.0` is the `evacuation_time` of the run with seed 1: the time in
   seconds at which the last agent reached the street, pre-movement
@@ -151,7 +156,7 @@ speed and leaves through the stair link. The
 |--------------------|-------|-----|
 | `ValueError: Initial population exceeds max_density in [...]`, raised by `run()` | More agents (weighted by area factor) than `max_density` × area in a start node | Enlarge the node, split the population, or check `count` |
 | `ValueError: No route from '...' to safety.`, raised by `NetworkSimulation(...)` | No chain of links from the start node to a safe node, or to the `target` | Add the missing `connect` call; check the link direction |
-| `ValueError: Agent speeds must be positive.` | A speed distribution produced 0, or a negative value with `lower=None` | Set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
+| `ValueError: population i: Agent speeds must be positive.`, raised by `run()` | Population *i* (0-based) has a speed of 0, or a speed distribution produced 0 or, with `lower=None`, a negative value | Give a positive `speed`, or set `lower` above 0 on the speed distribution ([Populations]({{< relref "/docs/using/populations#distributions" >}})) |
 | `evacuation_time` is `nan` | Some agents were still inside at `t_max` | Raise `t_max`, or look for a node that cannot empty |
 | `RuntimeWarning: ... runs did not finish before t_max ...`; `quantile` returns `inf` | Some runs were still running at `t_max` | Raise `t_max` until `runs.incomplete` is 0 |
 
@@ -168,5 +173,7 @@ All error messages are listed in
   for your own building.
 - [Running]({{< relref "/docs/using/running" >}}): choosing the time step and
   `max_density`, and replaying a critical run.
+- [Command line]({{< relref "/docs/using/command-line" >}}): the same
+  scenario as a JSON file, run without Python.
 - [Limitations]({{< relref "/docs/limitations" >}}): read before you use a
   result.

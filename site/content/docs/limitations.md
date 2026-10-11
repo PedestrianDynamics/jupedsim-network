@@ -261,7 +261,11 @@ simulation.
 ## Numerics
 
 - **Results are quantised by the time step.** Agents leave at the end of
-  a step, so exit times are multiples of $\Delta t$. Every link costs at
+  a step, so exit times are multiples of $\Delta t$, up to
+  floating-point rounding: at $\Delta t = 0.1$ s an exit time can differ
+  in the last digits from the step time it belongs to
+  ([issue #54](https://github.com/PedestrianDynamics/jupedsim-network/issues/54)).
+  Every link costs at
   least one step: six zero-length links in a row take 3.0 s at
   $\Delta t = 0.5$ s. Stair speeds need $\Delta t \approx 0.1$ s to
   match a hand calculation within 0.25 s.
@@ -341,11 +345,39 @@ simulation.
   to `pre_movement`
   ([defaults](#defaults-compared-with-bounding-defaults)).
 
+## Input checks
+
+Some inputs pass every check but change the result in a way you may not
+expect. They behave the same from Python and from a scenario file
+([issue #53](https://github.com/PedestrianDynamics/jupedsim-network/issues/53)).
+
+- **Stair dimensions in mm are accepted.** `riser=180, tread=280` gives
+  the same speed constant as `0.18` and `0.28`, because the constant
+  depends only on the ratio of tread to riser. The only sign is a
+  warning that the stair lies outside the SFPE range. Read every
+  warning.
+- **Negative plain values become 0.** A plain negative `pre_movement`,
+  `start_distance` or `count` is a `Fixed` value with `lower=0` and is
+  set to 0 without a message.
+- **`area_factor` 0 or negative is accepted.** It breaks the
+  `max_density` limit of the nodes.
+- **A negative `boundary_layer` widens the door.**
+- **`area` wins.** A room with `area` and also `length` and `width` uses
+  `area`.
+- **Weibull `alpha` below 0 is accepted.**
+- **A very small `dt` is accepted.** A `dt` such as 1e-300 makes a run hang.
+- **`max_density` at or below 1.88 m⁻² turns supply reduction off**
+  without notice ([Movement and capacity](#movement-and-capacity)).
+
 ## Output
 
 - **`node_occupancy` counts heads.** It counts agents, not area factors,
   so it differs from the density the model uses when area factors other
   than 1 are present.
+- **`agents.csv` has no population column.** The result files of the
+  command line list agents in population order, but a run does not
+  record the population of each agent, and `count` can be sampled
+  ([Command line]({{< relref "/docs/using/command-line#result-files" >}})).
 - **No counterflow output.** `SimulationResult` does not report in
   which steps a pair was in counterflow or its minor share
   ([issue #40](https://github.com/PedestrianDynamics/jupedsim-network/issues/40)).

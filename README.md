@@ -26,16 +26,27 @@ Python 3.10 or later:
 pip install jupedsim-network
 ```
 
+The install provides the `jupedsim-network` command, which runs a
+scenario written as a JSON file
+([Command line](https://pedestriandynamics.org/jupedsim-network/docs/using/command-line/)):
+
+```
+jupedsim-network init
+jupedsim-network run scenario.json
+pip install "jupedsim-network[cli]"  # coloured --help
+```
+
 ## Development
 
 ```
 uv sync
-uv run pytest
+uv run --extra cli pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-`uv run pytest` runs the tests of every pull request and deselects the
-long ones. Two further commands run those:
+`uv run --extra cli pytest` runs the tests of every pull request, as CI
+does; without `--extra cli` the tests of the coloured help are skipped.
+It deselects the long tests. Two further commands run those:
 
 ```
 uv run pytest -m slow

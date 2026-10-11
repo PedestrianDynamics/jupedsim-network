@@ -11,4 +11,5 @@ the results. Signatures and defaults are those of version 0.3.0.
   {{< card link="populations" title="Populations" subtitle="Agents, their inputs and the sampling distributions." >}}
   {{< card link="running" title="Running" subtitle="Seeds, Monte Carlo, time step, max_density and t_max." >}}
   {{< card link="results" title="Results" subtitle="What a run returns and how to report it." >}}
+  {{< card link="command-line" title="Command line" subtitle="Run a JSON scenario file and write the results to CSV and JSON." >}}
 {{< /cards >}}

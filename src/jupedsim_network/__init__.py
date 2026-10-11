@@ -17,6 +17,12 @@ from jupedsim_network.sampling import (
     Uniform,
     Weibull,
 )
+from jupedsim_network.scenario import (
+    Scenario,
+    ScenarioError,
+    load_scenario,
+    save_scenario,
+)
 from jupedsim_network.simulation import (
     MonteCarloResult,
     NetworkSimulation,
@@ -35,8 +41,12 @@ __all__ = [
     "Node",
     "Normal",
     "Population",
+    "Scenario",
+    "ScenarioError",
     "SimulationResult",
     "Triangular",
     "Uniform",
     "Weibull",
+    "load_scenario",
+    "save_scenario",
 ]

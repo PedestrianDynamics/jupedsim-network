@@ -49,6 +49,9 @@ runs = simulation.run_many(500, seed=1)  # 500 independent realisations
   a new one each time.
 - `run(..., record=False)` skips the time series of node occupancy and
   link flow. `run_many` uses it.
+- In a scenario file, the `run` and `monte_carlo` sections hold these
+  seeds, and `--seed` and `--mc-seed` override them
+  ([Command line]({{< relref "/docs/using/command-line#seeds-and-reproducibility" >}})).
 - `run_many(runs, seed)` derives one seed per run with
   `numpy.random.SeedSequence(seed).spawn(runs)`. Run *i* of
   `run_many(500, seed=1)` is therefore not `run(seed=i)`.
@@ -200,7 +203,13 @@ with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
 | `area_factor ... of the population in '...' exceeds max_density * area = ... of '...' on its route.` | An agent of the population would not fit into a node it may enter, even when that node is empty. With `split_ties=True` every tied route counts, so a run is rejected even if alternation might have kept the population off that node. |
 | `runs must be at least 1.` | Raised by `run_many()` with fewer than one run. |
 | `Initial population exceeds max_density in [...]` | Raised by `run()`: too many agents (weighted by area factor) in a start node. |
-| `Agent speeds must be positive.` | Raised by `run()`: a speed distribution produced 0, or a negative value with `lower=None`. |
+| `population i: Agent speeds must be positive.` | Raised by `run()`: population *i* (0-based) has a speed of 0, or a speed distribution produced 0 or, with `lower=None`, a negative value. |
 
 The last three are raised by `run_many()` or `run()`, the others when
 the `NetworkSimulation` is created.
+
+Every value or arithmetic error raised while the agents of a population are created names
+that population as `population i:` (0-based) and keeps the original
+message. It is a `ValueError`, with the original exception as
+`__cause__`. For example, `LogNormal(0.0, 60.0)` as pre-movement gives
+`population 0: float division by zero`.

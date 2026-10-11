@@ -19,7 +19,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       # Coverage on one leg (issue #48); the threshold only goes up.
-      - run: uv run pytest ${{ matrix.python-version == '3.13' && '--cov=jupedsim_network --cov-branch --cov-report=term-missing --cov-fail-under=97' || '' }}
+      - run: uv run --extra cli pytest ${{ matrix.python-version == '3.13' && '--cov=jupedsim_network --cov-branch --cov-report=term-missing --cov-fail-under=97' || '' }}
 
   docs:
     runs-on: ubuntu-latest
@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run pytest -m slow
+      - run: uv run --extra cli pytest -m slow
 
   # Run time of the base and the head revision on one runner. Reports
   # the ratio in the job summary and warns above 1.5; never fails.
