@@ -1,0 +1,41 @@
+Scenario scenario.json: 14 nodes, 14 links, 7 populations.
+Nodes:
+  0   G1               room   63 m²
+  1   G2               room   63 m²
+  2   G3               room   63 m²
+  3   G4               room   63 m²
+  4   GW               room   36 m²
+  5   GE               room   36 m²
+  6   U1               room   63 m²
+  7   U2               room   63 m²
+  8   TR               room   126 m²
+  9   UW               room   36 m²
+  10  UE               room   36 m²
+  11  stair            stair  8.9 m²
+  12  main             safe   
+  13  side             safe   
+Links:
+  0   G1->GW                   door     0.78 persons/s
+  1   G2->GW                   door     0.78 persons/s
+  2   G3->GE                   door     0.78 persons/s
+  3   G4->GE                   door     0.78 persons/s
+  4   GW->GE                   door     2.21 persons/s
+  5   GE->GW                   door     2.21 persons/s
+  6   GW->main                 door     1.95 persons/s
+  7   GE->side                 door     0.78 persons/s
+  8   U1->UW                   door     0.78 persons/s
+  9   U2->UW                   door     0.78 persons/s
+  10  TR->UE                   door     0.78 persons/s
+  11  UW->UE                   door     2.21 persons/s
+  12  UE->stair                door     0.78 persons/s
+  13  stair->GE                stair    0.86 persons/s
+Populations:
+  0   G1               -> main
+  1   G2               -> main
+  2   G3               -> side
+  3   G4               -> side
+  4   U1               -> side
+  5   U2               -> side
+  6   TR               -> side
+Trial run, seed 1: evacuation time 157.4 s; 96 of 96 agents safe.
+The scenario is valid.

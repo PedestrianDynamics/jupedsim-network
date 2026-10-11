@@ -74,6 +74,7 @@ def test_wheel_contains_the_cli(installed_wheel):
     expected = {
         "jupedsim_network/cli.py",
         "jupedsim_network/cli_init.py",
+        "jupedsim_network/cli_run.py",
         "jupedsim_network/__main__.py",
         "jupedsim_network/scenario.py",
         "jupedsim_network/scenarios/getting_started.json",

@@ -47,6 +47,7 @@ import math
 import numbers
 import re
 import sys
+import threading
 import types
 import typing
 import warnings
@@ -79,10 +80,11 @@ _NODE_METHODS = {
     "safe": Network.add_safe,
 }
 
-# The two exceptions to "every key is an API argument": ``record`` of
-# ``run`` is not in the file, ``quantiles`` is the argument of
-# ``MonteCarloResult.quantile``, not of ``run_many``.
-NOT_IN_FILE = {"run": ("record",)}
+# The three exceptions to "every key is an API argument": ``record`` of
+# ``run`` and ``progress`` of ``run_many`` are not in the file,
+# ``quantiles`` is the argument of ``MonteCarloResult.quantile``, not of
+# ``run_many``.
+NOT_IN_FILE = {"run": ("record",), "monte_carlo": ("progress",)}
 FILE_ONLY = {"monte_carlo": {"quantiles": list[float]}}
 
 _TOP = {
@@ -192,7 +194,24 @@ def load_scenario(path) -> Scenario:
 
 
 def scenario_from_dict(data, source=None) -> Scenario:
-    """Check and build a scenario held in memory as dicts and lists."""
+    """Check and build a scenario held in memory as dicts and lists.
+
+    The checks and errors are those of :func:`load_scenario`, except the
+    checks of the JSON text itself (UTF-8, duplicate keys). The returned
+    :attr:`Scenario.data` is a copy of ``data``; it is not checked again
+    when the :class:`Scenario` is saved, so edit a dict of your own and
+    save that dict with :func:`save_scenario`, which checks it first.
+
+    Arguments:
+        data: the document as ``json.load`` returns it: dicts, lists,
+            strings, finite numbers, booleans and ``None``; a tuple is
+            rejected
+        source: the file it was read from, stored as
+            :attr:`Scenario.source`; ``None`` for none
+
+    Raises:
+        ScenarioError: ``data`` is not a valid scenario
+    """
     _check_document(data)
     plain = _plain(data)
     simulation, warned = _build(plain)
@@ -312,7 +331,7 @@ def _check_document(data) -> None:
 
 def _sections() -> dict:
     run, many = NetworkSimulation.run, NetworkSimulation.run_many
-    annotations, required = _spec(many)
+    annotations, required = _spec(many, NOT_IN_FILE["monte_carlo"])
     return {
         "simulation": _spec(NetworkSimulation, ("network", "populations")),
         "run": _spec(run, NOT_IN_FILE["run"]),
@@ -550,6 +569,302 @@ def _json_type(value) -> str:
     return "an array" if isinstance(value, list) else "an object"
 
 
+# Keys of the format
+
+
+@dataclass(frozen=True)
+class Key:
+    """One key of a scenario element, as the loader checks it.
+
+    Attributes:
+        name: the key
+        annotation: the type the loader accepts (``int | None`` for a seed)
+        required: whether the loader requires the key
+        default: the API's own default object (``inspect.Parameter.empty``
+            if required); ``None`` for an optional section of the document
+        choices: the valid values of an enumerated key, from the tables
+            the API checks against
+        help: the description of the argument in the API docstring, or of
+            a key that only the file has
+        meaning: what an absent key means, for a key whose default is
+            ``None``; empty otherwise
+    """
+
+    name: str
+    annotation: object
+    required: bool
+    default: object
+    choices: tuple[str, ...] = ()
+    help: str = ""
+    meaning: str = ""
+
+
+ELEMENTS = (
+    "document",
+    "node",
+    "connection",
+    "population",
+    "simulation",
+    "run",
+    "monte_carlo",
+    "distribution",
+)
+
+# Help of the keys that are no API argument.
+FILE_ONLY_HELP: dict[tuple[str, str], str] = {
+    ("document", "format_version"): "version of the file format; this "
+    f"version of jupedsim-network reads {FORMAT_VERSION}",
+    ("document", "description"): "free text; not used by the model",
+    ("document", "nodes"): "rooms, stairs and safe places, created in "
+    "file order",
+    ("document", "connections"): "doors, openings and stair links "
+    "(Network.connect), created in file order",
+    ("document", "populations"): "groups of agents (Population), in file "
+    "order; at least one",
+    ("document", "simulation"): "settings of NetworkSimulation",
+    ("document", "run"): "the single run (NetworkSimulation.run)",
+    ("document", "monte_carlo"): "repeated runs "
+    "(NetworkSimulation.run_many) and the quantiles to report",
+    ("node", "kind"): "room, stair or safe: selects Network.add_room, "
+    "add_stair or add_safe",
+    ("distribution", "distribution"): "name of the distribution class",
+    ("monte_carlo", "quantiles"): "quantiles of the evacuation time over "
+    "the runs, each in [0, 1]; absent: the defaults of the command line",
+}
+
+
+def keys(element: str, kind: str | None = None) -> tuple[Key, ...]:
+    """The keys of one element of the file format.
+
+    The keys follow the API signature (the format for ``"document"``),
+    with ``kind`` after ``name`` for a node, ``distribution`` first and
+    ``lower`` and ``upper`` last for a distribution, and ``quantiles``
+    last for ``"monte_carlo"``.
+
+    Arguments:
+        element: one of :data:`ELEMENTS`
+        kind: the node kind for ``"node"``, the distribution name for
+            ``"distribution"``; ``None`` otherwise
+
+    Returns:
+        One :class:`Key` per key the loader accepts for that element.
+
+    Raises:
+        ValueError: ``element`` is not in :data:`ELEMENTS`, or ``kind``
+            does not fit ``element``
+    """
+    if element not in ELEMENTS:
+        valid = ", ".join(repr(e) for e in ELEMENTS)
+        raise ValueError(f"element must be one of {valid}; got {element!r}")
+    if element == "node":
+        return _node_keys(_kind(kind, _NODE_METHODS, "node kind"))
+    if element == "distribution":
+        return _distribution_keys(_kind(kind, _DISTRIBUTIONS, "distribution"))
+    if kind is not None:
+        raise ValueError(f"kind must be None for {element!r}; got {kind!r}")
+    return _ELEMENT_KEYS[element]()
+
+
+def _kind(kind, table: dict, what: str) -> str:
+    if kind in table:
+        return kind
+    valid = ", ".join(repr(k) for k in table)
+    raise ValueError(f"kind must be a {what}, one of {valid}; got {kind!r}")
+
+
+def _document_keys() -> tuple[Key, ...]:
+    return tuple(
+        Key(
+            name,
+            annotation,
+            name in _TOP_REQUIRED,
+            inspect.Parameter.empty if name in _TOP_REQUIRED else None,
+            help=FILE_ONLY_HELP["document", name],
+            meaning="" if name in _TOP_REQUIRED else _none_means()[name],
+        )
+        for name, annotation in _TOP.items()
+    )
+
+
+def _node_keys(kind: str) -> tuple[Key, ...]:
+    method = _NODE_METHODS[kind]
+    name, *rest = _signature_keys(method, method)
+    kind_key = Key(
+        "kind",
+        str,
+        True,
+        inspect.Parameter.empty,
+        tuple(_NODE_METHODS),
+        FILE_ONLY_HELP["node", "kind"],
+    )
+    return (name, kind_key, *rest)
+
+
+def _connection_keys() -> tuple[Key, ...]:
+    from jupedsim_network import network
+
+    choices = {"kind": tuple(network._BOUNDARY_LAYERS)}
+    return _signature_keys(Network.connect, Network.connect, choices=choices)
+
+
+def _population_keys() -> tuple[Key, ...]:
+    return _signature_keys(Population, Population)
+
+
+def _simulation_keys() -> tuple[Key, ...]:
+    from jupedsim_network import simulation
+
+    choices = {"counterflow": tuple(simulation._COUNTERFLOW)}
+    skip = ("network", "populations")
+    return _signature_keys(
+        NetworkSimulation, NetworkSimulation, skip, choices=choices
+    )
+
+
+def _run_keys() -> tuple[Key, ...]:
+    run = NetworkSimulation.run
+    return _signature_keys(run, run, NOT_IN_FILE["run"])
+
+
+def _monte_carlo_keys() -> tuple[Key, ...]:
+    from jupedsim_network import cli_run
+
+    many = NetworkSimulation.run_many
+    quantiles = Key(
+        "quantiles",
+        FILE_ONLY["monte_carlo"]["quantiles"],
+        False,
+        cli_run.DEFAULT_QUANTILES,
+        help=FILE_ONLY_HELP["monte_carlo", "quantiles"],
+    )
+    found = _signature_keys(many, many, NOT_IN_FILE["monte_carlo"])
+    return (*found, quantiles)
+
+
+_ELEMENT_KEYS = {
+    "document": _document_keys,
+    "connection": _connection_keys,
+    "population": _population_keys,
+    "simulation": _simulation_keys,
+    "run": _run_keys,
+    "monte_carlo": _monte_carlo_keys,
+}
+
+
+def _signature_keys(fn, documented, skip=(), choices=None) -> tuple[Key, ...]:
+    """The keys of the arguments of ``fn``, with the help of ``documented``."""
+    params = inspect.signature(fn).parameters
+    annotations, required = _spec(fn, skip)
+    helps = _argument_help(documented)
+    return tuple(
+        _key(
+            name,
+            (int | None) if annotation is _SEED else annotation,
+            name in required,
+            params[name].default,
+            (choices or {}).get(name, ()),
+            helps.get(name, ""),
+        )
+        for name, annotation in annotations.items()
+    )
+
+
+def _distribution_keys(name: str) -> tuple[Key, ...]:
+    cls = _DISTRIBUTIONS[name]
+    helps = {}
+    for base in reversed(cls.__mro__):
+        helps |= _argument_help(base)
+    first = Key(
+        "distribution",
+        str,
+        True,
+        inspect.Parameter.empty,
+        tuple(_DISTRIBUTIONS),
+        FILE_ONLY_HELP["distribution", "distribution"],
+    )
+    bounds = {f.name for f in dataclasses.fields(sampling.Distribution)}
+    fields = sorted(dataclasses.fields(cls), key=lambda f: f.name in bounds)
+    found = tuple(
+        _key(
+            field.name,
+            field.type,
+            _has_no_default(field),
+            inspect.Parameter.empty
+            if _has_no_default(field)
+            else field.default,
+            (),
+            helps.get(field.name, ""),
+        )
+        for field in fields
+    )
+    return (first, *found)
+
+
+def _key(name, annotation, required, default, choices, text) -> Key:
+    meaning = _none_means().get(name, "") if default is None else ""
+    return Key(name, annotation, required, default, choices, text, meaning)
+
+
+def _none_means() -> dict[str, str]:
+    """What an absent key with the default ``None`` means."""
+    from jupedsim_network import hydraulic, network
+
+    layers = ", ".join(
+        f"{width:g} m for {kind}"
+        for kind, width in network._BOUNDARY_LAYERS.items()
+    )
+    area = "give area, or length and width"
+    return {
+        "area": area,
+        "length": area,
+        "width": area,
+        "specific_flow": f"{hydraulic.DOOR_SPECIFIC_FLOW:g} persons/s/m for "
+        "doors and openings; for stairs, the maximum flow of the adjacent "
+        "stair node",
+        "boundary_layer": layers,
+        "name": "source->target",
+        "target": "the nearest safe node",
+        "upper": "no upper bound",
+        "seed": "the command line draws a seed and records it in "
+        "summary.json (seed_drawn: true)",
+        "description": "no description",
+        "simulation": "every setting takes the API default",
+        "run": "run.seed absent: the command line draws a seed",
+        "monte_carlo": "the single run only, unless --runs is given",
+    }
+
+
+_HELP_SECTION = re.compile(r"^(Arguments|Attributes):$")
+_HELP_ENTRY = re.compile(r"^    (\w+): (.*)$")
+
+
+def _argument_help(obj) -> dict[str, str]:
+    """``name: text`` of the ``Arguments:``/``Attributes:`` docstring section.
+
+    The section ends at a blank line or at a line indented less than its
+    entries.
+    """
+    helps: dict[str, str] = {}
+    lines = iter((inspect.getdoc(obj) or "").splitlines())
+    for line in lines:
+        if _HELP_SECTION.match(line):
+            _read_section(lines, helps)
+    return {name: " ".join(text.split()) for name, text in helps.items()}
+
+
+def _read_section(lines, helps: dict[str, str]) -> None:
+    current = None
+    for line in lines:
+        entry = _HELP_ENTRY.match(line)
+        if entry is not None:
+            current = entry.group(1)
+            helps[current] = entry.group(2)
+        elif current is not None and line.startswith("        "):
+            helps[current] += " " + line.strip()
+        else:
+            return
+
+
 # Building
 
 
@@ -557,18 +872,35 @@ def attempt(path: str, call, warned: list[str] | None):
     """Call the API; prefix its errors and warnings with ``path``.
 
     Every exception the call raises becomes a :class:`ScenarioError` with
-    the API's own message. Warnings are appended to ``warned``, or dropped
-    if it is ``None``.
+    the API's own message; a ``BaseException`` that is not an
+    ``Exception`` passes unchanged. Warnings raised on the calling thread
+    are appended to ``warned``, or dropped if it is ``None``; warnings of
+    other threads go to the handler that was in place before the call.
     """
-    with warnings.catch_warnings(record=True) as caught:
+    caught: list[str] = []
+    with warnings.catch_warnings():
         warnings.simplefilter("always")
+        warnings.showwarning = _recorder(caught, warnings.showwarning)
         try:
             result = call()
         except Exception as exc:  # the API's own error, re-raised with a path
             raise ScenarioError(*_located(path, _message(exc))) from exc
     if warned is not None:
-        warned.extend(f"{path}: {w.message}" for w in caught)
+        warned.extend(f"{path}: {message}" for message in caught)
     return result
+
+
+def _recorder(caught: list[str], previous):
+    """A ``showwarning`` that records only the warnings of this thread."""
+    owner = threading.get_ident()
+
+    def showwarning(message, category, filename, lineno, file=None, line=None):
+        if threading.get_ident() != owner:
+            previous(message, category, filename, lineno, file, line)
+            return
+        caught.append(str(message))
+
+    return showwarning
 
 
 _POPULATION = re.compile(r"population (\d+): (.*)", re.S)

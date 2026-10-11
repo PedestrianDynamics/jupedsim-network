@@ -1,0 +1,12 @@
+Scenario scenario.json: 3 nodes, 2 links, 1 population.
+Nodes:
+  0   office           room   200 m²
+  1   flight           stair  10.8 m²
+  2   street           safe   
+Links:
+  0   office->flight           door     0.78 persons/s
+  1   flight->street           stair    0.91 persons/s
+Populations:
+  0   office           -> street
+Trial run, seed 1: evacuation time 323.0 s; 120 of 120 agents safe.
+The scenario is valid.

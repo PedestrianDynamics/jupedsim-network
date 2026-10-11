@@ -22,6 +22,7 @@ from jupedsim_network.scenario import (
     ScenarioError,
     load_scenario,
     save_scenario,
+    scenario_from_dict,
 )
 from jupedsim_network.simulation import (
     MonteCarloResult,
@@ -49,4 +50,5 @@ __all__ = [
     "Weibull",
     "load_scenario",
     "save_scenario",
+    "scenario_from_dict",
 ]

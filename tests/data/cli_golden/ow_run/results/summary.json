@@ -1,0 +1,158 @@
+{
+  "format_version": 1,
+  "jupedsim_network": "VERSION",
+  "scenario": {
+    "path": "scenario.json",
+    "sha256": "e24fc3865ce06404ab66e78a508d3b8b8d41004737ca155a1c0742e62e8f743c"
+  },
+  "units": {
+    "time": "s from the start of the run, the origin of pre_movement; row 0 is time 0, before the first step; the last time can exceed t_max by less than dt",
+    "exit_time": "s, end of the step in which the agent reached safety (an upper bound to within dt), not rounded",
+    "pre_movement_sampled": "s, as sampled; the agent starts walking at the first step whose start is at or after it",
+    "link_flow": "agents (heads) per step of dt that passed the link in the step (time - dt, time]; a rate in persons/s is value / dt",
+    "occupancy": "agents (heads) in each node at time, not weighted by area factor; safe nodes are left out",
+    "capacity": "persons/s"
+  },
+  "dt": 0.1,
+  "t_max": 900.0,
+  "run": {
+    "seed": 1,
+    "seed_drawn": false,
+    "evacuation_time": 157.4,
+    "agents": 96,
+    "evacuated": 96
+  },
+  "monte_carlo": {
+    "runs": 5,
+    "seed": 1,
+    "seed_drawn": false,
+    "incomplete": 0,
+    "quantiles": [
+      {
+        "q": 0.5,
+        "value": 155.7
+      },
+      {
+        "q": 0.95,
+        "value": 157.38
+      }
+    ]
+  },
+  "links": [
+    {
+      "index": 0,
+      "name": "G1->GW",
+      "source": "G1",
+      "target": "GW",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 1,
+      "name": "G2->GW",
+      "source": "G2",
+      "target": "GW",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 2,
+      "name": "G3->GE",
+      "source": "G3",
+      "target": "GE",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 3,
+      "name": "G4->GE",
+      "source": "G4",
+      "target": "GE",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 4,
+      "name": "GW->GE",
+      "source": "GW",
+      "target": "GE",
+      "kind": "door",
+      "capacity": 2.21
+    },
+    {
+      "index": 5,
+      "name": "GE->GW",
+      "source": "GE",
+      "target": "GW",
+      "kind": "door",
+      "capacity": 2.21
+    },
+    {
+      "index": 6,
+      "name": "GW->main",
+      "source": "GW",
+      "target": "main",
+      "kind": "door",
+      "capacity": 1.9500000000000002
+    },
+    {
+      "index": 7,
+      "name": "GE->side",
+      "source": "GE",
+      "target": "side",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 8,
+      "name": "U1->UW",
+      "source": "U1",
+      "target": "UW",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 9,
+      "name": "U2->UW",
+      "source": "U2",
+      "target": "UW",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 10,
+      "name": "TR->UE",
+      "source": "TR",
+      "target": "UE",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 11,
+      "name": "UW->UE",
+      "source": "UW",
+      "target": "UE",
+      "kind": "door",
+      "capacity": 2.21
+    },
+    {
+      "index": 12,
+      "name": "UE->stair",
+      "source": "UE",
+      "target": "stair",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 13,
+      "name": "stair->GE",
+      "source": "stair",
+      "target": "GE",
+      "kind": "stair",
+      "capacity": 0.8640590209527069
+    }
+  ],
+  "warnings": [
+    "nodes[11]: Stair 'stair': riser 200.0 mm and tread 280.0 mm lie outside the SFPE range (risers 165-191 mm, treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant k = 51.8 sqrt(T/R) m/min is extrapolated."
+  ]
+}

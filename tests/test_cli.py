@@ -554,3 +554,52 @@ def test_init_writes_the_packaged_bytes(tmp_path, capsys, monkeypatch):
     assert written.read_text() == "mine"
     assert cli.main(["init", "--force", "--example", "office-wing"]) == 0
     assert written.read_bytes() == cli_init.example_bytes("office-wing")
+
+
+# The run seam shared with the terminal UI (cli_run, issue #47)
+
+
+def test_execute_passes_progress_to_run_many(tmp_path):
+    from jupedsim_network import cli_run
+
+    scenario = load_scenario(_scenario(tmp_path, _fast))
+    calls, warned = [], ["before"]
+    outcome = cli_run.execute(
+        scenario, cli_run.Overrides(runs=3), warned, lambda *c: calls.append(c)
+    )
+    assert calls == [(1, 3), (2, 3), (3, 3)]
+    assert outcome.runs.evacuation_times.size == 3
+
+
+def test_run_cancelled_leaves_execute_unchanged(tmp_path):
+    from jupedsim_network import cli_run
+
+    scenario = load_scenario(_scenario(tmp_path, _fast))
+    cancel = cli_run.RunCancelled()
+
+    def progress(done, runs):
+        raise cancel
+
+    warned = ["before"]
+    with pytest.raises(cli_run.RunCancelled) as info:
+        cli_run.execute(scenario, cli_run.Overrides(), warned, progress)
+    assert info.value is cancel
+    assert warned == ["before"]
+
+
+def test_warning_lines_are_unique_and_in_order():
+    from jupedsim_network import cli_run
+
+    assert cli_run.warning_lines(["b", "a", "b"]) == [
+        "warning: b",
+        "warning: a",
+    ]
+
+
+def test_empty_override_quantiles_report_the_defaults(tmp_path):
+    """Overrides(quantiles=()) falls back like an absent key (`or`)."""
+    from jupedsim_network import cli_run
+
+    scenario = load_scenario(_scenario(tmp_path, _fast))
+    outcome = cli_run.execute(scenario, cli_run.Overrides(quantiles=()), [])
+    assert outcome.quantiles == (0.5, 0.95) == cli_run.DEFAULT_QUANTILES

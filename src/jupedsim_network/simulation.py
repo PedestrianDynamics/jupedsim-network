@@ -252,18 +252,42 @@ class NetworkSimulation:
         """Run one realisation.
 
         Arguments:
-            seed: seed or ``numpy.random.Generator``
+            seed: integer seed; from Python also a
+                ``numpy.random.SeedSequence`` or ``numpy.random.Generator``,
+                or ``None`` for fresh entropy that is not recorded
             record: keep node occupancy and link flow time series
         """
         rng = np.random.default_rng(seed)
         return _Run(self, rng, record).execute()
 
-    def run_many(self, runs: int, seed=None) -> MonteCarloResult:
-        """Run independent realisations with seeds derived from ``seed``."""
+    def run_many(
+        self, runs: int, seed=None, *, progress=None
+    ) -> MonteCarloResult:
+        """Run independent realisations with seeds derived from ``seed``.
+
+        Realisation ``i`` runs with child ``i`` of
+        ``numpy.random.SeedSequence(seed).spawn(runs)``, so the first
+        ``k`` realisations do not depend on ``runs``.
+
+        Arguments:
+            runs: number of realisations, at least 1
+            seed: integer seed of the ``SeedSequence``; from Python also
+                a sequence of integers, or ``None`` for fresh entropy that
+                is not recorded
+            progress: called as ``progress(done, runs)`` after each
+                realisation, ``done`` counting from 1; does not affect
+                the results. An exception it raises ends the call,
+                propagates unchanged and discards the realisations done
+                so far.
+        """
         if runs < 1:
             raise ValueError("runs must be at least 1.")
         seeds = np.random.SeedSequence(seed).spawn(runs)
-        results = [self.run(s, record=False) for s in seeds]
+        results = []
+        for s in seeds:
+            results.append(self.run(s, record=False))
+            if progress is not None:
+                progress(len(results), int(runs))
         return MonteCarloResult(
             evacuation_times=np.array([r.evacuation_time for r in results]),
             agent_counts=np.array([len(r.exit_times) for r in results]),

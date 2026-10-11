@@ -1,0 +1,62 @@
+{
+  "format_version": 1,
+  "jupedsim_network": "VERSION",
+  "scenario": {
+    "path": "scenario.json",
+    "sha256": "a4feece4a4f45ff6c657d70cffc15dd29cc9c91995823cad1440b9c58616a1db"
+  },
+  "units": {
+    "time": "s from the start of the run, the origin of pre_movement; row 0 is time 0, before the first step; the last time can exceed t_max by less than dt",
+    "exit_time": "s, end of the step in which the agent reached safety (an upper bound to within dt), not rounded",
+    "pre_movement_sampled": "s, as sampled; the agent starts walking at the first step whose start is at or after it",
+    "link_flow": "agents (heads) per step of dt that passed the link in the step (time - dt, time]; a rate in persons/s is value / dt",
+    "occupancy": "agents (heads) in each node at time, not weighted by area factor; safe nodes are left out",
+    "capacity": "persons/s"
+  },
+  "dt": 0.5,
+  "t_max": 300.0,
+  "run": {
+    "seed": 1,
+    "seed_drawn": false,
+    "evacuation_time": null,
+    "agents": 120,
+    "evacuated": 118
+  },
+  "monte_carlo": {
+    "runs": 5,
+    "seed": 1,
+    "seed_drawn": false,
+    "incomplete": 4,
+    "quantiles": [
+      {
+        "q": 0.5,
+        "value": null
+      },
+      {
+        "q": 0.95,
+        "value": null
+      }
+    ]
+  },
+  "links": [
+    {
+      "index": 0,
+      "name": "office->flight",
+      "source": "office",
+      "target": "flight",
+      "kind": "door",
+      "capacity": 0.7800000000000001
+    },
+    {
+      "index": 1,
+      "name": "flight->street",
+      "source": "flight",
+      "target": "street",
+      "kind": "stair",
+      "capacity": 0.9107981796752356
+    }
+  ],
+  "warnings": [
+    "monte_carlo: 4 of 5 runs did not finish before t_max = 300 s; quantiles above q = 0/4 (about 0.000) are inf."
+  ]
+}

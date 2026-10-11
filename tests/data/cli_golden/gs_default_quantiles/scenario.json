@@ -1,0 +1,61 @@
+{
+  "format_version": 1,
+  "description": "Getting started: an office of 200 m\u00b2 with 120 occupants empties through a 0.9 m door into a stair flight, which leads to the street. Pre-movement times are log-normal with a mean of 120 s and a standard deviation of 60 s.",
+  "nodes": [
+    {
+      "name": "office",
+      "kind": "room",
+      "area": 200.0
+    },
+    {
+      "name": "flight",
+      "kind": "stair",
+      "area": 10.8,
+      "riser": 0.18,
+      "tread": 0.28
+    },
+    {
+      "name": "street",
+      "kind": "safe"
+    }
+  ],
+  "connections": [
+    {
+      "source": "office",
+      "target": "flight",
+      "width": 0.9,
+      "length": 25.0,
+      "bidirectional": false
+    },
+    {
+      "source": "flight",
+      "target": "street",
+      "width": 1.2,
+      "kind": "stair",
+      "length": 9.0,
+      "bidirectional": false
+    }
+  ],
+  "populations": [
+    {
+      "node": "office",
+      "count": 120,
+      "speed": 1.2,
+      "pre_movement": {
+        "distribution": "LogNormal",
+        "mean": 120.0,
+        "std": 60.0
+      }
+    }
+  ],
+  "simulation": {
+    "dt": 0.5
+  },
+  "run": {
+    "seed": 1
+  },
+  "monte_carlo": {
+    "runs": 5,
+    "seed": 1
+  }
+}

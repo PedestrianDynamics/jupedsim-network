@@ -8,10 +8,13 @@ every key of the format; its Python twin is ``_full_keys_python``.
 """
 
 import copy
+import dataclasses
+import functools
 import importlib.util
 import inspect
 import json
 import re
+import threading
 import warnings
 from pathlib import Path
 
@@ -309,11 +312,11 @@ def test_omitted_keys_take_the_api_defaults():
     [
         (NetworkSimulation, "simulation", ("self", "network", "populations")),
         (NetworkSimulation.run, "run", ("self", "record")),
-        (NetworkSimulation.run_many, "monte_carlo", ("self",)),
+        (NetworkSimulation.run_many, "monte_carlo", ("self", "progress")),
     ],
 )
 def test_section_keys_are_the_api_arguments(fn, section, skip):
-    """Only the two named exceptions differ from the signatures."""
+    """Only the named exceptions differ from the signatures."""
     names = set(inspect.signature(fn).parameters) - set(skip)
     keys = set(scenario_module._sections()[section][0])
     assert keys == names | set(scenario_module.FILE_ONLY.get(section, ()))
@@ -822,3 +825,235 @@ def test_export_refuses_what_the_format_cannot_hold(speed, expected):
     with pytest.raises(ScenarioError) as info:
         Scenario.from_simulation(sim)
     assert str(info.value).startswith(expected), str(info.value)
+
+
+# Run seam of the terminal UI (issue #47)
+
+
+def test_scenario_from_dict_is_public():
+    import jupedsim_network
+
+    assert "scenario_from_dict" in jupedsim_network.__all__
+    assert jupedsim_network.scenario_from_dict is scenario_from_dict
+
+
+def test_progress_is_not_a_key_of_the_file():
+    """A5: ``progress`` of run_many is a named exception of the format."""
+    assert "progress" not in scenario_module._sections()["monte_carlo"][0]
+    names = [k.name for k in scenario_module.keys("monte_carlo")]
+    assert names == ["runs", "seed", "quantiles"]
+    data = _edit(_set(["monte_carlo", "progress"], 1))
+    with pytest.raises(ScenarioError) as info:
+        scenario_from_dict(data)
+    assert info.value.path == "monte_carlo"
+    assert str(info.value).startswith("monte_carlo: unknown key 'progress'")
+
+
+def _many(progress):
+    sim = scenario_from_dict(_edit(_set(["monte_carlo", "runs"], 3))).simulation
+    return functools.partial(sim.run_many, 3, 1, progress=progress)
+
+
+def test_run_cancelled_passes_attempt_unchanged():
+    """A3: a cancel is no scenario error and leaves no state behind."""
+    from jupedsim_network.cli_run import RunCancelled
+
+    cancel = RunCancelled()
+
+    def progress(done, runs):
+        warnings.warn("recorded before the cancel")
+        if done == 2:
+            raise cancel
+
+    warned = ["before"]
+    filters = list(warnings.filters)
+    showwarning = warnings.showwarning
+    with pytest.raises(RunCancelled) as info:
+        scenario_module.attempt("monte_carlo", _many(progress), warned)
+    assert info.value is cancel
+    assert warned == ["before"]
+    assert warnings.filters == filters
+    assert warnings.showwarning is showwarning
+
+
+def test_other_progress_errors_are_scenario_errors():
+    """A3: why a cancel must not be an ``Exception``."""
+
+    def progress(done, runs):
+        raise ValueError("bug in the callback")
+
+    with pytest.raises(ScenarioError) as info:
+        scenario_module.attempt("monte_carlo", _many(progress), [])
+    assert info.value.path == "monte_carlo"
+    assert info.value.message == "bug in the callback"
+
+
+def test_attempt_records_only_warnings_of_its_thread():
+    """A6: a warning of another thread goes to the previous handler."""
+    entered, go = threading.Event(), threading.Event()
+    foreign = []
+
+    def call():
+        warnings.warn("from the call")
+        entered.set()
+        go.wait()
+        return "done"
+
+    def other_thread():
+        entered.wait()
+        warnings.warn("from the UI thread")
+        go.set()
+
+    def previous(message, category, filename, lineno, file=None, line=None):
+        foreign.append(str(message))
+
+    warned = []
+    thread = threading.Thread(target=other_thread)
+    with warnings.catch_warnings():
+        warnings.showwarning = previous
+        thread.start()
+        result = scenario_module.attempt("monte_carlo", call, warned)
+        thread.join()
+    assert result == "done"
+    assert warned == ["monte_carlo: from the call"]
+    assert foreign == ["from the UI thread"]
+
+
+def _all_keys():
+    """Every element and kind of :func:`scenario.keys`."""
+    kinds = {
+        "node": tuple(scenario_module._NODE_METHODS),
+        "distribution": tuple(scenario_module._DISTRIBUTIONS),
+    }
+    for element in scenario_module.ELEMENTS:
+        for kind in kinds.get(element, (None,)):
+            yield element, kind, scenario_module.keys(element, kind)
+
+
+def _distributions(data):
+    return [
+        value
+        for pop in data["populations"]
+        for value in pop.values()
+        if isinstance(value, dict)
+    ]
+
+
+def _given(data):
+    """The keys ``full_keys.json`` sets per element and kind."""
+    given: dict = {("document", None): set(data)}
+
+    def add(element, kind, obj):
+        given.setdefault((element, kind), set()).update(obj)
+
+    for node in data["nodes"]:
+        add("node", node["kind"], node)
+    for link in data["connections"]:
+        add("connection", None, link)
+    for pop in data["populations"]:
+        add("population", None, pop)
+    for value in _distributions(data):
+        add("distribution", value["distribution"], value)
+    for name in ("simulation", "run", "monte_carlo"):
+        add(name, None, data[name])
+    return given
+
+
+def test_keys_are_the_keys_of_the_format():
+    """U1: exactly the keys of full_keys.json, each with a help line."""
+    given = _given(json.loads(FULL_KEYS.read_text()))
+    found = {(e, k): {key.name for key in ks} for e, k, ks in _all_keys()}
+    # full_keys.json leaves the bounds of some distributions unset.
+    for name in scenario_module._DISTRIBUTIONS:
+        given["distribution", name] |= {"lower", "upper"}
+    assert found == given
+    for element, kind, ks in _all_keys():
+        for key in ks:
+            assert key.help, (element, kind, key.name)
+
+
+def _api_default(element, kind, name):
+    if element == "distribution":
+        cls = scenario_module._DISTRIBUTIONS[kind]
+        (field,) = [f for f in dataclasses.fields(cls) if f.name == name]
+        if scenario_module._has_no_default(field):
+            return inspect.Parameter.empty
+        return field.default
+    fn = {
+        "node": scenario_module._NODE_METHODS.get(kind),
+        "connection": Network.connect,
+        "population": Population,
+        "simulation": NetworkSimulation,
+        "run": NetworkSimulation.run,
+        "monte_carlo": NetworkSimulation.run_many,
+    }[element]
+    return inspect.signature(fn).parameters[name].default
+
+
+_FILE_ONLY_KEYS = {
+    ("node", "kind"),
+    ("distribution", "distribution"),
+    ("monte_carlo", "quantiles"),
+}
+
+
+def _check_default(element, kind, key):
+    if element == "document" or (element, key.name) in _FILE_ONLY_KEYS:
+        return
+    default = _api_default(element, kind, key.name)
+    # The very object of the signature, not an equal literal.
+    assert key.default is default, (element, key.name)
+    assert key.required is (default is inspect.Parameter.empty)
+    if key.default is None:
+        assert key.meaning and "None" not in key.meaning, key.name
+    else:
+        assert key.meaning == "", key.name
+
+
+def test_keys_defaults_are_the_api_objects():
+    """A8: defaults from the signatures, None by its meaning."""
+    from jupedsim_network import cli_run
+
+    for element, kind, ks in _all_keys():
+        for key in ks:
+            _check_default(element, kind, key)
+    quantiles = scenario_module.keys("monte_carlo")[-1]
+    assert quantiles.default is cli_run.DEFAULT_QUANTILES
+
+
+def test_keys_name_the_rules_the_signature_cannot():
+    """A8: rooms need area or length and width; meanings from the API."""
+    from jupedsim_network import hydraulic
+
+    for kind in ("room", "stair"):
+        keys = {k.name: k for k in scenario_module.keys("node", kind)}
+        for name in ("area", "length", "width"):
+            assert not keys[name].required
+            assert "area, or length and width" in keys[name].meaning
+    connection = {k.name: k for k in scenario_module.keys("connection")}
+    flow = f"{hydraulic.DOOR_SPECIFIC_FLOW:g} persons/s/m"
+    assert connection["specific_flow"].meaning.startswith(flow)
+    assert connection["kind"].choices == ("door", "opening", "stair")
+    simulation = {k.name: k for k in scenario_module.keys("simulation")}
+    assert simulation["counterflow"].choices == (
+        "bounding",
+        "estimate",
+        "independent",
+    )
+    seed = {k.name: k for k in scenario_module.keys("run")}["seed"]
+    assert seed.annotation == (int | None)
+    assert "summary.json" in seed.meaning
+
+
+@pytest.mark.parametrize(
+    "element, kind, message",
+    [
+        ("nodes", None, "element must be one of 'document'"),
+        ("node", None, "kind must be a node kind, one of 'room'"),
+        ("distribution", "Gamma", "kind must be a distribution, one of"),
+        ("run", "room", "kind must be None for 'run'; got 'room'"),
+    ],
+)
+def test_keys_reject_unknown_elements(element, kind, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        scenario_module.keys(element, kind)

@@ -1362,3 +1362,174 @@ def test_base_distribution_has_no_draw():
 
     with pytest.raises(NotImplementedError):
         Distribution().sample(np.random.default_rng(1), 1)
+
+
+# Progress of run_many and public tied route choices (issue #47)
+
+
+def _packaged(name):
+    from pathlib import Path
+
+    from jupedsim_network import load_scenario
+
+    root = Path(__file__).resolve().parents[1] / "src" / "jupedsim_network"
+    return load_scenario(root / "scenarios" / name).simulation
+
+
+def _same_runs(a, b):
+    assert a.evacuation_times.tobytes() == b.evacuation_times.tobytes()
+    assert a.agent_counts.tobytes() == b.agent_counts.tobytes()
+    assert a.t_max == b.t_max
+
+
+@pytest.mark.parametrize("name", ["getting_started.json", "office_wing.json"])
+@pytest.mark.parametrize("runs", [1, 7])
+@pytest.mark.parametrize("seed", [1, 12345])
+def test_progress_does_not_change_run_many(name, runs, seed):
+    """A1: byte identity with and without progress (tolerance 0)."""
+    sim = _packaged(name)
+    calls = []
+    hooked = sim.run_many(runs, seed, progress=lambda *c: calls.append(c))
+    _same_runs(hooked, sim.run_many(runs, seed))
+    assert calls == [(k, runs) for k in range(1, runs + 1)]
+
+
+def test_progress_is_called_after_each_realisation():
+    """A2: the calls, their types, and none for an invalid run count."""
+    sim = NetworkSimulation(single_room(), [Population("room", 5)])
+    calls = []
+    seen_at_return = []
+
+    def progress(done, runs):
+        calls.append((done, runs))
+        seen_at_return.append(len(calls))
+
+    sim.run_many(4, 1, progress=progress)
+    assert calls == [(1, 4), (2, 4), (3, 4), (4, 4)]
+    assert all(type(v) is int for call in calls for v in call)
+    assert seen_at_return == [1, 2, 3, 4]
+    calls.clear()
+    with pytest.raises(ValueError, match="runs must be at least 1"):
+        sim.run_many(0, progress=progress)
+    assert calls == []
+
+
+class _Stop(BaseException):
+    pass
+
+
+def _stop_at(k):
+    def progress(done, runs):
+        if done == k:
+            raise _Stop(done)
+
+    return progress
+
+
+def test_progress_exception_propagates_unchanged():
+    """A3: the raised object leaves run_many itself; nothing is returned."""
+    sim = NetworkSimulation(single_room(), [Population("room", 5)])
+    for exc in (_Stop("stop"), ValueError("bug")):
+
+        def progress(done, runs, exc=exc):
+            raise exc
+
+        with pytest.raises(type(exc)) as info:
+            sim.run_many(3, 1, progress=progress)
+        assert info.value is exc
+
+
+def test_cancel_leaves_no_state_behind():
+    """A4: after a cancel the same instance gives a fresh instance's bytes."""
+    pops = [Population("room", 20, pre_movement=Uniform(0, 30))]
+    sim = NetworkSimulation(single_room(), pops)
+    with pytest.raises(_Stop):
+        sim.run_many(6, 5, progress=_stop_at(3))
+    fresh = NetworkSimulation(single_room(), pops)
+    _same_runs(sim.run_many(6, 5), fresh.run_many(6, 5))
+    full = fresh.run_many(6, 5).evacuation_times
+    prefix = fresh.run_many(3, 5).evacuation_times
+    assert prefix.tobytes() == full[:3].tobytes()
+
+
+def _route_tie():
+    # room -> a -> s and room -> b -> s are both 2 m; c has one route.
+    net = Network()
+    for name in ("room", "a", "b", "c"):
+        net.add_room(name, area=100.0)
+    net.add_safe("s")
+    net.connect("room", "a", width=1.0, length=1.0, bidirectional=False)
+    net.connect("room", "b", width=1.0, length=1.0, bidirectional=False)
+    net.connect("a", "s", width=1.0, length=1.0)
+    net.connect("b", "s", width=1.0, length=1.0)
+    net.connect("c", "room", width=1.0, length=1.0, bidirectional=False)
+    return net
+
+
+@pytest.mark.parametrize("make", [_route_tie, chain, two_doors])
+def test_route_choices_are_the_tied_links(make):
+    net = make()
+    targets = [None] + [n.name for n in net.nodes if n.kind == "safe"]
+    for target in targets:
+        choices = net.route_choices(target)
+        assert choices == net._route_choices(target)
+        for node, link, tied in zip(
+            net.nodes, net.route_table(target), choices
+        ):
+            assert (link is None) == (tied == ())
+            assert link is None or link in tied
+            assert all(net.links[i].source == node.index for i in tied)
+
+
+def test_route_choices_name_the_tie():
+    net = _route_tie()
+    choices = net.route_choices()
+    names = {
+        n.name: [net.links[i].name for i in choices[n.index]] for n in net.nodes
+    }
+    assert names == {
+        "room": ["room->a", "room->b"],
+        "a": ["a->s"],
+        "b": ["b->s"],
+        "c": ["c->room"],
+        "s": [],
+    }
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_split_ties_use_the_route_choices(split):
+    """split_ties=True passes agents on every tied link, False on one."""
+    net = _route_tie()
+    room = net.node("room").index
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the tie warning of split=False
+        sim = NetworkSimulation(net, [Population("c", 20)], split_ties=split)
+    flow = flows(sim.run(1))
+    tied = net.route_choices()[room]
+    used = {net.links[i].name for i in tied if flow[net.links[i].name] > 0}
+    if split:
+        assert used == {net.links[i].name for i in tied}
+        assert flow["room->a"] == flow["room->b"] == 10
+    else:
+        assert used == {net.links[net.route_table()[room]].name}
+
+
+def test_progress_comes_after_its_realisation(monkeypatch):
+    """Each call follows the realisation it counts; runs is a Python int."""
+    sim = NetworkSimulation(single_room(), [Population("room", 5)])
+    finished = []
+    run = sim.run
+
+    def counted(*args, **kwargs):
+        result = run(*args, **kwargs)
+        finished.append(True)
+        return result
+
+    monkeypatch.setattr(sim, "run", counted)
+    seen = []
+
+    def progress(done, runs):
+        seen.append((done, len(finished), type(runs)))
+
+    sim.run_many(np.int64(3), 1, progress=progress)
+    assert seen == [(1, 1, int), (2, 2, int), (3, 3, int)]
