@@ -21,7 +21,8 @@ it.
 | `evacuated` | Number of agents that reached safety |
 
 An agent's exit time is the end of the step in which it passed its last
-link, so exit times are multiples of `dt`.
+link, so exit times are multiples of `dt`, up to floating-point
+rounding ([Limitations]({{< relref "/docs/limitations#numerics" >}})).
 
 `node_occupancy` counts heads. The density the model uses counts area
 factors, so with area factors other than 1 the two differ.
@@ -46,6 +47,10 @@ Output:
 
 At most 9 agents are on the flight at once, all 120 pass the door,
 and the run ends at 323.0 s in steps of 0.5 s.
+
+The command line writes these fields to `agents.csv`, `link_flow.csv`
+and `occupancy.csv`, and the evacuation times of a Monte Carlo set to
+`runs.csv` ([Result files]({{< relref "/docs/using/command-line#result-files" >}})).
 
 ## Many runs: MonteCarloResult
 

@@ -77,6 +77,9 @@ class Network:
         self._by_name: dict[str, Node] = {}
         # Reverse link of each link of a two-way connection (shared door).
         self._reverse: dict[int, int] = {}
+        # Arguments of each add_* and connect call as given, in call
+        # order, so that a scenario file can be written without loss.
+        self._inputs: list[tuple[str, dict]] = []
 
     @property
     def nodes(self) -> tuple[Node, ...]:
@@ -100,7 +103,9 @@ class Network:
         width: float | None = None,
     ) -> Node:
         """Add a level space, given by ``area`` or ``length`` and ``width``."""
-        return self._add(name, ROOM, _area(area, length, width), None)
+        node = self._add(name, ROOM, _area(area, length, width), None)
+        self._record("room", name=name, area=area, length=length, width=width)
+        return node
 
     def add_stair(
         self,
@@ -121,11 +126,23 @@ class Network:
         """
         k = hydraulic.stair_speed_constant(riser, tread)
         _warn_outside_sfpe_range(name, riser, tread)
-        return self._add(name, STAIR, _area(area, length, width), k)
+        node = self._add(name, STAIR, _area(area, length, width), k)
+        self._record(
+            "stair",
+            name=name,
+            riser=riser,
+            tread=tread,
+            area=area,
+            length=length,
+            width=width,
+        )
+        return node
 
     def add_safe(self, name: str) -> Node:
         """Add a place of safety with unlimited capacity."""
-        return self._add(name, SAFE, math.inf, hydraulic.LEVEL_SPEED_CONSTANT)
+        node = self._add(name, SAFE, math.inf, hydraulic.LEVEL_SPEED_CONSTANT)
+        self._record("safe", name=name)
+        return node
 
     def connect(
         self,
@@ -197,7 +214,23 @@ class Network:
         if len(links) == 2:
             self._reverse[links[0].index] = links[1].index
             self._reverse[links[1].index] = links[0].index
+        self._record(
+            "connect",
+            source=source,
+            target=target,
+            width=width,
+            kind=kind,
+            length=length,
+            specific_flow=specific_flow,
+            boundary_layer=boundary_layer,
+            merge_weight=merge_weight,
+            bidirectional=bidirectional,
+            name=name,
+        )
         return tuple(links)
+
+    def _record(self, call: str, **arguments) -> None:
+        self._inputs.append((call, arguments))
 
     def route_table(self, target: str | None = None) -> list[int | None]:
         """Next link per node on the shortest walking distance to safety.

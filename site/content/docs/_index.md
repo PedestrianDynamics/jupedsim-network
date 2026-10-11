@@ -27,7 +27,9 @@ or experiments, and it is not intended for regulatory or design use. See
 {{< /callout >}}
 
 **New here.** Install the package, run a first scenario, then work
-through a complete example:
+through a complete example. Without Python, run `jupedsim-network init`
+and then `jupedsim-network run scenario.json`
+([Command line]({{< relref "/docs/using/command-line" >}})).
 
 {{< cards >}}
   {{< card link="getting-started" title="Getting started" subtitle="Install, run one building, and check the result." >}}
@@ -42,6 +44,7 @@ the run, and read the results:
   {{< card link="using/populations" title="Populations" subtitle="Agents, their inputs and the sampling distributions." >}}
   {{< card link="using/running" title="Running" subtitle="Seeds, Monte Carlo, time step, max_density and t_max." >}}
   {{< card link="using/results" title="Results" subtitle="What a run returns and how to report it." >}}
+  {{< card link="using/command-line" title="Command line" subtitle="Run a JSON scenario file and write the results to CSV and JSON." >}}
 {{< /cards >}}
 
 **Checking the model.** How it works, how it is tested, and where it

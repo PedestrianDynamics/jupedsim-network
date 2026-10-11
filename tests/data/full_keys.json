@@ -1,0 +1,179 @@
+{
+  "format_version": 1,
+  "description": "Test fixture: every key of the file format set, most to a non-default value.",
+  "nodes": [
+    {
+      "name": "west",
+      "kind": "room",
+      "area": 60.0
+    },
+    {
+      "name": "east",
+      "kind": "room",
+      "length": 10.0,
+      "width": 6.0
+    },
+    {
+      "name": "hall",
+      "kind": "room",
+      "area": 40.0
+    },
+    {
+      "name": "upper",
+      "kind": "stair",
+      "riser": 0.17,
+      "tread": 0.29,
+      "area": 12.0
+    },
+    {
+      "name": "lower",
+      "kind": "stair",
+      "riser": 0.17,
+      "tread": 0.29,
+      "length": 4.0,
+      "width": 2.5
+    },
+    {
+      "name": "yard",
+      "kind": "safe"
+    },
+    {
+      "name": "street",
+      "kind": "safe"
+    }
+  ],
+  "connections": [
+    {
+      "source": "west",
+      "target": "hall",
+      "width": 1.0,
+      "kind": "opening",
+      "length": 6.0,
+      "specific_flow": 1.2,
+      "boundary_layer": 0.05,
+      "merge_weight": 2.0,
+      "bidirectional": true,
+      "name": "west opening"
+    },
+    {
+      "source": "east",
+      "target": "hall",
+      "width": 0.9,
+      "length": 5.0
+    },
+    {
+      "source": "hall",
+      "target": "yard",
+      "width": 1.2,
+      "length": 4.0,
+      "bidirectional": false
+    },
+    {
+      "source": "hall",
+      "target": "yard",
+      "width": 0.8,
+      "kind": "door",
+      "length": 4.0,
+      "bidirectional": false,
+      "name": "narrow yard door"
+    },
+    {
+      "source": "east",
+      "target": "upper",
+      "width": 1.1,
+      "kind": "stair",
+      "length": 3.0,
+      "bidirectional": false
+    },
+    {
+      "source": "upper",
+      "target": "lower",
+      "width": 1.1,
+      "kind": "stair",
+      "length": 5.0,
+      "bidirectional": false
+    },
+    {
+      "source": "lower",
+      "target": "street",
+      "width": 1.1,
+      "kind": "stair",
+      "length": 5.0,
+      "bidirectional": false
+    }
+  ],
+  "populations": [
+    {
+      "node": "west",
+      "count": {
+        "distribution": "Uniform",
+        "minimum": 20,
+        "maximum": 30
+      },
+      "speed": {
+        "distribution": "Normal",
+        "mean": 1.3,
+        "std": 0.2,
+        "lower": null,
+        "upper": 2.0
+      },
+      "pre_movement": {
+        "distribution": "Weibull",
+        "alpha": 30.0,
+        "beta": 1.5
+      },
+      "start_distance": {
+        "distribution": "Triangular",
+        "minimum": 0.0,
+        "mode": 2.0,
+        "maximum": 5.0
+      },
+      "area_factor": 0.8,
+      "target": "yard"
+    },
+    {
+      "node": "east",
+      "count": 15,
+      "speed": {
+        "distribution": "LogNormal",
+        "mean": 1.1,
+        "std": 0.2,
+        "lower": 0.5
+      },
+      "pre_movement": {
+        "distribution": "Fixed",
+        "value": 10.0
+      },
+      "start_distance": 1.5,
+      "area_factor": 1.2,
+      "target": "yard"
+    },
+    {
+      "node": "west",
+      "count": 10,
+      "speed": 1.0,
+      "pre_movement": 5.0,
+      "target": "street"
+    }
+  ],
+  "simulation": {
+    "dt": 0.25,
+    "t_max": 1200.0,
+    "max_density": 3.0,
+    "supply_reduction": false,
+    "split_ties": false,
+    "counterflow": "estimate"
+  },
+  "run": {
+    "seed": 7
+  },
+  "monte_carlo": {
+    "runs": 20,
+    "seed": 11,
+    "quantiles": [
+      0.1,
+      0.5,
+      0.9
+    ]
+  }
+}

@@ -21,9 +21,13 @@ and the snippets that call ``run_many(500)``) run in their own CI job;
 import contextlib
 import functools
 import io
+import json
 import math
+import os
+import pathlib
 import re
 import sys
+import tempfile
 import warnings
 from dataclasses import dataclass
 
@@ -59,6 +63,7 @@ SNIPPETS = [
         ("getting-started.md", (0, 1, 2)),
         ("using/results.md", (0,)),
         ("using/running.md", (1, 2, 3, 4)),
+        ("using/command-line.md", (0,)),
     ],
     [("using/populations.md", (2,))],
 ]
@@ -97,6 +102,8 @@ def _run_many_once():
     original = NetworkSimulation.run_many
     cache = {}
 
+    # wraps keeps the signature, which the scenario loader reads.
+    @functools.wraps(original)
     def run_many(self, runs, seed=None):
         key = (id(self), runs, seed)
         if not isinstance(seed, int) or cache.get(key, (None,))[0] is not self:
@@ -106,11 +113,25 @@ def _run_many_once():
     return run_many
 
 
+@contextlib.contextmanager
+def _in_tmp_dir():
+    with tempfile.TemporaryDirectory() as tmp:
+        previous = os.getcwd()
+        os.chdir(tmp)
+        try:
+            yield
+        finally:
+            os.chdir(previous)
+
+
 @functools.cache
 def snippets(group):
-    """Run one group of snippet pages once: the blocks, output, names."""
+    """Run one group of snippet pages once: the blocks, output, names.
+
+    The blocks run in an empty directory, because some write files.
+    """
     done, names = [], {}
-    with pytest.MonkeyPatch.context() as mp:
+    with pytest.MonkeyPatch.context() as mp, _in_tmp_dir():
         mp.setattr(NetworkSimulation, "run_many", _run_many_once())
         _run_group(SNIPPETS[group], done, names)
     return done, names
@@ -404,7 +425,8 @@ def ci_docs_numbers():
     deploy needs it."""
     ci = (docpages.ROOT / ".github" / "workflows" / "ci.yml").read_text()
     job = re.search(r"\n  docs-numbers:\n((?:    .*\n|\n)*)", ci)
-    runs_slow = job is not None and "uv run pytest -m slow" in job.group(1)
+    slow = r"uv run (?:--extra \S+ )*pytest -m slow"
+    runs_slow = job is not None and re.search(slow, job.group(1)) is not None
     needs = re.search(r"\n  deploy:\n(?:    .*\n)*?    needs: \[(.*)\]", ci)
     gated = needs is not None and "docs-numbers" in needs.group(1).split(", ")
     name = "`docs-numbers`" if runs_slow else "(no slow job)"
@@ -1584,3 +1606,325 @@ def test_page_shows_the_number_the_code_produces(number):
     docpages.quoted(page, texts)
     produced = _texts(number.produce())
     assert produced == texts
+
+
+# Command line (#46) -----------------------------------------------------------
+
+CLI_PAGE = "using/command-line.md"
+PACKAGED = docpages.ROOT / "src" / "jupedsim_network" / "scenarios"
+
+
+def _collapse(text):
+    """Runs of whitespace as one space, as in ``docpages.text``."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# The terminal output the page shows, whitespace collapsed (brief §1.2).
+CLI_INIT = _collapse("""
+Wrote scenario.json (the getting-started scenario).
+Next steps:
+  1. Check it: jupedsim-network check scenario.json
+  2. Run it: jupedsim-network run scenario.json
+  3. Edit nodes, connections and populations for your building, then check and run again.
+""")
+CLI_CHECK = _collapse("""
+Scenario scenario.json: 3 nodes, 2 links, 1 population.
+Nodes:
+  0   office           room   200 m²
+  1   flight           stair  10.8 m²
+  2   street           safe
+Links:
+  0   office->flight           door     0.78 persons/s
+  1   flight->street           stair    0.91 persons/s
+Populations:
+  0   office           -> street
+Trial run, seed 1: evacuation time 323.0 s; 120 of 120 agents safe.
+The scenario is valid.
+""")
+CLI_RUN = _collapse("""
+Scenario scenario.json: 3 nodes, 2 links, 1 population.
+Run, seed 1: evacuation time 323.0 s; 120 of 120 agents safe.
+Monte Carlo, 500 runs, seed 1: q 0.5 383.25 s, q 0.95 550.05 s; 0 incomplete.
+Wrote scenario_results/: summary.json, agents.csv, link_flow.csv, occupancy.csv, runs.csv
+""")
+
+
+def _cli(args, files=None):
+    """Exit status, stdout, stderr and result files of one command.
+
+    It runs in an empty directory that holds ``files`` (name -> bytes);
+    the result files are those of the ``*_results`` directory, by name.
+    """
+    from jupedsim_network import cli
+
+    out, err = io.StringIO(), io.StringIO()
+    with (
+        _in_tmp_dir(),
+        contextlib.redirect_stdout(out),
+        contextlib.redirect_stderr(err),
+    ):
+        for name, raw in (files or {}).items():
+            pathlib.Path(name).write_bytes(raw)
+        code = cli.main(list(args))
+        written = pathlib.Path().glob("*_results/*")
+        results = {path.name: path.read_bytes() for path in written}
+    return code, out.getvalue(), err.getvalue(), results
+
+
+def _packaged():
+    return (PACKAGED / "getting_started.json").read_bytes()
+
+
+def _edited(edit):
+    """The packaged getting-started file with ``edit`` applied."""
+    data = json.loads(_packaged())
+    edit(data)
+    return json.dumps(data, indent=2).encode()
+
+
+def _line(text, start):
+    (line,) = [s for s in text.splitlines() if s.strip().startswith(start)]
+    return line
+
+
+def _ok(args, files):
+    code, out, err, results = _cli(args, files)
+    assert code == 0, err
+    return out, results
+
+
+def cli_init():
+    return _collapse(_ok(["init"], {})[0])
+
+
+def cli_check():
+    return _collapse(
+        _ok(["check", "scenario.json"], {"scenario.json": _packaged()})[0]
+    )
+
+
+@functools.cache
+def _packaged_run():
+    """``run scenario.json`` on the packaged file: 500 runs, about 18 s."""
+    return _ok(["run", "scenario.json"], {"scenario.json": _packaged()})
+
+
+def cli_run():
+    return _collapse(_packaged_run()[0])
+
+
+def capacity_rounding():
+    """The door capacity as ``check`` prints it and as summary.json holds it."""
+    check = _ok(["check", "scenario.json"], {"scenario.json": _packaged()})[0]
+    shown = _line(check, "0   office->flight").split()[-2]
+    summary = json.loads(_packaged_run()[1]["summary.json"])
+    full = summary["links"][0]["capacity"]
+    return (
+        f"Capacities are rounded too: `{shown}` in the terminal is "
+        f"`{full!r}` in `summary.json`."
+    )
+
+
+def first_run_numbers():
+    """Capacities from ``check``, the run and the quantiles from ``run``."""
+    check = _ok(["check", "scenario.json"], {"scenario.json": _packaged()})[0]
+    door, stair = (
+        _line(check, f"{i}   {link}").split()[-2]
+        for i, link in ((0, "office->flight"), (1, "flight->street"))
+    )
+    out = _packaged_run()[0]
+    run = re.search(r"seed (\d+): evacuation time (\S+) s", _line(out, "Run,"))
+    mc = re.search(
+        r"(\d+) runs, seed \d+: q 0.5 (\S+) s, q 0.95 (\S+) s",
+        _line(out, "Monte Carlo,"),
+    )
+    return (
+        f"the door passes {door} persons/s and the stair link {stair} "
+        f"persons/s, the run with seed {run[1]} ends at {run[2]} s, and over "
+        f"{mc[1]} runs the median is {mc[2]} s and the 95th percentile "
+        f"{mc[3]} s."
+    )
+
+
+CSV_FILES = ("agents.csv", "link_flow.csv", "occupancy.csv", "runs.csv")
+
+
+def csv_headers():
+    """First line of each CSV file of the packaged run, in page order."""
+    results = _packaged_run()[1]
+    return tuple(results[name].decode().split("\n")[0] for name in CSV_FILES)
+
+
+def try_one_change():
+    """``check`` with the first connection 1.2 m wide instead of 0.9 m."""
+
+    def wider(data):
+        data["connections"][0]["width"] = 1.2
+
+    check = ["check", "scenario.json"]
+    before = _ok(check, {"scenario.json": _packaged()})[0]
+    after = _ok(check, {"scenario.json": _edited(wider)})[0]
+    capacity = [
+        float(_line(t, "0   office->flight").split()[-2])
+        for t in (before, after)
+    ]
+    trials = [_line(t, "Trial run") for t in (before, after)]
+    larger = "a larger" if capacity[1] > capacity[0] else "no larger"
+    same = "stays the same" if trials[0] == trials[1] else "changes"
+    assert "evacuation time 323.0 s" in trials[0]
+    return (
+        f"The `office->flight` link gets {larger} capacity, but the "
+        f"evacuation time of the trial run {same}"
+    )
+
+
+RESULT_FIELDS = (
+    "exit_times",
+    "pre_movement_times",
+    "times",
+    "node_occupancy",
+    "link_flow",
+)
+
+
+def _same_result(a, b):
+    return all(
+        getattr(a, f).tobytes() == getattr(b, f).tobytes()
+        for f in RESULT_FIELDS
+    )
+
+
+def export_sentences():
+    """The export block of the page (snippet group 0), then the CLI on
+    the file it writes against the CLI on the packaged file."""
+    from jupedsim_network.scenario import dumps
+
+    names = snippets(0)[1][CLI_PAGE]
+    result = names["result"]
+    same = _same_result(result, names["simulation"].run(seed=1))
+    exported = dumps(names["scenario"].data).encode()
+    out, results = _ok(["run", "office.json"], {"office.json": exported})
+    packaged_out, packaged_results = _packaged_run()
+    lines = [
+        [_line(t, start) for start in ("Run,", "Monte Carlo,")]
+        for t in (out, packaged_out)
+    ]
+    numbers = lines[0] == lines[1] and all(
+        results[f] == packaged_results[f] for f in CSV_FILES
+    )
+    return (
+        f"`result` {'is the same as' if same else 'differs from'} "
+        "`simulation.run(seed=1)`, byte for byte. `jupedsim-network run "
+        f"office.json` {'gives the same numbers as' if numbers else 'differs from'}"
+        " the packaged file."
+    )
+
+
+ERROR_FILES = {
+    "typo.json": lambda d: d["simulation"].update(max_densty=3.0),
+    "speed0.json": lambda d: d["populations"][0].update(speed=0),
+    "ln0.json": lambda d: d["populations"][0]["pre_movement"].update(mean=0),
+}
+
+
+def error_lines():
+    """The error of ``check`` on each file of the Errors block."""
+    lines = []
+    for name, edit in ERROR_FILES.items():
+        code, _, err, _ = _cli(["check", name], {name: _edited(edit)})
+        assert code == 1
+        lines.append(_collapse(err))
+    return " ".join(lines)
+
+
+def utf8_message():
+    """``check`` on the packaged file saved as cp1252, byte and position
+    replaced by the page's placeholders."""
+    text = _packaged().decode().replace("\\u00b2", "²")
+    files = {"bad.json": text.encode("cp1252")}
+    code, _, err, _ = _cli(["check", "bad.json"], files)
+    assert code == 1
+    message = err.strip().split("bad.json: ", 1)[1]
+    message = re.sub(r"byte 0x[0-9a-f]{2}", "byte 0xNN", message)
+    return re.sub(r"position \d+", "position P", message)
+
+
+CLI_REGISTRY = [
+    Number(CLI_PAGE, CLI_INIT, cli_init),
+    Number(CLI_PAGE, CLI_CHECK, cli_check),
+    Number(CLI_PAGE, CLI_RUN, cli_run, slow=True),
+    Number(
+        CLI_PAGE,
+        "The `office->flight` link gets a larger capacity, but the "
+        "evacuation time of the trial run stays the same",
+        try_one_change,
+    ),
+    Number(
+        CLI_PAGE,
+        "`result` is the same as `simulation.run(seed=1)`, byte for byte. "
+        "`jupedsim-network run office.json` gives the same numbers as the "
+        "packaged file.",
+        export_sentences,
+        slow=True,
+    ),
+    Number(
+        CLI_PAGE,
+        "jupedsim-network check: error: typo.json: simulation: unknown key "
+        "'max_densty'; valid keys: counterflow, dt, max_density, split_ties, "
+        "supply_reduction, t_max jupedsim-network check: error: speed0.json: "
+        "populations[0]: Agent speeds must be positive. jupedsim-network "
+        "check: error: ln0.json: populations[0].pre_movement: cannot sample "
+        "LogNormal(lower=0.0, upper=None, mean=0, std=60.0): float division "
+        "by zero",
+        error_lines,
+    ),
+    Number(
+        CLI_PAGE,
+        "not UTF-8 text: byte 0xNN at position P; save the file as UTF-8",
+        utf8_message,
+    ),
+    Number(
+        CLI_PAGE,
+        "the door passes 0.78 persons/s and the stair link 0.91 persons/s, "
+        "the run with seed 1 ends at 323.0 s, and over 500 runs the median "
+        "is 383.25 s and the 95th percentile 550.05 s.",
+        first_run_numbers,
+        slow=True,
+    ),
+    # These read the packaged run, which the run output above already
+    # makes; in the slow job they add no run.
+    Number(
+        CLI_PAGE,
+        "Capacities are rounded too: `0.78` in the terminal is "
+        "`0.7800000000000001` in `summary.json`.",
+        capacity_rounding,
+        slow=True,
+    ),
+    Number(
+        CLI_PAGE,
+        (
+            "agent,pre_movement_sampled,exit_time",
+            "time,0:office->flight,1:flight->street",
+            "time,office,flight",
+            "run,evacuation_time,agents",
+        ),
+        csv_headers,
+        slow=True,
+    ),
+]
+
+
+@pytest.mark.parametrize("number", [_param(n) for n in CLI_REGISTRY])
+def test_command_line_page_shows_what_the_command_prints(number):
+    test_page_shows_the_number_the_code_produces(number)
+
+
+def test_command_line_page_shows_the_packaged_scenario():
+    """The scenario on the page is ``init``'s file, key for key."""
+    scenarios = [
+        data
+        for data in map(json.loads, docpages.blocks(CLI_PAGE, "json"))
+        if "populations" in data
+    ]
+    assert len(scenarios) == 1, "one scenario block expected on the page"
+    assert scenarios[0] == json.loads(_packaged())

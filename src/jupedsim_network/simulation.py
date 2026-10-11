@@ -434,12 +434,22 @@ class _Run:
         return self._result()
 
     def _spawn(self) -> _Agents:
-        parts = [self._spawn_population(p) for p in self.sim.populations]
+        parts = [
+            self._spawn_numbered(i, p)
+            for i, p in enumerate(self.sim.populations)
+        ]
         agents = _Agents(
             *(np.concatenate([p[i] for p in parts]) for i in range(9))
         )
         self._check_capacity(agents)
         return agents
+
+    def _spawn_numbered(self, index: int, pop: Population) -> list[np.ndarray]:
+        """Spawn ``pop``; an error names it as ``population <index>: ...``."""
+        try:
+            return self._spawn_population(pop)
+        except (ValueError, ArithmeticError, MemoryError) as exc:
+            raise ValueError(f"population {index}: {exc}") from exc
 
     def _spawn_population(self, pop: Population) -> list[np.ndarray]:
         node = self.sim.network.node(pop.node).index
