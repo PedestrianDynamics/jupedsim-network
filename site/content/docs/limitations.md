@@ -235,9 +235,11 @@ simulation.
   whatever the door widths. Putting landing travel on a stair link
   makes $L$ longer than the stair node. In the SFPE nine-storey
   building this lowers the exit flow from 0.811 to about 0.65
-  persons/s and raises the evacuation time from 1548.5 s to 1915.0 s
+  persons/s and raises the evacuation time from 1548.5 s to 1915.5 s
   ([Verification]({{< relref "/docs/verification#evacuationz-verification-cases" >}})).
-  Model landings as their own nodes.
+  Model landings as their own nodes. When such a node is held at
+  `max_density`, a coarse step can also give too short an evacuation
+  time ([Numerics](#numerics)).
 - **The area factor is not calibrated.** It scales an agent's
   contribution to density. It is not the Predtechenskii–Milinskii
   method that SFPE describes for mixed body sizes
@@ -263,6 +265,36 @@ simulation.
   least one step: six zero-length links in a row take 3.0 s at
   $\Delta t = 0.5$ s. Stair speeds need $\Delta t \approx 0.1$ s to
   match a hand calculation within 0.25 s.
+- **A full node can make a coarse step too fast.** Space that an agent
+  frees by leaving a node becomes available only in the next step. Take
+  a node of area $A$ held at a `max_density` above $1/(2a) + 1/(2A)$,
+  with $a = 0.266$ m² as above. This is the peak-flow density
+  1.88 m⁻² plus half an agent per node area: 2.0 m⁻² for a 4 m² node.
+  The node's outflow is limited by walking because its link is longer
+  than the node ([Movement and capacity](#movement-and-capacity)). After each
+  departure the remaining agents walk for one step at the speed for one
+  agent fewer. Above that density this raises the node's flow, so a
+  coarse step gives too short an evacuation time, the non-conservative
+  direction. Below it the flow falls and the error changes sign.
+
+  In this example, 200 agents (`speed=1.2`, no pre-movement,
+  `start_distance=0`) leave a 100 m² room through a one-way 2 m door of
+  length 0.3 m into a 4 m² lobby, which leads through a one-way 4 m
+  opening of length 10 m to a safe node. With `max_density=3.5` and
+  `supply_reduction=False` the evacuation time is 1372.0 s at
+  $\Delta t = 0.5$ s against 1442.8 s at $\Delta t = 1/64$ s, 4.9 %
+  short. With the defaults (2.75 m⁻², supply reduction on) the same
+  network gives 453.5 s against 446.9 s, 1.5 % on the long side. There
+  supply reduction keeps the lobby below its limit more than half the
+  time, so the usual delay of a coarse step outweighs the effect.
+  Check such cases with a smaller step. In the first case, halving
+  $\Delta t$ roughly halves the error. Whether a node is held at its
+  limit shows in `node_occupancy`
+  ([Results]({{< relref "/docs/using/results" >}})). The effect is
+  documented in
+  [issue #55](https://github.com/PedestrianDynamics/jupedsim-network/issues/55);
+  [issue #56](https://github.com/PedestrianDynamics/jupedsim-network/issues/56)
+  proposes to reuse freed space in the same step.
 - **Passage time is one headway shorter than SFPE.** A link idle for at
   least $1/C_\ell$ lets the first agent through at once, so $N$ agents need $(N-1)/C$ instead
   of the SFPE $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}

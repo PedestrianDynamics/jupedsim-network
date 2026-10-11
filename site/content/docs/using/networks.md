@@ -54,7 +54,7 @@ extrapolation. `add_stair` accepts any positive riser and tread, computes
 the speed as usual, and issues a `UserWarning` when either lies outside
 this range. For a riser of 0.20 m:
 
-```
+```text
 UserWarning: Stair 'flight': riser 200.0 mm and tread 280.0 mm lie outside the SFPE range (risers 165-191 mm, treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant k = 51.8 sqrt(T/R) m/min is extrapolated.
 ```
 

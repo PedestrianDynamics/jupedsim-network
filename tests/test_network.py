@@ -979,7 +979,7 @@ def test_second_population_in_unknown_node_is_rejected(target):
         NetworkSimulation(single_room(), populations)
 
 
-def door_swap(n_a, n_b, counterflow, area_b=200.0):
+def door_swap(n_a, n_b, counterflow, area_b=200.0, dt=0.5):
     """Rooms A and B swap through one two-way 1 m door (C dt = 0.455).
 
     Exits are 20 m openings, so an agent passing the door in step k
@@ -997,7 +997,7 @@ def door_swap(n_a, n_b, counterflow, area_b=200.0):
         Population("A", n_a, target="xB"),
         Population("B", n_b, target="xA"),
     ]
-    sim = NetworkSimulation(net, pops, counterflow=counterflow)
+    sim = NetworkSimulation(net, pops, counterflow=counterflow, dt=dt)
     return sim.run(seed=1)
 
 
@@ -1066,6 +1066,12 @@ def test_counterflow_door_minor_ten_percent(counterflow, total, minor):
 def test_counterflow_stair_responders(counterflow, total, responders):
     # 20 evacuees leave the flight to the street; 4 responders enter it
     # from the lobby, heading for the roof (C dt = 0.455399).
+    result = stair_responders(counterflow)
+    assert result.evacuation_time == total
+    assert sorted(result.exit_times[20:].tolist()) == responders
+
+
+def stair_responders(counterflow, dt=0.5):
     net = Network()
     net.add_room("lobby", area=100.0)
     net.add_room("floor", area=100.0)
@@ -1080,10 +1086,8 @@ def test_counterflow_stair_responders(counterflow, total, responders):
         Population("flight", 20, target="street"),
         Population("lobby", 4, target="roof"),
     ]
-    sim = NetworkSimulation(net, pops, counterflow=counterflow)
-    result = sim.run(seed=1)
-    assert result.evacuation_time == total
-    assert sorted(result.exit_times[20:].tolist()) == responders
+    sim = NetworkSimulation(net, pops, counterflow=counterflow, dt=dt)
+    return sim.run(seed=1)
 
 
 def chain_run(split, counterflow):
@@ -1143,3 +1147,218 @@ def test_counterflow_supply_uses_door_share(counterflow, first, total):
     assert result.evacuated == 51
     assert result.exit_times[0] == first
     assert result.evacuation_time == total
+
+
+# The counterflow cases T1-T3 at three time steps. Regression values of
+# contract_issue8 section 9, not a convergence proof: T is not guaranteed
+# to fall with dt (issue #55). Exit times are t + dt with t rounded to
+# 9 digits, so they can differ from the decimal value by float rounding.
+@pytest.mark.parametrize(
+    ("counterflow", "t1", "t2", "t3"),
+    [
+        (
+            "independent",
+            (21.5, 21.25, 21.0),
+            (39.0, 38.75, 38.6),
+            (21.5, 21.25, 21.0),
+        ),
+        (
+            "estimate",
+            (44.0, 43.5, 43.2),
+            (45.5, 45.0, 44.8),
+            (29.0, 28.25, 28.1),
+        ),
+        (
+            "bounding",
+            (46.5, 46.0, 45.9),
+            (47.0, 46.5, 46.2),
+            (30.0, 29.5, 29.3),
+        ),
+    ],
+)
+def test_counterflow_cases_at_three_time_steps(counterflow, t1, t2, t3):
+    for i, dt in enumerate((0.5, 0.25, 0.1)):
+        cases = (
+            (door_swap(20, 20, counterflow, dt=dt), t1),
+            (door_swap(36, 4, counterflow, dt=dt), t2),
+            (stair_responders(counterflow, dt=dt), t3),
+        )
+        for result, expected in cases:
+            assert result.evacuation_time == pytest.approx(
+                expected[i], abs=1e-9
+            )
+
+
+def test_pair_within_budget_passes_both_ways():
+    # A 4 m two-way door: C dt = 1.3 * 3.7 * 0.5 = 2.405. One agent each
+    # way: under "bounding" the pair budget is 1 + g C dt >= 3, so both
+    # pass in step 0 and exit at 1.0 s, as with two separate doors.
+    net = Network()
+    net.add_room("A", area=20.0)
+    net.add_room("B", area=20.0)
+    net.add_safe("xA")
+    net.add_safe("xB")
+    net.connect("A", "B", width=4.0)
+    net.connect("A", "xA", width=4.0, kind="opening", bidirectional=False)
+    net.connect("B", "xB", width=4.0, kind="opening", bidirectional=False)
+    pops = [Population("A", 1, target="xB"), Population("B", 1, target="xA")]
+    for counterflow in ("independent", "bounding"):
+        sim = NetworkSimulation(net, pops, counterflow=counterflow)
+        assert sim.run(seed=1).exit_times.tolist() == [1.0, 1.0]
+
+
+def test_supply_reduction_is_off_at_or_below_peak_density():
+    # max_density <= 1.88 leaves the supply ramp no range: only the hard
+    # limit acts, so supply_reduction makes no difference.
+    pops = [Population("a", 300), Population("b", 300)]
+    results = [
+        NetworkSimulation(
+            corridor_with_rooms(),
+            pops,
+            max_density=1.5,
+            supply_reduction=on,
+            t_max=200.0,
+        ).run(seed=3)
+        for on in (True, False)
+    ]
+    corridor = results[0].node_names.index("corridor")
+    assert results[0].node_occupancy[:, corridor].max() == 6
+    np.testing.assert_array_equal(results[0].link_flow, results[1].link_flow)
+
+
+def two_rooms():
+    net = Network()
+    net.add_room("room", area=10.0)
+    net.add_safe("exit")
+    net.add_safe("street")
+    return net
+
+
+@pytest.mark.parametrize(
+    ("build", "message"),
+    [
+        (lambda n: n.add_room("room", area=5.0), "Node 'room' already exists"),
+        (lambda n: n.add_room("hall"), "Give either area or both"),
+        (lambda n: n.add_room("hall", length=2.0), "Give either area or both"),
+        (lambda n: n.add_room("hall", area=0.0), "Node area must be positive"),
+        (
+            lambda n: n.add_room("hall", length=-1.0, width=2.0),
+            "Node area must be positive",
+        ),
+        (
+            lambda n: n.add_stair("flight", riser=0.0, tread=0.28, area=8.0),
+            "Riser and tread must be positive",
+        ),
+        (
+            lambda n: n.add_stair("flight", riser=0.18, tread=-0.28, area=8.0),
+            "Riser and tread must be positive",
+        ),
+        (lambda n: n.node("hall"), "Unknown node 'hall'"),
+        (
+            lambda n: n.connect("room", "exit", width=1.0, kind="window"),
+            "Unknown connection kind 'window'",
+        ),
+        (
+            lambda n: n.connect("room", "room", width=1.0),
+            "A connection needs two different nodes",
+        ),
+        (
+            lambda n: n.connect("exit", "street", width=1.0),
+            "Cannot connect two safe nodes",
+        ),
+        (lambda n: n.connect("room", "exit", width=0.0), "Width and merge"),
+        (lambda n: n.connect("room", "exit", width=1.0, length=-1.0), "Width"),
+        (
+            lambda n: n.connect("room", "exit", width=1.0, merge_weight=0.0),
+            "Width and merge",
+        ),
+        (
+            lambda n: n.connect("room", "exit", width=0.3),
+            "Connection room-exit has no capacity",
+        ),
+        (lambda n: n.route_table("room"), "Target 'room' is not a safe node"),
+        (lambda n: n.route_table("hall"), "Unknown node 'hall'"),
+    ],
+)
+def test_network_input_errors(build, message):
+    with pytest.raises(ValueError, match=message):
+        build(two_rooms())
+
+
+def test_network_without_safe_node_has_no_route_table():
+    net = Network()
+    net.add_room("room", area=10.0)
+    with pytest.raises(ValueError, match="The network has no safe node"):
+        net.route_table()
+
+
+def test_tied_cycle_is_detected():
+    # The progress rule excludes tied cycles; the check behind it still
+    # raises if one is ever built.
+    from jupedsim_network.network import _check_acyclic
+
+    net = two_rooms()
+    net.add_room("hall", area=10.0)
+    links = net.connect("room", "hall", width=1.0)
+    with pytest.raises(RuntimeError, match="Tied routes form a cycle"):
+        _check_acyclic([[links[0].index], [], [], [links[1].index]], net.links)
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (dict(dt=0.0), "dt and t_max must be positive"),
+        (dict(dt=-0.5), "dt and t_max must be positive"),
+        (dict(t_max=0.0), "dt and t_max must be positive"),
+        (dict(max_density=0.0), r"max_density must be in \(0, 3\.76\)"),
+        (dict(max_density=3.76), r"max_density must be in \(0, 3\.76\)"),
+    ],
+)
+def test_simulation_setting_errors(options, message):
+    with pytest.raises(ValueError, match=message):
+        NetworkSimulation(single_room(), [Population("room", 1)], **options)
+
+
+def test_simulation_needs_a_population():
+    with pytest.raises(ValueError, match="At least one population is required"):
+        NetworkSimulation(single_room(), [])
+
+
+@pytest.mark.parametrize("runs", [0, -1])
+def test_run_many_needs_one_run(runs):
+    sim = NetworkSimulation(single_room(), [Population("room", 1)])
+    with pytest.raises(ValueError, match="runs must be at least 1"):
+        sim.run_many(runs)
+
+
+@pytest.mark.parametrize(
+    "speed", [0.0, Normal(-1.0, 0.1, lower=None), Fixed(-1.0, lower=None)]
+)
+def test_non_positive_speed_is_rejected_at_run(speed):
+    sim = NetworkSimulation(single_room(), [Population("room", 3, speed=speed)])
+    with pytest.raises(ValueError, match="Agent speeds must be positive"):
+        sim.run(seed=1)
+
+
+def test_distribution_clips_after_redraws():
+    # Every draw lies outside [0, 2]: after 100 redraws the values are
+    # clipped to the bound.
+    rng = np.random.default_rng(1)
+    np.testing.assert_array_equal(
+        Fixed(5.0, upper=2.0).sample(rng, 3), [2.0] * 3
+    )
+    np.testing.assert_array_equal(Fixed(-5.0).sample(rng, 2), [0.0] * 2)
+
+
+def test_distribution_without_lower_bound_keeps_negative_values():
+    rng = np.random.default_rng(1)
+    assert (
+        Fixed(-5.0, lower=None, upper=1.0).sample(rng, 2).tolist() == [-5.0] * 2
+    )
+
+
+def test_base_distribution_has_no_draw():
+    from jupedsim_network import Distribution
+
+    with pytest.raises(NotImplementedError):
+        Distribution().sample(np.random.default_rng(1), 1)

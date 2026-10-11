@@ -69,7 +69,7 @@ print(worst, runs.evacuation_times[worst], replay.evacuation_time)
 
 Output:
 
-```
+```text
 426 1015.5 1015.5
 ```
 
@@ -93,7 +93,7 @@ for dt in (1.0, 0.5, 0.25, 0.1):
 
 Output:
 
-```
+```text
 1.0 323.0
 0.5 323.0
 0.25 323.0
@@ -101,12 +101,20 @@ Output:
 ```
 
 Here the result changes by 0.4 s between 1.0 s and 0.1 s. Cases set by
-door queues on level ground behave like this. Walking times on short
-stair flights do not: the stair-speed test needs $\Delta t = 0.1$ s to
-match the hand calculation within 0.25 s
-([Verification]({{< relref "/docs/verification" >}})). The rule this model
-recommends: choose $\Delta t$ small compared with the shortest walk
-through a node, and halve it once to check.
+door queues on level ground behave like this. Two kinds of case are known
+to need a smaller step. The first is walking on short stair flights: the
+stair-speed test needs $\Delta t = 0.1$ s to match the hand
+calculation within 0.25 s
+([Verification]({{< relref "/docs/verification" >}})). The second is a
+node held at `max_density` whose agents walk out on a link longer than
+the node. There a coarse step gives too *short* an evacuation time
+([Limitations]({{< relref "/docs/limitations#numerics" >}})). When
+$\Delta t$ is halved, the result can therefore move either way.
+
+The rule this model recommends: choose $\Delta t$ small compared with
+the shortest walk through a node, and halve it once to check. If the
+result changes by more than one or two steps, in either direction, the
+step is too coarse.
 
 ## Choosing max_density
 
@@ -156,14 +164,14 @@ print(cut.quantile([0.5, 0.95]))
 
 Output:
 
-```
+```text
 59
 [383.25    inf]
 ```
 
 The warning reads:
 
-```
+```text
 RuntimeWarning: 59 of 500 runs did not finish before t_max = 500 s; quantiles above q = 440/499 (about 0.882) are inf.
 ```
 

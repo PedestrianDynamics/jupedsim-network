@@ -34,6 +34,19 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
+`uv run pytest` runs the tests of every pull request and deselects the
+long ones. Two further commands run those:
+
+```
+uv run pytest -m slow
+uv run pytest -m fuzz --hypothesis-profile=fuzz
+```
+
+The first runs the documented numbers of long runs (CI job
+`docs-numbers`); the second runs the long property runs and fixed-seed
+sweeps of `.github/workflows/fuzz.yml`, weekly and on demand. See
+[Verification](https://pedestriandynamics.org/jupedsim-network/docs/verification/#tests).
+
 The documentation is a [Hugo](https://gohugo.io) site with the
 [Hextra](https://imfing.github.io/hextra/) theme in `site/`. Hugo
 (extended) and Go are needed to build it:

@@ -18,7 +18,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
+      # Coverage on one leg (issue #48); the threshold only goes up.
+      - run: uv run pytest ${{ matrix.python-version == '3.13' && '--cov=jupedsim_network --cov-branch --cov-report=term-missing --cov-fail-under=97' || '' }}
 
   docs:
     runs-on: ubuntu-latest
@@ -55,7 +56,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [test, docs]
+    needs: [test, docs, docs-numbers]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -66,3 +67,32 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Documented numbers of long runs (the case study, the max_density
+  # sweep, the snippets that call run_many(500) and the time-step example
+  # in Limitations); the test job deselects them with -m 'not slow'.
+  docs-numbers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run pytest -m slow
+
+  # Run time of the base and the head revision on one runner. Reports
+  # the ratio in the job summary and warns above 1.5; never fails.
+  bench:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Check out the base revision
+        run: git worktree add "$RUNNER_TEMP/base" "${{ github.event.pull_request.base.sha }}"
+      - name: Benchmark
+        run: |
+          uv run python scripts/bench.py "$RUNNER_TEMP/base" > base.json
+          uv run python scripts/bench.py > head.json
+          uv run python scripts/bench.py --compare base.json head.json

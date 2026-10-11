@@ -38,7 +38,7 @@ print(result.times[1] - result.times[0], result.times[-1])
 
 Output:
 
-```
+```text
 9
 120
 0.5 323.0

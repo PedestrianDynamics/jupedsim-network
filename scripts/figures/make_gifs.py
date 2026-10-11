@@ -17,9 +17,12 @@ from make_figures import DEFAULT_OUT, GREY, ORANGE, PAL, RED, style
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
 from matplotlib.patches import Rectangle
-from scenarios import building, building_populations, merge_corridor, trace
+from scenarios import (
+    building_run,
+    mechanics_simulation,
+    trace,
+)
 
-from jupedsim_network import NetworkSimulation, Population, Uniform
 from jupedsim_network.simulation import _QUEUED, _SAFE, _WAITING, _WALKING
 
 STATE_COLOR = {
@@ -94,13 +97,7 @@ def agent_xy(i, f, names, links, spot, d0):
 
 
 def mechanics(out):
-    pops = [
-        Population(
-            r, 40, pre_movement=Uniform(0, 8), start_distance=Uniform(1, 12)
-        )
-        for r in "ab"
-    ]
-    sim = NetworkSimulation(merge_corridor(), pops)
+    sim = mechanics_simulation()
     run, frames = trace(sim, seed=4)
     xy = mechanics_positions(sim, frames, np.random.default_rng(0))
     corridor = sim.network.node("corridor").index
@@ -214,10 +211,7 @@ def shade_cells(cells, labels, names, density, occupancy, color):
 
 
 def building_gif(out, floors=10, every=5):
-    net = building(floors=floors)
-    pops = building_populations(floors=floors, split="AB")
-    sim = NetworkSimulation(net, pops)
-    r = sim.run(seed=1)
+    net, r = building_run(floors)
     names = list(r.node_names)
     area = np.array([n.area for n in net.nodes])
     density = r.node_occupancy / np.where(np.isfinite(area), area, 1)
