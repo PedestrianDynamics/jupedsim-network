@@ -104,7 +104,9 @@ def _run_many_once():
 
     # wraps keeps the signature, which the scenario loader reads.
     @functools.wraps(original)
-    def run_many(self, runs, seed=None):
+    def run_many(self, runs, seed=None, *, progress=None):
+        if progress is not None:  # the callbacks must happen
+            return original(self, runs, seed, progress=progress)
         key = (id(self), runs, seed)
         if not isinstance(seed, int) or cache.get(key, (None,))[0] is not self:
             cache[key] = (self, original(self, runs, seed))

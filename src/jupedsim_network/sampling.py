@@ -16,7 +16,21 @@ _MAX_REDRAWS = 100
 
 @dataclass(frozen=True, kw_only=True)
 class Distribution:
-    """Base class, truncated to ``[lower, upper]``."""
+    """Base class, truncated to ``[lower, upper]``.
+
+    The values have the unit of the quantity sampled (persons for
+    ``count``, s for ``pre_movement``, m/s for ``speed``, m for
+    ``start_distance``).
+
+    Attributes:
+        lower: lower bound, in the unit of the quantity sampled. Values
+            outside ``[lower, upper]`` are drawn again up to 100 times,
+            then clipped to the bounds. The default 0 keeps every value
+            non-negative; ``None`` removes the bound.
+        upper: upper bound, in the unit of the quantity sampled; values
+            above it are drawn again as for ``lower``. ``None`` for no
+            upper bound.
+    """
 
     lower: float | None = 0.0
     upper: float | None = None
@@ -44,6 +58,14 @@ class Distribution:
 
 @dataclass(frozen=True)
 class Fixed(Distribution):
+    """Always ``value``.
+
+    Attributes:
+        value: the value returned every time; a value outside
+            ``[lower, upper]`` is clipped to the bound, so ``-5`` gives 0
+            with the default ``lower``
+    """
+
     value: float
 
     def _draw(self, rng, size):
@@ -52,6 +74,13 @@ class Fixed(Distribution):
 
 @dataclass(frozen=True)
 class Uniform(Distribution):
+    """Uniform between ``minimum`` and ``maximum``.
+
+    Attributes:
+        minimum: smallest value
+        maximum: largest value
+    """
+
     minimum: float
     maximum: float
 
@@ -61,6 +90,13 @@ class Uniform(Distribution):
 
 @dataclass(frozen=True)
 class Normal(Distribution):
+    """Normal (Gaussian), before truncation to ``[lower, upper]``.
+
+    Attributes:
+        mean: mean before truncation
+        std: standard deviation before truncation
+    """
+
     mean: float
     std: float
 
@@ -70,7 +106,13 @@ class Normal(Distribution):
 
 @dataclass(frozen=True)
 class LogNormal(Distribution):
-    """Log-normal given by the mean and standard deviation of the variable."""
+    """Log-normal given by the mean and standard deviation of the variable.
+
+    Attributes:
+        mean: mean of the variable itself, not of its logarithm, before
+            truncation
+        std: standard deviation of the variable itself, before truncation
+    """
 
     mean: float
     std: float
@@ -83,6 +125,14 @@ class LogNormal(Distribution):
 
 @dataclass(frozen=True)
 class Triangular(Distribution):
+    """Triangular between ``minimum`` and ``maximum``.
+
+    Attributes:
+        minimum: smallest value
+        mode: most likely value
+        maximum: largest value
+    """
+
     minimum: float
     mode: float
     maximum: float
@@ -93,7 +143,12 @@ class Triangular(Distribution):
 
 @dataclass(frozen=True)
 class Weibull(Distribution):
-    """Weibull with scale ``alpha`` and shape ``beta``."""
+    """Weibull with scale ``alpha`` and shape ``beta``.
+
+    Attributes:
+        alpha: scale, in the unit of the quantity sampled
+        beta: shape, dimensionless
+    """
 
     alpha: float
     beta: float

@@ -1,0 +1,3 @@
+Scenario scenario.json: 3 nodes, 2 links, 1 population.
+Run, seed 1: evacuation time 323.0 s; 120 of 120 agents safe.
+Wrote scenario_results/: summary.json, agents.csv, link_flow.csv, occupancy.csv

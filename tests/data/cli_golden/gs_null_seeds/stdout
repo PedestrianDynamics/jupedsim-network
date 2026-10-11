@@ -1,0 +1,4 @@
+Scenario scenario.json: 3 nodes, 2 links, 1 population.
+Run, seed 271828182845904523536 (drawn): evacuation time 567.5 s; 120 of 120 agents safe.
+Monte Carlo, 5 runs, seed 314159265358979323846 (drawn): q 0.5 378.0 s, q 0.95 414.7 s; 0 incomplete.
+Wrote scenario_results/: summary.json, agents.csv, link_flow.csv, occupancy.csv, runs.csv

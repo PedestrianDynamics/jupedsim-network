@@ -1,0 +1,317 @@
+{
+  "format_version": 1,
+  "description": "Office wing: two storeys, eleven rooms, one stair and two exits (examples/office_wing.py).",
+  "nodes": [
+    {
+      "name": "G1",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "G2",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "G3",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "G4",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "GW",
+      "kind": "room",
+      "length": 18.0,
+      "width": 2.0
+    },
+    {
+      "name": "GE",
+      "kind": "room",
+      "length": 18.0,
+      "width": 2.0
+    },
+    {
+      "name": "U1",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "U2",
+      "kind": "room",
+      "length": 9.0,
+      "width": 7.0
+    },
+    {
+      "name": "TR",
+      "kind": "room",
+      "length": 18.0,
+      "width": 7.0
+    },
+    {
+      "name": "UW",
+      "kind": "room",
+      "length": 18.0,
+      "width": 2.0
+    },
+    {
+      "name": "UE",
+      "kind": "room",
+      "length": 18.0,
+      "width": 2.0
+    },
+    {
+      "name": "stair",
+      "kind": "stair",
+      "riser": 0.2,
+      "tread": 0.28,
+      "area": 8.9
+    },
+    {
+      "name": "main",
+      "kind": "safe"
+    },
+    {
+      "name": "side",
+      "kind": "safe"
+    }
+  ],
+  "connections": [
+    {
+      "source": "G1",
+      "target": "GW",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "G2",
+      "target": "GW",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "G3",
+      "target": "GE",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "G4",
+      "target": "GE",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "GW",
+      "target": "GE",
+      "width": 2.0,
+      "kind": "door",
+      "length": 9.0,
+      "bidirectional": false
+    },
+    {
+      "source": "GE",
+      "target": "GW",
+      "width": 2.0,
+      "kind": "door",
+      "length": 9.0,
+      "bidirectional": false
+    },
+    {
+      "source": "GW",
+      "target": "main",
+      "width": 1.8,
+      "kind": "door",
+      "length": 9.0,
+      "bidirectional": false
+    },
+    {
+      "source": "GE",
+      "target": "side",
+      "width": 0.9,
+      "kind": "door",
+      "length": 9.0,
+      "bidirectional": false
+    },
+    {
+      "source": "U1",
+      "target": "UW",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "U2",
+      "target": "UW",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "TR",
+      "target": "UE",
+      "width": 0.9,
+      "kind": "door",
+      "length": 3.5,
+      "bidirectional": false
+    },
+    {
+      "source": "UW",
+      "target": "UE",
+      "width": 2.0,
+      "kind": "door",
+      "length": 9.0,
+      "bidirectional": false
+    },
+    {
+      "source": "UE",
+      "target": "stair",
+      "width": 0.9,
+      "kind": "door",
+      "length": 7.0,
+      "bidirectional": false
+    },
+    {
+      "source": "stair",
+      "target": "GE",
+      "width": 1.2,
+      "kind": "stair",
+      "length": 8.3,
+      "bidirectional": false
+    }
+  ],
+  "populations": [
+    {
+      "node": "G1",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "G2",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "G3",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "G4",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "U1",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "U2",
+      "count": 6,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 30.0,
+        "maximum": 90.0
+      }
+    },
+    {
+      "node": "TR",
+      "count": 60,
+      "speed": {
+        "distribution": "Uniform",
+        "minimum": 0.8,
+        "maximum": 1.2
+      },
+      "pre_movement": {
+        "distribution": "Uniform",
+        "minimum": 20.0,
+        "maximum": 40.0
+      }
+    }
+  ],
+  "simulation": {
+    "dt": 0.1,
+    "t_max": 900.0,
+    "max_density": 2.75
+  },
+  "run": {
+    "seed": 1
+  },
+  "monte_carlo": {
+    "runs": 5,
+    "seed": 1,
+    "quantiles": [
+      0.5,
+      0.95
+    ]
+  }
+}

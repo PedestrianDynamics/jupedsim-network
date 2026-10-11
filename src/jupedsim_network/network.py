@@ -102,7 +102,16 @@ class Network:
         length: float | None = None,
         width: float | None = None,
     ) -> Node:
-        """Add a level space, given by ``area`` or ``length`` and ``width``."""
+        """Add a level space, given by ``area`` or ``length`` and ``width``.
+
+        Arguments:
+            name: unique name of the node
+            area: floor area in m²; give it, or both ``length`` and
+                ``width``
+            length: length in m; with ``width``, the area is
+                ``length * width`` when ``area`` is not given
+            width: width in m; see ``length``
+        """
         node = self._add(name, ROOM, _area(area, length, width), None)
         self._record("room", name=name, area=area, length=length, width=width)
         return node
@@ -123,6 +132,17 @@ class Network:
         A ``UserWarning`` is issued if ``riser`` lies outside 165-191 mm or
         ``tread`` outside 254-330 mm, the range of SFPE Handbook Table 67.2
         (6th ed., pp. 2174-2175); the speed constant is then extrapolated.
+
+        Arguments:
+            name: unique name of the node
+            riser: riser height in m; with ``tread`` it sets the walking
+                speed on the flight
+            tread: tread depth in m
+            area: area of the flight in m², which holds the agents on
+                it; give it, or both ``length`` and ``width``
+            length: length of the flight in m; with ``width``, the area is
+                ``length * width`` when ``area`` is not given
+            width: width of the flight in m; see ``length``
         """
         k = hydraulic.stair_speed_constant(riser, tread)
         _warn_outside_sfpe_range(name, riser, tread)
@@ -139,7 +159,15 @@ class Network:
         return node
 
     def add_safe(self, name: str) -> Node:
-        """Add a place of safety with unlimited capacity."""
+        """Add a place of safety with unlimited capacity.
+
+        An agent that reaches a safe node counts as safe: its exit time is
+        recorded and it leaves the model. A safe node can be the outside
+        or a protected area such as a refuge.
+
+        Arguments:
+            name: unique name of the node
+        """
         node = self._add(name, SAFE, math.inf, hydraulic.LEVEL_SPEED_CONSTANT)
         self._record("safe", name=name)
         return node
@@ -161,6 +189,8 @@ class Network:
         """Connect two nodes through a door, opening or stair entry.
 
         Arguments:
+            source: name of the node the link starts in
+            target: name of the node the link leads to
             width: clear width in m
             kind: ``"door"``, ``"opening"`` or ``"stair"``
             length: distance in m walked inside the source node to reach
@@ -175,7 +205,11 @@ class Network:
             merge_weight: relative share when several links feed a full node
             bidirectional: also create the link from target to source;
                 the two links share one door (``counterflow`` of
-                ``NetworkSimulation``)
+                ``NetworkSimulation``). No link leaves a safe node, so a
+                safe target gets no reverse link.
+            name: name of the link from ``source`` to ``target``; ``None``
+                or empty gives ``"source->target"``. The reverse link is
+                always named ``"target->source"``.
 
         Returns:
             The created links.
@@ -265,6 +299,31 @@ class Network:
             link if not tied or link in tied else tied[0]
             for link, tied in zip(next_link, choices)
         ]
+
+    def route_choices(self, target: str | None = None) -> list[tuple[int, ...]]:
+        """Tied next links per node: the first links of all shortest routes.
+
+        Where several routes to safety are equally short, within
+        ``TIE_TOLERANCE``, and each first link makes progress (see
+        :meth:`route_table`), a node has more than one link here.
+        ``NetworkSimulation`` with ``split_ties=True`` (the default)
+        alternates its agents at such a node between all of these links;
+        with ``split_ties=False`` every agent takes the one link of
+        :meth:`route_table`, which is one of them.
+
+        Arguments:
+            target: name of one safe node; ``None`` uses the nearest one
+
+        Returns:
+            For each node index the tied link indices in creation order;
+            one link where the route is unique, and empty for safe nodes
+            and nodes without a route.
+
+        Raises:
+            RuntimeError: tied routes form a cycle, which the progress
+                rule excludes
+        """
+        return self._route_choices(target)
 
     def _relax(self, link, d, distance, next_link, heap) -> None:
         candidate = d + link.length
