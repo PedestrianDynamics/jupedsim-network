@@ -12,16 +12,49 @@ models.
 
 ## Tests
 
-The tests are in `tests/test_network.py` and
-`tests/test_evacuationz_verification.py`. Run them from a clone of the
-repository:
+The tests are in `tests/`. Run them from a clone of the repository:
 
-```
+```bash
 uv run pytest -q
 ```
 
-The last line of the output reads `166 passed`, followed by the run
-time.
+This runs the tests that every pull request runs: the hand calculations
+and IMO cases, the EvacuatioNZ cases, the property tests on random
+networks (hypothesis profile `pr`, derandomized) and the
+documented-number tests. It ends with no failures and lists the long
+tests as deselected. Two further commands run those:
+
+```bash
+uv run pytest -m slow
+uv run pytest -m fuzz --hypothesis-profile=fuzz
+```
+
+The first runs the documented numbers of long runs: the 300-run case
+study, the `max_density` sweep, the time-step example in
+[Limitations]({{< relref "/docs/limitations#numerics" >}}) and the
+snippets that call `run_many(500)`. CI runs it as its own job, `docs-numbers`, and the site
+deploys only when it passes. The second runs the long property runs and
+fixed-seed sweeps of `.github/workflows/fuzz.yml`, weekly and on demand.
+
+The property tests check on random networks that
+
+- no agent is lost;
+- no link, and no shared two-way connection under `"bounding"` and
+  `"estimate"`, passes more than $1 + C\,t$ agents in any interval $t$;
+- no node exceeds `max_density`;
+- a seed reproduces its run;
+- networks with no two-way pair in use give the same result under all
+  three `counterflow` values;
+- route tables take only tied shortest links.
+
+The weekly job also reports how the evacuation time changes when
+$\Delta t$ is halved. It does not assert that a smaller $\Delta t$
+never gives a later time, because that does not hold
+([Limitations]({{< relref "/docs/limitations#numerics" >}})).
+
+The documented-number tests (`tests/test_docs_numbers.py`) rebuild every
+number on these pages that a run produces from the code and compare it
+with the page text exactly.
 
 The table lists the tests with a hand-calculated expectation. "Result"
 is what the test measures with the current code. In the counterflow
@@ -268,7 +301,7 @@ are accepted for the EvacuatioNZ cases only:
 | Door flow, 1–3 m doors and 1 m opening, 1–100 agents | §2.2, p. 10 | $(N-1)/C$ | Fig. 2.2, graph only | table below | `test_door_flow_widths` |
 | Stair flow, 1–1000 agents, stairs 10 × 1, 200 × 1 and 200 × 5 m | §2.3, pp. 12–13 | $L/S_0 + (N-1)/C$ | Fig. 2.6, graph only | table below | `test_stair_flow_*` |
 | Fire Engineering Design Guide, 90 agents, room over one stair | §2.4, pp. 13–15 | 186 s (report, p. 14), the sum of the FEDG's 0.20 + 2.9 min {{< cite 18 "p. 231" >}}; no room walk | 179 s (p. 14); 168 s with random start (p. 15) | first exit 30.5 s; last exit 129.0 s | Capacity bound $30.5 + 89/0.911 = 128.2$ s; exit C is merged into the stair link (lower capacity), see below. `test_fedg_first_exit`, `test_fedg_last_exit_bound` |
-| SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE Solution A, 25.4 min; Solution B 1518 s); ≥ 1538.9 s in this model's conventions ($t_{\text{first}} + 1199/0.811$) | 1871 s (v2.11); 1471 ± 3 s in {{< cite 7 "manuscript p. 20; Fig. 10" >}} (2009, different network) | 1548.5 s | 300 per floor on floors 2–9 {{< cite 1 "p. 2181" >}} {{< cite 7 "Fig. 11" >}} and a 36 in exit door per stair from the SFPE example {{< cite 1 "p. 2181" >}}; the report gives neither, and neither EvacuatioNZ document gives the ground-floor exit. The exit door (0.811/s) controls: $70.0 + 1199/0.811$. Stair length 6.76 m from $H = 12$ ft. Landings are nodes: each link's length is walked in the node it leaves, so the 4.8 m of landing travel is level travel and corridor→landing is 4.8 m shorter below the top floor. With the landing travel walked on the stair link instead, 1915.0 s. Agents start at the room door; the report draws a random start distance. With a start $U(0, 91.44)$ m, 1542.5 s (seed 1; first exit 64.0 s instead of 70.0 s; the exit door still controls). `test_sfpe_nine_storey` |
+| SFPE Handbook nine-storey building | §2.5, pp. 15–17 | 1524 s (SFPE Solution A, 25.4 min; Solution B 1518 s); ≥ 1538.9 s in this model's conventions ($t_{\text{first}} + 1199/0.811$) | 1871 s (v2.11); 1471 ± 3 s in {{< cite 7 "manuscript p. 20; Fig. 10" >}} (2009, different network) | 1548.5 s | 300 per floor on floors 2–9 {{< cite 1 "p. 2181" >}} {{< cite 7 "Fig. 11" >}} and a 36 in exit door per stair from the SFPE example {{< cite 1 "p. 2181" >}}; the report gives neither, and neither EvacuatioNZ document gives the ground-floor exit. The exit door (0.811/s) controls: $70.0 + 1199/0.811$. Stair length 6.76 m from $H = 12$ ft. Landings are nodes: each link's length is walked in the node it leaves, so the 4.8 m of landing travel is level travel and corridor→landing is 4.8 m shorter below the top floor. With the landing travel walked on the stair link instead, 1915.5 s. Agents start at the room door; the report draws a random start distance. With a start $U(0, 91.44)$ m, 1542.5 s (seed 1; first exit 64.0 s instead of 70.0 s; the exit door still controls). `test_sfpe_nine_storey` |
 | SFPE Guide on Human Behavior, example 1, 300 agents, start at the door | §2.6, pp. 18–20 | 246 s (Guide); 234.95 s in this model's conventions | 221.5 s | 235.5 s | $149/0.682 + 15.27/S_0$. `test_sfpe_guide_example_1` |
 | The same, start 200 ft from the door | §2.6, pp. 18–20 | 300 s (Guide); 285.8 s in this model's conventions | 283 s | 286.0 s | Plus 60.96 m at 1.199 m/s |
 | Distributions: fixed 45 and 120 s, $U(10, 100)$, $N(120, 30)$, log-normal mean 5, sd 2 | §3.1, pp. 21–25 | means 55, 120, 5; sd 25.98, 30, 2 | Figs. 3.1–3.3, graph only | means 54.88, 119.66, 4.97; sd 26.07, 29.82, 1.99 (20 000 samples) | `test_fixed_distribution_is_exact`, `test_distribution_moments` |
@@ -298,12 +331,12 @@ stairs of 1.0 m and 5.0 m. All three are run.
 |-------|-----|------------|-------------------|-------------------|
 | 10 × 1 m | 1 | 11.5 s | 10.84 s | 1 |
 | 10 × 1 m | 10 | 26.0 s | 23.55 s | 10 |
-| 10 × 1 m | 100 | 168.5 s | 150.60 s | 27 (limit) |
-| 10 × 1 m | 1000 | 1439.0 s | 1421.07 s | 27 (limit) |
+| 10 × 1 m | 100 | 169.0 s | 150.60 s | 27 (limit) |
+| 10 × 1 m | 1000 | 1439.5 s | 1421.07 s | 27 (limit) |
 | 200 × 1 m | 1 | 217.5 s | 216.90 s | 1 |
 | 200 × 1 m | 10 | 230.0 s | 229.60 s | 10 |
 | 200 × 1 m | 100 | 357.0 s | 356.65 s | 100 |
-| 200 × 1 m | 1000 | 1984.0 s | 1627.12 s | 550 (limit) |
+| 200 × 1 m | 1000 | 1984.5 s | 1627.12 s | 550 (limit) |
 | 200 × 5 m | 1 | 217.5 s | 216.90 s | 1 |
 | 200 × 5 m | 10 | 219.0 s | 218.79 s | 10 |
 | 200 × 5 m | 100 | 238.0 s | 237.71 s | 100 |
@@ -485,7 +518,7 @@ run was incomplete.
 The figures and animations on this site are produced by
 `scripts/figures/make_figures.py` and `scripts/figures/make_gifs.py`:
 
-```
+```bash
 uv run --group docs python scripts/figures/make_figures.py OUTDIR
 uv run --group docs python scripts/figures/make_gifs.py OUTDIR
 ```

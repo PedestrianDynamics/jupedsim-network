@@ -18,7 +18,7 @@ Source = "https://github.com/PedestrianDynamics/jupedsim-network"
 JuPedSim = "https://www.jupedsim.org"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["hypothesis>=6.100", "pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
 docs = ["matplotlib==3.10.8"]
 
 [tool.hatch.build.targets.wheel]
@@ -26,6 +26,11 @@ packages = ["src/jupedsim_network"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not fuzz and not slow'"
+markers = [
+    "fuzz: long property and fuzz runs of the scheduled job (fuzz.yml)",
+    "slow: documented numbers of long runs, in their own CI job",
+]
 
 [tool.ruff]
 line-length = 80

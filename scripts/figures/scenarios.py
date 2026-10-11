@@ -1,9 +1,25 @@
-"""Scenarios shared by the figure and animation scripts."""
+"""Scenarios shared by the figure and animation scripts.
+
+The runs behind the figures are computed here, with NumPy only, so that
+``tests/test_docs_numbers.py`` checks the numbers the pages quote from
+them without matplotlib.
+"""
+
+import warnings
 
 import numpy as np
 
-from jupedsim_network import Network, Population, Uniform
+from jupedsim_network import (
+    LogNormal,
+    Network,
+    NetworkSimulation,
+    Population,
+    Uniform,
+)
 from jupedsim_network.simulation import _SAFE, _Run
+
+#: max_density values of the density sweep, in 1/m².
+DENSITY_LIMITS = np.array([2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.7])
 
 
 def building(floors=10, stairs=("A", "B"), lengths=None, area=400.0):
@@ -68,6 +84,80 @@ def merge_corridor(weights=(1.0, 3.0)):
         net.connect(name, "corridor", width=2.0, merge_weight=w)
     net.connect("corridor", "exit", width=1.0, length=2.0)
     return net
+
+
+def door_run():
+    """IMO test 4 geometry: 100 agents through a 1 m door, Fs = 1.33."""
+    net = Network()
+    net.add_room("room", area=40.0)
+    net.add_safe("exit")
+    net.connect("room", "exit", width=1.0, specific_flow=1.33)
+    return NetworkSimulation(net, [Population("room", 100, speed=1.0)]).run(1)
+
+
+def merge_run():
+    """Two rooms of 300 agents merge 1 : 3 into a full corridor."""
+    pops = [Population("a", 300), Population("b", 300)]
+    return NetworkSimulation(merge_corridor(), pops, t_max=150.0).run(seed=2)
+
+
+def density_sweep_runs(max_density, supply_reduction, runs=30):
+    """Evacuation times of the one-stair building, seed 1."""
+    sim = NetworkSimulation(
+        building(stairs=("A",)),
+        building_populations(),
+        max_density=max_density,
+        supply_reduction=supply_reduction,
+    )
+    return sim.run_many(runs, seed=1).evacuation_times
+
+
+def rset_quantiles(max_density, supply_reduction, runs):
+    times = density_sweep_runs(max_density, supply_reduction, runs)
+    return np.quantile(times, [0.05, 0.5, 0.95])
+
+
+def route_tie_runs():
+    """Seed 1 of the ten-storey building: ties split, not split, one stair."""
+    cases = {
+        "split": (building(), True),
+        "first": (building(), False),
+        "one": (building(stairs=("A",)), True),
+    }
+    runs = {}
+    for key, (net, split) in cases.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            sim = NetworkSimulation(
+                net, building_populations(), split_ties=split
+            )
+        runs[key] = sim.run(seed=1)
+    return runs
+
+
+def monte_carlo_runs(runs=300):
+    """The case study: log-normal pre-movement, half of each floor per stair."""
+    pre = LogNormal(120.0, 60.0, upper=600.0)
+    pops = building_populations(pre=pre, split="AB")
+    return NetworkSimulation(building(), pops).run_many(runs, seed=11)
+
+
+def mechanics_simulation():
+    """Two rooms of 40 agents empty into a 4 m² corridor (mechanics.gif)."""
+    pops = [
+        Population(
+            r, 40, pre_movement=Uniform(0, 8), start_distance=Uniform(1, 12)
+        )
+        for r in "ab"
+    ]
+    return NetworkSimulation(merge_corridor(), pops)
+
+
+def building_run(floors=10):
+    """One run of the case-study building, seed 1 (building.gif)."""
+    net = building(floors=floors)
+    pops = building_populations(floors=floors, split="AB")
+    return net, NetworkSimulation(net, pops).run(seed=1)
 
 
 def trace(sim, seed):

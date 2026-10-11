@@ -51,7 +51,7 @@ print(runs.quantile([0.5, 0.95]))
 
 Output:
 
-```
+```text
 323.0
 [383.25 550.05]
 ```
@@ -86,7 +86,7 @@ print(runs.incomplete, "incomplete runs")
 
 Output:
 
-```
+```text
 120 of 120 agents are safe
 0 incomplete runs
 ```
@@ -123,7 +123,7 @@ for width in (0.9, 1.2):
 
 Output:
 
-```
+```text
 291.9
 0.9 184.0
 1.2 162.5

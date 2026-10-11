@@ -15,19 +15,14 @@ import math
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[1]
-DOCS = ROOT / "site" / "content" / "docs"
+from docpages import ROOT
+from docpages import blocks as _blocks
+from docpages import quoted as _quoted
+from docpages import text as _page_text
 
 PAGES = {"office_wing.py": "examples/office-wing.md"}
-
-
-def _blocks(page, lang):
-    pattern = re.compile(rf"^```{lang}\n(.*?)^```", re.DOTALL | re.MULTILINE)
-    return pattern.findall((DOCS / page).read_text())
 
 
 @pytest.fixture(scope="module")
@@ -85,19 +80,13 @@ def _office_wing_module():
 
 
 def _office_wing_page():
-    text = (DOCS / PAGES["office_wing.py"]).read_text()
-    return re.sub(r"\s+", " ", text.replace("&nbsp;", " "))
+    return _page_text(PAGES["office_wing.py"])
 
 
 def _number(out, pattern):
     match = re.search(pattern, out)
     assert match, f"no output line matches {pattern!r}"
     return [float(g) for g in match.groups()]
-
-
-def _quoted(page, phrases):
-    for phrase in phrases:
-        assert phrase in page, f"page does not say: {phrase}"
 
 
 def test_office_wing_page_tables_match_script():

@@ -97,7 +97,7 @@ print(round(Normal(10.0, 20.0, lower=None).sample(rng, 100_000).mean(), 2))
 
 Output:
 
-```
+```text
 20.12
 9.93
 ```

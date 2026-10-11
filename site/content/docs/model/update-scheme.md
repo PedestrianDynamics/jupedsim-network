@@ -190,3 +190,9 @@ length of their next link, or they are marked safe with exit time
 $t + \Delta t$. An agent that has passed a link walks again only in the
 next step, so every link on a route costs at least one step. Space
 freed by agents who leave a node becomes available in the next step.
+In a node of area $A$ held at a `max_density` above $1/(2a) + 1/(2A)$,
+with $a = 0.266$ m², whose agents walk out on a link longer than the
+node, the remaining agents therefore walk at the speed for one agent
+fewer during the step after each departure, and the evacuation time can
+converge from below as $\Delta t$ falls
+([Limitations]({{< relref "/docs/limitations#numerics" >}})).

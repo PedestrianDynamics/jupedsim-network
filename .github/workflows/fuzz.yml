@@ -1,0 +1,54 @@
+name: Fuzz
+
+# The long property runs and fixed-seed fuzz sweeps of issue #48, weekly
+# and on demand. Every PR runs the derandomized "pr" profile instead.
+on:
+  schedule:
+    - cron: "17 3 * * 1"  # Mondays, 03:17 UTC
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [fz1, fz2, fz3, hypothesis]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Run the shard
+        shell: bash
+        run: |
+          if [ "${{ matrix.shard }}" = hypothesis ]; then
+            tests=(tests/test_properties.py)
+          else
+            tests=(tests/test_fuzz_sweeps.py -k "${{ matrix.shard }}")
+          fi
+          uv run pytest -m fuzz --hypothesis-profile=fuzz \
+            --hypothesis-show-statistics -s "${tests[@]}" 2>&1 | tee fuzz-output.txt
+      # The falsifying specs are in the hypothesis output; turn each
+      # confirmed failure into an @example or a named regression test.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-${{ matrix.shard }}
+          include-hidden-files: true  # .hypothesis/
+          path: |
+            fuzz-output.txt
+            fuzz-failures/
+            .hypothesis/
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run python scripts/bench.py > bench.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ github.sha }}
+          path: bench.json

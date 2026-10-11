@@ -10,3 +10,6 @@ site/resources/
 .hugo_build.lock
 site/static/images/network/
 .context/
+.coverage
+.hypothesis/
+fuzz-failures/

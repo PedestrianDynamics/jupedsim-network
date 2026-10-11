@@ -8,7 +8,6 @@ the first argument. ``jupedsim_network`` must be importable::
 """
 
 import sys
-import warnings
 from pathlib import Path
 
 import matplotlib
@@ -23,15 +22,16 @@ from matplotlib.patches import (
     FancyBboxPatch,
     Rectangle,
 )
-from scenarios import building, building_populations, merge_corridor
-
-from jupedsim_network import (
-    LogNormal,
-    Network,
-    NetworkSimulation,
-    Population,
-    hydraulic,
+from scenarios import (
+    DENSITY_LIMITS,
+    door_run,
+    merge_run,
+    monte_carlo_runs,
+    route_tie_runs,
+    rset_quantiles,
 )
+
+from jupedsim_network import hydraulic
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "examples"))
@@ -253,11 +253,7 @@ def fundamental(out):
 
 def door_and_merge(out):
     fig, axes = plt.subplots(2, 1, figsize=(7, 8))
-    net = Network()
-    net.add_room("room", area=40.0)
-    net.add_safe("exit")
-    net.connect("room", "exit", width=1.0, specific_flow=1.33)
-    r = NetworkSimulation(net, [Population("room", 100, speed=1.0)]).run(1)
+    r = door_run()
     exits = np.sort(r.exit_times)
     axes[0].step(
         exits,
@@ -314,8 +310,7 @@ def door_and_merge(out):
     inset.tick_params(labelsize=7)
     axes[0].indicate_inset_zoom(inset, edgecolor=GREY)
 
-    pops = [Population("a", 300), Population("b", 300)]
-    r = NetworkSimulation(merge_corridor(), pops, t_max=150.0).run(seed=2)
+    r = merge_run()
     for name, color, w, ls in [
         ("a->corridor", PAL[2], 1, "-"),
         ("b->corridor", ORANGE, 3, "--"),
@@ -341,19 +336,8 @@ def door_and_merge(out):
     plt.close(fig)
 
 
-def rset_quantiles(max_density, supply_reduction, runs):
-    sim = NetworkSimulation(
-        building(stairs=("A",)),
-        building_populations(),
-        max_density=max_density,
-        supply_reduction=supply_reduction,
-    )
-    times = sim.run_many(runs, seed=1).evacuation_times
-    return np.quantile(times, [0.05, 0.5, 0.95])
-
-
 def density_sweep(out, runs=30):
-    limits = np.array([2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.7])
+    limits = DENSITY_LIMITS
     fig, ax = plt.subplots(figsize=(7, 4.2))
     for on, color, label, marker in [
         (True, PAL[3], "supply reduction on", "o"),
@@ -375,37 +359,14 @@ def density_sweep(out, runs=30):
 
 def route_tie(out):
     cases = [
-        (
-            "two stairs, ties split (default)",
-            building(),
-            building_populations(),
-            PAL[3],
-            "--",
-            True,
-        ),
-        (
-            "two stairs, split_ties=False (tie → one stair)",
-            building(),
-            building_populations(),
-            RED,
-            "-",
-            False,
-        ),
-        (
-            "one stair",
-            building(stairs=("A",)),
-            building_populations(),
-            GREY,
-            ":",
-            True,
-        ),
+        ("two stairs, ties split (default)", "split", PAL[3], "--"),
+        ("two stairs, split_ties=False (tie → one stair)", "first", RED, "-"),
+        ("one stair", "one", GREY, ":"),
     ]
+    runs = route_tie_runs()
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    for label, net, pops, color, ls, split in cases:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            sim = NetworkSimulation(net, pops, split_ties=split)
-        r = sim.run(seed=1)
+    for label, key, color, ls in cases:
+        r = runs[key]
         e = np.sort(r.exit_times)
         ax.step(
             e,
@@ -428,9 +389,7 @@ def route_tie(out):
 
 
 def monte_carlo(out, runs=300):
-    pre = LogNormal(120.0, 60.0, upper=600.0)
-    pops = building_populations(pre=pre, split="AB")
-    mc = NetworkSimulation(building(), pops).run_many(runs, seed=11)
+    mc = monte_carlo_runs(runs)
     t = mc.complete
     fig, ax = plt.subplots(figsize=(7, 4.2))
     ax.hist(t, bins=30, color=PAL[2], edgecolor="white")
