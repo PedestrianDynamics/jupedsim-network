@@ -1,4 +1,13 @@
+[![CI](https://github.com/PedestrianDynamics/jupedsim-network/actions/workflows/ci.yml/badge.svg)](https://github.com/PedestrianDynamics/jupedsim-network/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/PedestrianDynamics/jupedsim-network/graph/badge.svg)](https://codecov.io/gh/PedestrianDynamics/jupedsim-network)
+[![docs](https://img.shields.io/badge/docs-online-blue.svg)](https://pedestriandynamics.org/jupedsim-network/)
+[![license: LGPL-3.0-or-later](https://img.shields.io/badge/license-LGPL--3.0--or--later-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/jupedsim-network.svg)](https://pypi.org/project/jupedsim-network/)
+[![Python](https://img.shields.io/pypi/pyversions/jupedsim-network.svg)](https://pypi.org/project/jupedsim-network/)
+
 # jupedsim-network
+
+<img src="site/static/images/jupedsim-network-logo.png" alt="JuPedSim Network logo" width="384" />
 
 A coarse network egress model for fast estimates of evacuation times
 (pre-movement plus movement). Rooms, corridors and stair flights are
