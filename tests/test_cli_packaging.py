@@ -3,7 +3,7 @@
 
 The wheel holds the CLI modules and the packaged scenarios, installs the
 ``jupedsim-network`` console script, depends on NumPy alone, and keeps
-``rich-argparse`` in the ``cli`` extra.
+``rich-argparse`` in the ``cli`` extra and Textual in the ``tui`` extra.
 """
 
 import os
@@ -79,6 +79,19 @@ def test_wheel_contains_the_cli(installed_wheel):
         "jupedsim_network/scenario.py",
         "jupedsim_network/scenarios/getting_started.json",
         "jupedsim_network/scenarios/office_wing.json",
+        *(
+            f"jupedsim_network/tui/{name}.py"
+            for name in (
+                "__init__",
+                "app",
+                "engine",
+                "launch",
+                "model",
+                "netview",
+                "theme",
+                "widgets",
+            )
+        ),
     }
     assert expected <= files
     (info,) = installed_wheel.glob("jupedsim_network-*.dist-info")
@@ -93,6 +106,8 @@ def test_wheel_contains_the_cli(installed_wheel):
     assert [r.split(">")[0].strip() for r in plain] == ["numpy"]
     (rich,) = [r for r in requires if r.startswith("rich-argparse")]
     assert "extra == 'cli'" in rich or 'extra == "cli"' in rich
+    (textual,) = [r for r in requires if r.startswith("textual")]
+    assert "extra == 'tui'" in textual or 'extra == "tui"' in textual
 
 
 def test_wheel_command_runs_outside_the_repository(installed_wheel, tmp_path):

@@ -19,10 +19,11 @@ REPO = Path(__file__).resolve().parents[1]
 CONSOLE_SCRIPT = Path(sys.executable).parent / "jupedsim-network"
 
 USAGE = {
-    (): "usage: jupedsim-network {run,check,init} ...",
+    (): "usage: jupedsim-network {run,check,init,tui} ...",
     ("run",): "usage: jupedsim-network run SCENARIO.json [-o DIR] [options]",
     ("check",): "usage: jupedsim-network check SCENARIO.json",
     ("init",): "usage: jupedsim-network init [PATH] [--example NAME] [--force]",
+    ("tui",): "usage: jupedsim-network tui [SCENARIO.json] [--theme NAME]",
 }
 GROUPS = {"run": ("Scenario & output", "Monte Carlo"), "check": ("Scenario",)}
 

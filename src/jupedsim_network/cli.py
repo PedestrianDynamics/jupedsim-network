@@ -135,7 +135,7 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface."""
     parser = _Parser(
         prog=PROG,
-        usage="%(prog)s {run,check,init} ...",
+        usage="%(prog)s {run,check,init,tui} ...",
         description=_DESCRIPTION,
         epilog=_EPILOG,
         formatter_class=_HelpFormatter,
@@ -160,6 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cli_init.add_arguments(init)
     init.set_defaults(command=cli_init.init)
+    _add_tui(commands)
     return parser
 
 
@@ -239,6 +240,45 @@ def _add_check(commands) -> None:
         help="the scenario file",
     )
     check.set_defaults(command=_check)
+
+
+_TUI_DESCRIPTION = """\
+Open, edit, check and run a scenario file in the terminal. Check and Run
+show and write exactly what the check and run commands do. Needs the tui
+extra: pip install "jupedsim-network[tui]"."""
+
+
+def _add_tui(commands) -> None:
+    tui = commands.add_parser(
+        "tui",
+        prog=f"{PROG} tui",
+        help="edit, check and run a scenario in a terminal UI",
+        usage="%(prog)s [SCENARIO.json] [--theme NAME]",
+        description=_TUI_DESCRIPTION,
+        formatter_class=_HelpFormatter,
+    )
+    tui.add_argument(
+        "scenario",
+        nargs="?",
+        metavar="SCENARIO.json",
+        help="the scenario file to open (default: start on the Scenario step)",
+    )
+    tui.add_argument(
+        "--theme",
+        choices=("network-dark", "solarized-light"),
+        metavar="NAME",
+        help="network-dark or solarized-light (default: "
+        "$JUPEDSIM_NETWORK_TUI_THEME, else the last one used, else "
+        "network-dark)",
+    )
+    tui.set_defaults(command=_tui)
+
+
+def _tui(args) -> int:
+    # textual is imported only here: the other commands never load it.
+    from jupedsim_network.tui import launch
+
+    return launch.main(args.scenario, args.theme)
 
 
 def main(argv: list[str] | None = None) -> int:
