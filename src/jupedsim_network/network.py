@@ -2,8 +2,9 @@
 """Directed graph with resolved physical properties for the network model.
 
 The builder resolves hydraulic defaults into node speeds and link capacities.
-Routing uses distances only; flow sharing and agent movement belong to the
-simulation. Reverse links identify directions of one physical connection.
+Routing uses static distance or reference-time costs. Flow sharing and agent
+movement belong to the simulation. Reverse links identify directions of one
+physical connection.
 """
 
 import heapq
@@ -510,17 +511,14 @@ def _edge_cost(link: Link, source: Node, routing_policy: str) -> float:
         raise ValueError(
             f"Node '{source.name}' must have a finite positive reference speed."
         )
-    cost = link.length / reference_speed
-    if not math.isfinite(cost):
-        raise ValueError(
-            f"Reference travel time at link '{link.name}' is non-finite (seconds)."
-        )
-    return cost
+    # Infinity records an unrepresentable cost; routing raises only when
+    # no finite route exists, after considering all alternatives.
+    return link.length / reference_speed
 
 
 def _relax_hops(link, key, distance, hops, heap, overflows, cost) -> None:
     total = key[0] + cost
-    # Heap costs and individual edge costs are finite; check their sum.
+    # Heap costs are finite; an edge cost or the sum may overflow.
     if not math.isfinite(total):
         overflows.append((link, key[0], cost))
         return

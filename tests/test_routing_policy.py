@@ -161,3 +161,37 @@ def test_time_tolerance_is_in_seconds(delta, tied):
     assert net.route_choices(routing_policy=TIME)[0] == (
         (0, 1) if tied else (0,)
     )
+
+
+@pytest.mark.parametrize("method", ["route_table", "route_choices"])
+@pytest.mark.parametrize("finite_alternative", [False, True])
+def test_individual_reference_cost_overflow(method, finite_alternative):
+    net = Network()
+    net.add_stair("A", area=10, riser=0.18, tread=0.28)
+    net.add_safe("exit")
+    net.connect(
+        "A", "exit", width=1, length=1.7e308, name="long", bidirectional=False
+    )
+    if finite_alternative:
+        net.connect(
+            "A", "exit", width=1, length=1, name="short", bidirectional=False
+        )
+        result = getattr(net, method)(routing_policy=TIME)
+        assert result[0] == (1 if method == "route_table" else (1,))
+        return
+    with pytest.raises(
+        ValueError, match="link 'long'.*accumulated.*s.*non-finite"
+    ):
+        getattr(net, method)(routing_policy=TIME)
+
+
+@pytest.mark.parametrize("method", ["route_table", "route_choices"])
+def test_overflowing_cost_to_unreachable_destination(method):
+    net = Network()
+    net.add_stair("A", area=10, riser=0.18, tread=0.28)
+    net.add_room("dead_end", area=10)
+    net.add_safe("exit")
+    net.connect("A", "dead_end", width=1, length=1.7e308, bidirectional=False)
+    net.connect("A", "exit", width=1, length=1, bidirectional=False)
+    result = getattr(net, method)(routing_policy=TIME)
+    assert result[0] == (1 if method == "route_table" else (1,))
