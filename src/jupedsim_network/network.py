@@ -271,6 +271,11 @@ class Network:
     def route_table(self, target: str | None = None) -> list[int | None]:
         """Next link per node on the shortest walking distance to safety.
 
+        Distances are sums of link lengths, not travel times; speeds,
+        capacities and congestion do not enter this routing policy.
+        Raises ``ValueError`` if a reachable node's shortest distance
+        exceeds the floating-point range.
+
         Arguments:
             target: name of one safe node; ``None`` uses the nearest one
 
@@ -312,6 +317,11 @@ class Network:
         alternates its agents at such a node between all of these links;
         with ``split_ties=False`` every agent takes the one link of
         :meth:`route_table`, which is one of them.
+        The tolerance handles numerical equality, not behavioral route
+        equivalence; alternation is an algorithmic policy, not an empirical
+        route-choice law.
+        Progress requires a strictly smaller computed distance, or fewer
+        links at exactly the same computed distance, without a tolerance.
 
         Arguments:
             target: name of one safe node; ``None`` uses the nearest one
@@ -322,6 +332,8 @@ class Network:
             and nodes without a route.
 
         Raises:
+            ValueError: a reachable node's shortest distance exceeds the
+                floating-point range
             RuntimeError: tied routes form a cycle, which the progress
                 rule excludes
         """
@@ -342,8 +354,9 @@ class Network:
 
         A link u -> v is tied for u if d(v) + length equals d(u) within
         ``TIE_TOLERANCE`` and the link makes progress: v is closer to
-        safety, or as close over fewer links. A zero-length detour is thus
-        not a tie, and tied links cannot form a cycle.
+        safety, or at exactly the same computed distance over fewer links.
+        This strict lexicographic ordering excludes cycles independently
+        of the tolerance used to identify equal route lengths.
 
         Returns:
             For each node index the tied link indices in creation order;
@@ -361,6 +374,7 @@ class Network:
         """Shortest distance to safety and the fewest links on such a route."""
         distance = [math.inf] * len(self._nodes)
         hops = [math.inf] * len(self._nodes)
+        overflows: list[tuple[Link, float]] = []
         heap = [(0.0, 0, n.index) for n in self._targets(target)]
         for _, _, index in heap:
             distance[index], hops[index] = 0.0, 0
@@ -370,7 +384,16 @@ class Network:
             if (d, h) > (distance[index], hops[index]):
                 continue
             for link in incoming[index]:
-                _relax_hops(link, (d, h), distance, hops, heap)
+                _relax_hops(link, (d, h), distance, hops, heap, overflows)
+        # An overflowing candidate is harmless if a finite alternative exists.
+        for link, accumulated in overflows:
+            if math.isinf(distance[link.source]):
+                raise ValueError(
+                    f"Shortest route distance from '{self._nodes[link.source].name}' "
+                    f"exceeds the floating-point range at link '{link.name}' "
+                    f"(index {link.index}): accumulated distance {accumulated!r} m "
+                    f"+ link length {link.length!r} m is non-finite."
+                )
         return distance, hops
 
     def _incoming(self) -> list[list[Link]]:
@@ -405,8 +428,13 @@ class Network:
         return node
 
 
-def _relax_hops(link, key, distance, hops, heap) -> None:
-    candidate = (key[0] + link.length, key[1] + 1)
+def _relax_hops(link, key, distance, hops, heap, overflows) -> None:
+    total = key[0] + link.length
+    # Heap distances and validated link lengths are finite; check their sum.
+    if not math.isfinite(total):
+        overflows.append((link, key[0]))
+        return
+    candidate = (total, key[1] + 1)
     if candidate >= (distance[link.source], hops[link.source]):
         return
     distance[link.source], hops[link.source] = candidate
@@ -420,8 +448,7 @@ def _is_tied(link, distance, hops) -> bool:
     tol = TIE_TOLERANCE
     if not math.isclose(there + link.length, here, rel_tol=tol, abs_tol=tol):
         return False
-    closer = there < here - tol * max(1.0, here)
-    return closer or hops[link.target] < hops[link.source]
+    return (there, hops[link.target]) < (here, hops[link.source])
 
 
 def _check_acyclic(choices, links) -> None:
