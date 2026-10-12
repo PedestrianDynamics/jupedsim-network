@@ -813,7 +813,6 @@ _SameName = type("Normal", (Normal,), {"_draw": _draw_twice})
             _SameName(mean=1.3, std=0.1),
             "populations[0].speed: Normal is not a distribution of the file",
         ),
-        (float("inf"), "populations[0].speed: non-finite number inf"),
         (object(), "populations[0].speed: object <object"),
     ],
 )
@@ -825,6 +824,129 @@ def test_export_refuses_what_the_format_cannot_hold(speed, expected):
     with pytest.raises(ScenarioError) as info:
         Scenario.from_simulation(sim)
     assert str(info.value).startswith(expected), str(info.value)
+
+
+def test_non_finite_speed_is_rejected_at_construction():
+    # Was refused by the exporter only; now no Population holds inf (#53).
+    with pytest.raises(
+        ValueError, match="speed: value must be finite, got inf"
+    ):
+        Population("office", 10, speed=float("inf"))
+
+
+# Input checks (issue #53): the error is located at the key of the entry
+
+
+def _no_area(data):
+    node = data["nodes"][0]
+    del node["area"]
+    node.update(length=-5.0, width=-4.0)
+
+
+REJECTED = [
+    (
+        _set(["populations", 0, "area_factor"], -1.0),
+        "populations[0].area_factor",
+        "must be positive, got -1.0.",
+    ),
+    (
+        _set(["populations", 0, "pre_movement"], -10),
+        "populations[0].pre_movement",
+        "Fixed value -10.0 lies outside [lower, upper] = [0.0, None].",
+    ),
+    (
+        _set(["populations", 0, "count"], -5),
+        "populations[0].count",
+        "Fixed value -5.0 lies outside [lower, upper] = [0.0, None].",
+    ),
+    (
+        _set(
+            ["populations", 0, "pre_movement"],
+            {"distribution": "Fixed", "value": 10, "upper": 3},
+        ),
+        "populations[0].pre_movement",
+        "Fixed value 10 lies outside [lower, upper] = [0.0, 3].",
+    ),
+    (
+        _set(
+            ["populations", 0, "pre_movement"],
+            {
+                "distribution": "Normal",
+                "mean": 5,
+                "std": 1,
+                "lower": 2,
+                "upper": 1,
+            },
+        ),
+        "populations[0].pre_movement",
+        "lower 2 is greater than upper 1.",
+    ),
+    (
+        _set(
+            ["populations", 0, "pre_movement"],
+            {"distribution": "Weibull", "alpha": -2, "beta": 3},
+        ),
+        "populations[0].pre_movement",
+        "Weibull alpha and beta must be positive, got -2, 3.",
+    ),
+    (
+        _set(
+            ["populations", 0, "pre_movement"],
+            {"distribution": "LogNormal", "mean": 120.0, "std": -60.0},
+        ),
+        "populations[0].pre_movement",
+        "std must be >= 0, got -60.0.",
+    ),
+    (
+        _set(
+            ["populations", 0, "start_distance"],
+            {"distribution": "Normal", "mean": 5.0, "std": 3.0, "lower": None},
+        ),
+        "populations[0].start_distance",
+        "must have lower >= 0, got lower=None.",
+    ),
+    (
+        _set(["connections", 0, "boundary_layer"], -0.5),
+        "connections[0].boundary_layer",
+        "must be >= 0 m, got -0.5.",
+    ),
+    (
+        _set(["nodes", 0, "length"], 5.0),
+        "nodes[0]",
+        "Give either area or length and width, not both.",
+    ),
+    (_no_area, "nodes[0]", "Node area must be positive, got length -5.0."),
+    (
+        lambda d: d["nodes"][1].update(riser=180, tread=280),
+        "nodes[1]",
+        "riser and tread are in m and must be below 1 m; got riser 180, "
+        "tread 280 (mm?).",
+    ),
+    (
+        _set(["simulation", "dt"], 1e-300),
+        "simulation",
+        "dt must be at least 1e-6 s, got 1e-300.",
+    ),
+]
+
+
+@pytest.mark.parametrize("change, path, message", REJECTED)
+def test_input_checks_are_located_at_the_key(change, path, message):
+    with pytest.raises(ScenarioError) as info:
+        scenario_from_dict(_edit(change))
+    assert (info.value.path, info.value.message) == (path, message)
+
+
+def test_settings_warning_is_reported_once_at_simulation():
+    data = _edit(_set(["simulation", "max_density"], 1.5))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        scenario = scenario_from_dict(data)
+    assert len(scenario.warnings) == 1
+    assert scenario.warnings[0].startswith(
+        "simulation: max_density 1.5 is at or below the peak-flow density"
+    )
+    assert scenario.simulation.run(1).evacuation_time == 323.0
 
 
 # Run seam of the terminal UI (issue #47)

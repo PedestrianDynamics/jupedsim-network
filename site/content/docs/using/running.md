@@ -26,8 +26,8 @@ NetworkSimulation(
 
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `dt` | 0.5 s | Time step |
-| `t_max` | 3600 s | A run stops here, finished or not |
+| `dt` | 0.5 s | Time step, at least 1e-6 s |
+| `t_max` | 3600 s | A run stops here, finished or not; must be finite |
 | `max_density` | 2.75 m⁻² | Hard limit of agents (weighted by area factor) per m² in a node; must lie in (0, 3.76) |
 | `supply_reduction` | `True` | Reduce what a node accepts above the peak-flow density of 1.88 m⁻² |
 | `split_ties` | `True` | Alternate agents between equally short routes; `False` takes the route found first and warns ([Networks]({{< relref "/docs/using/networks#routes" >}})). Neither setting bounds the result ([Limitations]({{< relref "/docs/limitations#defaults-compared-with-bounding-defaults" >}})) |
@@ -149,7 +149,7 @@ area factor. A node never exceeds it.
   less inflow as it fills
   ([update scheme]({{< relref "/docs/model/update-scheme#4-passing-links" >}})).
   For `max_density` ≤ 1.88 m⁻² the reduction has no range to act on and
-  is switched off; only the hard limit remains.
+  is switched off with a `UserWarning`; only the hard limit remains.
 - With `supply_reduction=False`, results become very sensitive to
   `max_density` above about 3 m⁻²
   ([Verification]({{< relref "/docs/verification#sensitivity-to-max_density" >}})).
@@ -204,8 +204,16 @@ with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
 
 | Error | When |
 |-------|------|
-| `dt and t_max must be positive.` | `dt` or `t_max` is 0 or negative. |
+| `dt and t_max must be positive and finite, got ...` | `dt` or `t_max` is 0, negative, NaN or infinite. |
+| `dt must be at least 1e-6 s, got ...` | `dt` is below 1e-6 s. |
 | `max_density must be in (0, 3.76).` | `max_density` is 0 or negative, or at least the jam density. |
+| `area_factor: must be positive, got ...` | `Population` with an `area_factor` of 0 or less, or not finite. |
+| `count: Fixed value ... lies outside [lower, upper] = [0.0, None].` | A plain negative `count`; likewise `speed`, `pre_movement` and `start_distance`. |
+| `Fixed value ... lies outside [lower, upper] = [...]` | A `Fixed` value outside its bounds. |
+| `lower ... is greater than upper ...` | A distribution with `lower` above `upper`. |
+| `... must be finite, got ...` / `... must be a finite number or None, got ...` | A distribution parameter, a plain `count`, `speed`, `pre_movement` or `start_distance`, or a `lower` or `upper` bound that is NaN or infinite. |
+| `Weibull alpha and beta must be positive, got ...` / `std must be >= 0, got ...` | A Weibull scale or shape of 0 or less; a negative `LogNormal` `std`. |
+| `start_distance: must have lower >= 0, got lower=...` | A `start_distance` distribution with `lower=None` or a negative `lower`. |
 | `At least one population is required.` | The population list is empty. |
 | `Unknown node '...'.` | A population or `target` names a node that does not exist. |
 | `Target '...' is not a safe node.` | `target` names a room or stair. |
@@ -218,7 +226,10 @@ with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
 | `population i: Agent speeds must be positive.` | Raised by `run()`: population *i* (0-based) has a speed of 0, or a speed distribution produced 0 or, with `lower=None`, a negative value. |
 
 The last three are raised by `run_many()` or `run()`, the others when
-the `NetworkSimulation` is created.
+the `NetworkSimulation`, the `Population` or the distribution is
+created. `max_density` at or below the peak-flow density 1.88 m⁻² with
+`supply_reduction=True` issues a `UserWarning`: supply reduction has no
+effect.
 
 Every value or arithmetic error raised while the agents of a population are created names
 that population as `population i:` (0-based) and keeps the original

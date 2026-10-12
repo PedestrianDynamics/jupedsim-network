@@ -518,6 +518,16 @@ def test_warnings_are_printed_once(tmp_path, capsys):
     assert err.count("warning: ") == 2
 
 
+def test_settings_warning_is_printed_once(tmp_path, capsys):
+    data = json.loads((PACKAGED / "getting_started.json").read_text())
+    data["simulation"]["max_density"] = 1.5
+    (tmp_path / "low.json").write_text(json.dumps(data))
+    assert cli.main(["check", str(tmp_path / "low.json")]) == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert err.count("warning: ") == 1
+    assert "warning: simulation: max_density 1.5 is at or below" in err
+
+
 @pytest.mark.parametrize("name", ["getting_started.json", "office_wing.json"])
 def test_check_packaged_scenarios(name, capsys):
     assert cli.main(["check", str(PACKAGED / name)]) == cli.EXIT_OK

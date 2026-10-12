@@ -2031,49 +2031,73 @@ def test_results_figure_shows_what_run_prints():
 # Bounds and the run_many prefix (#47 PR 3) ------------------------------------
 
 
-def _draws(distribution):
-    """1000 draws, failing on any warning ("without a message")."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        return distribution.sample(np.random.default_rng(1), 1000)
+def _rejected(make) -> bool:
+    """Whether building the distribution raises ``ValueError``."""
+    try:
+        make()
+    except ValueError:
+        return True
+    return False
 
 
-def _clipped():
-    low, high = (np.unique(_draws(d)) for d in (Fixed(-5), Fixed(10, upper=3)))
-    return f"`Fixed(-5)` gives {low[0]:g} and `Fixed(10, upper=3)` gives {high[0]:g}"
-
-
-INVERTED = (
-    Fixed(7, lower=2, upper=1),
-    Uniform(0, 10, lower=2, upper=1),
-    Normal(5, 1, lower=2, upper=1),
-    LogNormal(5, 1, lower=2, upper=1),
-    Triangular(0, 5, 10, lower=2, upper=1),
-    Weibull(2, 3, lower=2, upper=1),
-)
-
-
-def _inverted_gives_upper():
-    """Every distribution with lower 2 above upper 1 draws only 1."""
-    return all(set(_draws(d)) == {1.0} for d in INVERTED)
-
-
-def bounds_limitations():
-    gives = "gives the `upper` value" if _inverted_gives_upper() else "does not"
+# Built lazily: each raises ``ValueError`` (issue #53).
+def _inverted():
     return (
-        f"its bounds is clipped to them: {_clipped()}.",
-        f"A distribution with `lower` greater than `upper` {gives} for every "
-        "draw, whatever its parameters, without a message.",
+        lambda: Fixed(7, lower=2, upper=1),
+        lambda: Uniform(0, 10, lower=2, upper=1),
+        lambda: Normal(5, 1, lower=2, upper=1),
+        lambda: LogNormal(5, 1, lower=2, upper=1),
+        lambda: Triangular(0, 5, 10, lower=2, upper=1),
+        lambda: Weibull(2, 3, lower=2, upper=1),
     )
 
 
-def bounds_command_line():
-    fixed = _clipped() == "`Fixed(-5)` gives 0 and `Fixed(10, upper=3)` gives 3"
-    upper = "returns `upper`" if _inverted_gives_upper() else "does not"
+def _fixed_outside_rejected() -> bool:
+    return all(
+        _rejected(m) for m in (lambda: Fixed(-5), lambda: Fixed(10, upper=3))
+    )
+
+
+def bounds_limitations():
+    fixed = (
+        "raise `ValueError`" if _fixed_outside_rejected() else "are accepted"
+    )
+    inverted = "so does" if all(_rejected(m) for m in _inverted()) else "not"
     return (
-        f"A `Fixed` value outside its bounds is "
-        f"{'clipped' if fixed else 'not clipped'}, and a distribution with "
-        f"`lower` above `upper` {upper} for every draw."
+        f"`Fixed(-5)` and `Fixed(10, upper=3)` {fixed}, and {inverted} every "
+        "distribution with `lower` greater than `upper`."
+    )
+
+
+def _load_rejects(pre_movement: dict) -> bool:
+    """Whether the loader rejects ``pre_movement`` at its own key."""
+    from jupedsim_network import ScenarioError, scenario_from_dict
+
+    data = json.loads((PACKAGED / "getting_started.json").read_text())
+    data["populations"][0]["pre_movement"] = pre_movement
+    try:
+        scenario_from_dict(data)
+    except ScenarioError as exc:
+        return exc.path == "populations[0].pre_movement"
+    return False
+
+
+def bounds_command_line():
+    outside = {"distribution": "Fixed", "value": 10, "upper": 3}
+    inverted = {
+        "distribution": "Normal",
+        "mean": 5,
+        "std": 1,
+        "lower": 2,
+        "upper": 1,
+    }
+    rejected = _load_rejects(outside) and _load_rejects(inverted)
+    verb = (
+        "are rejected when the file is loaded" if rejected else "are accepted"
+    )
+    return (
+        "A `Fixed` value outside its bounds and a distribution with `lower` "
+        f"above `upper` {verb}."
     )
 
 
@@ -2104,19 +2128,14 @@ def run_many_prefix():
 BOUNDS_REGISTRY = [
     Number(
         L,
-        (
-            "its bounds is clipped to them: `Fixed(-5)` gives 0 and "
-            "`Fixed(10, upper=3)` gives 3.",
-            "A distribution with `lower` greater than `upper` gives the "
-            "`upper` value for every draw, whatever its parameters, without "
-            "a message.",
-        ),
+        "`Fixed(-5)` and `Fixed(10, upper=3)` raise `ValueError`, and so does "
+        "every distribution with `lower` greater than `upper`.",
         bounds_limitations,
     ),
     Number(
         CLI_PAGE,
-        "A `Fixed` value outside its bounds is clipped, and a distribution "
-        "with `lower` above `upper` returns `upper` for every draw.",
+        "A `Fixed` value outside its bounds and a distribution with `lower` "
+        "above `upper` are rejected when the file is loaded.",
         bounds_command_line,
     ),
     Number(

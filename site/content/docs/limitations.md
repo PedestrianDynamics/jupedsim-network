@@ -149,8 +149,8 @@ simulation.
   behaviour between 1.88 m⁻² and `max_density` is its own choice.
 - **The supply reduction is a modelling choice.** Its linear form
   between 1.88 m⁻² and `max_density` has not been calibrated against
-  experiments. It is off when `max_density` ≤ 1.88 m⁻².
-  `max_density` must stay below the jam density of 3.76 m⁻².
+  experiments. With `supply_reduction=True` it is off, with a
+  `UserWarning`, when `max_density` ≤ 1.88 m⁻². `max_density` must stay below the jam density of 3.76 m⁻².
 - **Supply depends on which links have a queue.** Above 1.88 m⁻² a node
   accepts a share of the summed rate of its incoming links that have
   a queue in this step; a link of a pair in counterflow counts with its
@@ -346,32 +346,33 @@ simulation.
 
 ## Input checks
 
-Some inputs pass every check but change the result in a way you may not
-expect. They behave the same from Python and from a scenario file
-([issue #53](https://github.com/PedestrianDynamics/jupedsim-network/issues/53)).
+Inputs that are almost certainly mistakes are rejected with a
+`ValueError` when the network, a distribution, a population or the
+simulation is built,
+so Python, a scenario file, the command line and the terminal UI give
+the same message
+([issue #53](https://github.com/PedestrianDynamics/jupedsim-network/issues/53)):
+stair dimensions of 1 m or more (mm instead of m), a negative plain
+`pre_movement`, `start_distance`, `speed` or `count`, `area_factor` 0
+or negative, a negative `boundary_layer`, `area` together with `length`
+or `width`, a Weibull `alpha` or `beta` of 0 or less, a negative
+`LogNormal` `std`, a `start_distance` distribution with `lower` `None`
+or negative, a `dt` below 1e-6 s, and `nan` or `inf` anywhere.
+`Fixed(-5)` and `Fixed(10, upper=3)` raise `ValueError`, and so does
+every distribution with `lower` greater than `upper`. The messages are
+listed under [Networks]({{< relref "/docs/using/networks#errors" >}})
+and [Running]({{< relref "/docs/using/running#errors" >}}).
 
-- **Stair dimensions in mm are accepted.** `riser=180, tread=280` gives
-  the same speed constant as `0.18` and `0.28`, because the constant
-  depends only on the ratio of tread to riser. The only sign is a
-  warning that the stair lies outside the SFPE range. Read every
-  warning.
-- **Negative plain values become 0.** A plain negative `pre_movement`,
-  `start_distance` or `count` is a `Fixed` value with `lower=0` and is
-  set to 0 without a message. More generally, a `Fixed` value outside
-  its bounds is clipped to them: `Fixed(-5)` gives 0 and
-  `Fixed(10, upper=3)` gives 3.
-- **`lower` above `upper` returns `upper`.** A distribution with `lower`
-  greater than `upper` gives the `upper` value for every draw, whatever
-  its parameters, without a message.
-- **`area_factor` 0 or negative is accepted.** It breaks the
-  `max_density` limit of the nodes.
-- **A negative `boundary_layer` widens the door.**
-- **`area` wins.** A room with `area` and also `length` and `width` uses
-  `area`.
-- **Weibull `alpha` below 0 is accepted.**
-- **A very small `dt` is accepted.** A `dt` such as 1e-300 makes a run hang.
-- **`max_density` at or below 1.88 m⁻² turns supply reduction off**
-  without notice ([Movement and capacity](#movement-and-capacity)).
+Some inputs are accepted with a warning or without a message:
+
+- **`max_density` at or below 1.88 m⁻² turns supply reduction off.**
+  The simulation issues a `UserWarning`
+  ([Movement and capacity](#movement-and-capacity)).
+- **A stair outside the SFPE range** is extrapolated with a
+  `UserWarning` ([Networks]({{< relref "/docs/using/networks#stairs" >}})).
+- **A negative sampled `pre_movement`** with `lower=None` is kept: the
+  agent starts at t = 0.
+- **A total population of 0** gives an evacuation time of 0 s.
 
 ## Output
 

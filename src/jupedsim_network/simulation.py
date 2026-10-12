@@ -46,6 +46,8 @@ also depends on population order.
 Space freed by agents leaving a node becomes available in the next step.
 """
 
+import math
+import numbers
 import warnings
 from dataclasses import dataclass, field
 
@@ -54,6 +56,10 @@ import numpy as np
 from jupedsim_network import hydraulic
 from jupedsim_network.network import SAFE, STAIR, Network
 from jupedsim_network.sampling import Distribution, as_distribution
+
+# Smallest time step: the clock ``t = round(t + dt, 9)`` keeps its rounding
+# error below 0.05 % of a step.
+_MIN_DT = 1e-6
 
 _WAITING = 0
 _WALKING = 1
@@ -93,8 +99,15 @@ class Population:
         pre_movement: time in s before the agent starts moving
         start_distance: extra distance in m walked in the start node
         area_factor: space taken relative to an average adult; counts
-            towards node density and capacity
+            towards node density and capacity; positive
         target: name of a safe node to head for; ``None`` for the nearest
+
+    Raises:
+        ValueError: ``area_factor`` is not positive, a plain number is not
+            a valid ``Fixed`` value (negative with the default bounds, or
+            not finite), or a ``start_distance`` distribution has no
+            ``lower`` bound or a negative one. The message starts with
+            the name of the attribute.
     """
 
     node: str
@@ -104,6 +117,36 @@ class Population:
     start_distance: Distribution | float = 0.0
     area_factor: float = 1.0
     target: str | None = None
+
+    def __post_init__(self) -> None:
+        if not 0 < self.area_factor < math.inf:
+            raise ValueError(
+                f"area_factor: must be positive, got {self.area_factor}."
+            )
+        for name in ("count", "speed", "pre_movement", "start_distance"):
+            _check_plain_number(name, getattr(self, name))
+        _check_start_distance(self.start_distance)
+
+
+def _check_plain_number(name: str, value) -> None:
+    """A plain number must make a valid ``Fixed``; the number stays as given."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return
+    try:
+        as_distribution(value)
+    except ValueError as exc:
+        raise ValueError(f"{name}: {exc}") from exc
+
+
+def _check_start_distance(value) -> None:
+    """An extra distance cannot be negative, so its ``lower`` must be >= 0."""
+    if not isinstance(value, Distribution):
+        return
+    if value.lower is not None and value.lower >= 0:
+        return
+    raise ValueError(
+        f"start_distance: must have lower >= 0, got lower={value.lower}."
+    )
 
 
 @dataclass(frozen=True)
@@ -188,10 +231,12 @@ class NetworkSimulation:
     Arguments:
         network: the node-link graph
         populations: agent groups
-        dt: time step in s
-        t_max: time in s after which a run stops
+        dt: time step in s, at least 1e-6
+        t_max: time in s after which a run stops; finite
         max_density: hard limit of agents (weighted by area factor) per
-            m² in a node
+            m² in a node, in (0, 3.76); at or below the peak-flow density
+            1.88 the supply reduction has no effect, which issues a
+            ``UserWarning``
         supply_reduction: reduce link capacity when the target node is
             above the peak-flow density
         split_ties: split agents evenly between equally short routes;
@@ -221,11 +266,24 @@ class NetworkSimulation:
         split_ties: bool = True,
         counterflow: str = "bounding",
     ) -> None:
-        if dt <= 0 or t_max <= 0:
-            raise ValueError("dt and t_max must be positive.")
+        if not (0 < dt < math.inf and 0 < t_max < math.inf):
+            raise ValueError(
+                "dt and t_max must be positive and finite, got dt "
+                f"{dt}, t_max {t_max}."
+            )
+        if dt < _MIN_DT:
+            raise ValueError(f"dt must be at least 1e-6 s, got {dt}.")
         if not 0 < max_density < hydraulic.JAM_DENSITY:
             raise ValueError(
                 f"max_density must be in (0, {hydraulic.JAM_DENSITY:.2f})."
+            )
+        if supply_reduction and max_density <= hydraulic.PEAK_FLOW_DENSITY:
+            warnings.warn(
+                f"max_density {max_density} is at or below the peak-flow "
+                f"density {hydraulic.PEAK_FLOW_DENSITY:.2f} m⁻²; supply "
+                "reduction has no effect.",
+                UserWarning,
+                stacklevel=2,
             )
         if counterflow not in tuple(_COUNTERFLOW):
             raise ValueError(

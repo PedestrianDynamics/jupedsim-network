@@ -47,7 +47,8 @@ def stair_speed_constant(riser: float, tread: float) -> float:
     SFPE tabulates k only (Table 67.2) and states that stair speed varies
     approximately with ``sqrt(tread / riser)`` for risers of 165-191 mm and
     treads of 254-330 mm (6th ed., p. 2175). This function does not restrict
-    riser or tread to that range.
+    riser or tread to that range, but both must be below 1 m, which
+    catches values given in mm or cm.
 
     Arguments:
         riser: riser height in m
@@ -55,9 +56,21 @@ def stair_speed_constant(riser: float, tread: float) -> float:
 
     Returns:
         k in m/s
+
+    Raises:
+        ValueError: riser or tread is not positive, not finite or not
+            below 1 m
     """
-    if riser <= 0 or tread <= 0:
-        raise ValueError("Riser and tread must be positive.")
+    if not (riser > 0 and tread > 0):
+        raise ValueError(
+            f"Riser and tread must be positive, got riser {riser}, tread "
+            f"{tread}."
+        )
+    if not (riser < 1.0 and tread < 1.0):
+        raise ValueError(
+            "riser and tread are in m and must be below 1 m; got riser "
+            f"{riser}, tread {tread} (mm?)."
+        )
     return 51.8 * math.sqrt(tread / riser) / 60.0
 
 
