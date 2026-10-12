@@ -11,8 +11,8 @@ from fractions import Fraction
 
 import pytest
 
-from jupedsim_network import Network
-from jupedsim_network.network import _check_acyclic
+from jupedsim_network import Network, routing
+from jupedsim_network.routing import _check_acyclic
 
 
 def build(edges, rooms=("A", "B", "C"), safes=("s",)):
@@ -97,7 +97,12 @@ def verify_exact(net, target=None):
         if n.kind == "safe" and (target is None or n.name == target)
     }
     paths, best = reference(net, targets)
-    distance, hops = net._distances(target)
+    distance, hops = routing.distances(
+        net.nodes,
+        net.links,
+        sorted(targets),
+        [link.length for link in net.links],
+    )
     choices, table = net.route_choices(target), net.route_table(target)
     assert choices == net.route_choices(target)
     assert table == net.route_table(target)
@@ -139,7 +144,12 @@ def test_small_network_invariants(edges):
 def test_diamond_identifies_both_ten_metre_routes():
     net = build(CASES["diamond"])
     assert net.route_choices()[0] == (0, 1)
-    assert net._distances(None)[0][0] == 10
+    assert (
+        routing.distances(
+            net.nodes, net.links, [3], [link.length for link in net.links]
+        )[0][0]
+        == 10
+    )
 
 
 def test_zero_length_detours_are_intentionally_excluded():

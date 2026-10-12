@@ -257,7 +257,7 @@ def _check_route_table(net, target):
     """P9 for one target."""
     dist, hops = netgen.oracle_distances(net, target)
     table = net.route_table(target)  # P9 (e): raises on a cycle
-    choices = net._route_choices(target)
+    choices = net.route_choices(target)
     links = net.links
     for u, node in enumerate(net.nodes):
         unreachable = node.kind == "safe" or dist[u] == float("inf")

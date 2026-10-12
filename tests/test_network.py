@@ -681,7 +681,7 @@ def test_zero_length_detour_is_not_a_tie():
     net.connect("c", "a", width=1.0, bidirectional=False)
     net.connect("a", "s", width=1.0, length=1.0)
     (direct,) = net.connect("c", "s", width=1.0, length=1.0)
-    assert net._route_choices()[net.node("c").index] == (direct.index,)
+    assert net.route_choices()[net.node("c").index] == (direct.index,)
 
 
 def chain(length=0.0):
@@ -701,7 +701,7 @@ def chain(length=0.0):
 
 def test_route_table_takes_tied_links():
     net = chain()
-    table, choices = net.route_table(), net._route_choices()
+    table, choices = net.route_table(), net.route_choices()
     for link, tied in zip(table, choices):
         assert link is None or link in tied
     names = {u: net.links[table[net.node(u).index]].name for u in "ABCDE"}
@@ -756,7 +756,7 @@ def test_ties_within_rounding_only(delta, tied):
     net.connect("room", "hall", width=1.0, length=0.1, bidirectional=False)
     net.connect("hall", "s", width=1.0, length=0.2)
     net.connect("room", "s", width=1.0, length=0.3 + delta)
-    choices = net._route_choices()[net.node("room").index]
+    choices = net.route_choices()[net.node("room").index]
     assert (len(choices) == 2) is tied
 
 
@@ -1296,7 +1296,7 @@ def test_network_without_safe_node_has_no_route_table():
 def test_tied_cycle_is_detected():
     # The progress rule excludes tied cycles; the check behind it still
     # raises if one is ever built.
-    from jupedsim_network.network import _check_acyclic
+    from jupedsim_network.routing import _check_acyclic
 
     net = two_rooms()
     net.add_room("hall", area=10.0)
@@ -1767,7 +1767,6 @@ def test_route_choices_are_the_tied_links(make):
     targets = [None] + [n.name for n in net.nodes if n.kind == "safe"]
     for target in targets:
         choices = net.route_choices(target)
-        assert choices == net._route_choices(target)
         for node, link, tied in zip(
             net.nodes, net.route_table(target), choices
         ):

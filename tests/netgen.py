@@ -28,7 +28,7 @@ from jupedsim_network import (
     Uniform,
 )
 from jupedsim_network import simulation as simulation_module
-from jupedsim_network.network import TIE_TOLERANCE
+from jupedsim_network.routing import TIE_TOLERANCE
 
 COUNTERFLOW = ("independent", "estimate", "bounding")
 AREAS = (4.0, 10.0, 20.0, 40.0, 100.0)
