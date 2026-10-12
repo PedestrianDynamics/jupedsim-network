@@ -34,8 +34,12 @@ net.add_safe(name)
   area in m², or `length` and `width` in m.
 - **Stair flights** take the riser height and tread depth in m, which set
   their walking speed. Their area holds the agents on the flight.
-- **Safe nodes** have unlimited area. An agent that reaches one has left
-  the building.
+- **Safe nodes** have unlimited area. An agent that reaches a safe node
+  counts as safe: its exit time is recorded and it leaves the model. A
+  safe node can be the outside or a protected area such as a refuge.
+  Either way it has unlimited capacity and no onward movement
+  ([Behaviour]({{< relref "/docs/limitations#behaviour" >}}),
+  [Movement and capacity]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
 Names must be unique and areas positive.
 
@@ -86,7 +90,7 @@ net.connect(
 | `specific_flow` | $F_s$ in persons/s per m of effective width; `None` uses the default of the kind. |
 | `boundary_layer` | $b$ in m per side; `None` uses the default of the kind. |
 | `merge_weight` | Relative share of this link when several links feed one full node. |
-| `bidirectional` | Also create the link from `target` to `source`; the two links share one door ([Counterflow]({{< relref "/docs/model/counterflow" >}})). |
+| `bidirectional` | Also create the link from `target` to `source`; the two links share one door ([Counterflow]({{< relref "/docs/model/counterflow" >}})). No link is created out of a safe node ([One-way and two-way links](#one-way-and-two-way-links)). |
 | `name` | Name of the forward link; the default is `"source->target"`. |
 
 ### Kinds
@@ -170,6 +174,13 @@ the run starts and is never updated.
   the populations can reach
   ([Limitations]({{< relref "/docs/limitations#routes" >}}),
   [issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
+- `Network.route_choices(target=None)` returns, for each node index,
+  the tied first links of all shortest routes, in creation order: one
+  link where the route is unique, and none for safe nodes and nodes
+  without a route. `split_ties=True` alternates agents between these
+  links; the one link of `route_table` is one of them. It raises
+  `RuntimeError` if tied routes form a cycle, which the progress
+  rule (a link must bring agents closer) excludes.
 - `start_distance` of a population is added to the walk but not to the
   route distance.
 

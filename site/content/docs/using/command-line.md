@@ -27,6 +27,14 @@ pip install "jupedsim-network[cli]"
 Without it, `--help` prints plain text with the same groups. Every
 command works either way.
 
+For the [terminal UI]({{< relref "/docs/using/terminal-ui" >}}), which
+edits, checks and runs a scenario file in forms, install the `tui`
+extra:
+
+```bash
+pip install "jupedsim-network[tui]"
+```
+
 ## First run
 
 Write the scenario of [Getting started]({{< relref "/docs/getting-started" >}})
@@ -103,13 +111,14 @@ link gets a larger capacity, but the evacuation time of the trial run
 stays the same: the pre-movement times set it
 ([Try one change]({{< relref "/docs/getting-started#try-one-change" >}})).
 
-### The three commands
+### The four commands
 
 | Command | What it does |
 |---------|--------------|
 | `init [PATH] [--example NAME] [--force]` | Writes a packaged scenario to `PATH` (default `scenario.json`). `NAME` is `getting-started` (default) or `office-wing`, the [worked example]({{< relref "/docs/examples/office-wing" >}}). The file is copied unchanged. An existing file is kept unless you pass `--force`. |
 | `check SCENARIO.json` | Builds the scenario, lists it and makes one trial run with the seed of `run.seed`. Writes nothing. |
 | `run SCENARIO.json [options]` | Makes one run with `run.seed`, then a Monte Carlo set if the file has a `monte_carlo` section or `--runs` is given, and writes the result files. |
+| `tui [SCENARIO.json] [--theme NAME]` | Opens the [terminal UI]({{< relref "/docs/using/terminal-ui" >}}); needs the `tui` extra. |
 
 Options of `run`. Each one overrides the matching key of the file.
 
@@ -236,6 +245,14 @@ the file has no names of its own, and every value is passed on
 unchanged. Two names differ from what you might guess: a population
 starts in `node`, and a stair takes `riser` and `tread` in m.
 
+Three names are not shared between the file and the API:
+
+- `record` of `run()` is not in the file: `run` always records
+  ([What the command line adds](#what-the-command-line-adds)).
+- `progress` of `run_many()` is not in the file.
+- `quantiles` is in the file only. It is not an argument of
+  `run_many()`; it feeds `MonteCarloResult.quantile()`.
+
 A key you leave out takes the API default. The loader adds no defaults
 of its own. An unknown key is an error that lists the valid keys, so a
 typo cannot fall back to a default without notice. Here `typo.json` is
@@ -331,6 +348,8 @@ not expect. The file and Python behave the same; the full list is on
 - `area_factor` 0 or negative, a negative `boundary_layer`, a Weibull
   `alpha` below 0 and a very small `dt` are accepted.
 - A room with both `area` and `length` and `width` uses `area`.
+- A `Fixed` value outside its bounds is clipped, and a distribution
+  with `lower` above `upper` returns `upper` for every draw.
 - `max_density` at or below 1.88 m⁻² turns supply reduction off
   ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
@@ -483,7 +502,7 @@ A wrong option also gives 1, unlike the usual 2 of Python's
 
 ## From Python
 
-Four names of `jupedsim_network.scenario` move a scenario between
+Five names of `jupedsim_network.scenario` move a scenario between
 Python and the file. They are importable from `jupedsim_network`. To
 write the [Getting started]({{< relref "/docs/getting-started" >}})
 simulation to a file and run it from there:
@@ -525,11 +544,22 @@ packaged file.
 - **`load_scenario(path)`** reads, checks and builds a scenario and
   returns a `Scenario`. It raises `ScenarioError` for an invalid
   scenario and `OSError` for a file it cannot read.
+- **`scenario_from_dict(data, source=None)`** checks and builds a
+  scenario held in memory. The terminal UI checks every edit with it.
+  - `data` is what `json.load` returns: dicts, lists, strings, finite
+    numbers, booleans and `None`. A tuple is rejected.
+  - The checks and messages are those of `load_scenario`, except the
+    checks of the JSON text itself (UTF-8, duplicate keys).
+  - It returns a `Scenario` whose `data` is a copy of `data`.
+  - `source` is stored as `Scenario.source`.
+  - It raises `ScenarioError`.
 - **`Scenario`** is a frozen dataclass with
   - `data`, the document in file order, as a plain dict: changing it
     does not change `simulation`, and `save_scenario` writes it without
     checking it again
-    ([issue #47](https://github.com/PedestrianDynamics/jupedsim-network/issues/47));
+    ([issue #47](https://github.com/PedestrianDynamics/jupedsim-network/issues/47)).
+    To edit a scenario, change a dict of your own and pass it to
+    `scenario_from_dict` or `save_scenario`, which checks a dict first;
   - `simulation`, the `NetworkSimulation` built at load;
   - `warnings`, a tuple of messages that start with their path;
   - `source`, the path of the file, or `None`;
@@ -577,6 +607,8 @@ A wrong option prints the `usage:` line before the error.
 
 ## Next steps
 
+- [Terminal UI]({{< relref "/docs/using/terminal-ui" >}}): edit, check
+  and run the same file in forms.
 - [Networks]({{< relref "/docs/using/networks" >}}) and
   [Populations]({{< relref "/docs/using/populations" >}}): the keys of
   `nodes`, `connections` and `populations`, with their defaults.

@@ -43,10 +43,12 @@ result = simulation.run(seed=1)  # one realisation
 runs = simulation.run_many(500, seed=1)  # 500 independent realisations
 ```
 
-- `seed` may be an integer, a `numpy.random.SeedSequence` or a
-  `numpy.random.Generator`. An integer or a `SeedSequence` gives the
-  same result every time. A `Generator` is advanced by the run, so pass
-  a new one each time.
+- `seed` of `run` may be an integer, a `numpy.random.SeedSequence`, a
+  `numpy.random.Generator` or `None`, which uses fresh entropy that is
+  not recorded. `seed` of `run_many` may be an integer, a sequence of
+  integers or `None`. For both, an integer gives the same result
+  every time; for `run`, so does a `SeedSequence`. A `Generator` is advanced by the run, so pass a
+  new one each time.
 - `run(..., record=False)` skips the time series of node occupancy and
   link flow. `run_many` uses it.
 - In a scenario file, the `run` and `monte_carlo` sections hold these
@@ -54,7 +56,17 @@ runs = simulation.run_many(500, seed=1)  # 500 independent realisations
   ([Command line]({{< relref "/docs/using/command-line#seeds-and-reproducibility" >}})).
 - `run_many(runs, seed)` derives one seed per run with
   `numpy.random.SeedSequence(seed).spawn(runs)`. Run *i* of
-  `run_many(500, seed=1)` is therefore not `run(seed=i)`.
+  `run_many(500, seed=1)` is therefore not `run(seed=i)`. The first *k*
+  runs do not depend on `runs`: `run_many(100, seed=1)` gives the first
+  100 runs of `run_many(500, seed=1)`.
+- `run_many(runs, seed=None, *, progress=None)` calls
+  `progress(done, runs)` after each run, on the calling thread, with
+  `done` counting from 1 and both arguments Python integers. There is
+  no call with 0, and the last call comes before the result is built.
+  `progress` does not change the results; keep it quick. An exception
+  it raises ends `run_many`, propagates unchanged and discards the runs
+  done so far, so there is no partial result. A call ended this way
+  cannot be resumed; with `seed=None` its seeds are lost.
 
 ### Replay a critical run
 

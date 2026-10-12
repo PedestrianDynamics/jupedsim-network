@@ -2094,6 +2094,7 @@ def keys_text() -> str:
             "x or ctrl+c         cancel a run",
             "←/→, shift+←/→      Results: occupancy time ±1 / ±10 steps",
             "w, y, t             Results: warnings, copy path, traceback",
+            "o                   file preview: open in the default app, if available",
             "e, n                Results: edit, new scenario",
             "? or F1             this list; on a field, its help first",
             "ctrl+k              command palette (themes, steps, save as)",

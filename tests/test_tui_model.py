@@ -10,6 +10,7 @@ import dataclasses
 import functools
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -17,6 +18,7 @@ import time
 import warnings
 from pathlib import Path
 
+import docpages
 import pytest
 
 from jupedsim_network import cli, cli_init, scenario
@@ -406,6 +408,18 @@ def test_notes_qualify_rset():
     for text in (model.TIME_NOTE, model.SPREAD_NOTE):
         if "RSET" in text:
             assert "Call it an RSET only with that qualification" in text
+
+
+def test_notes_are_sentences_of_results_reporting():
+    """Each sentence of the two notes is on using/results.md under
+    "Reporting", once ``**`` and backticks are removed, so an edit of
+    that section fails here."""
+    page = (docpages.DOCS / "using" / "results.md").read_text()
+    section = page.split("\n## Reporting\n", 1)[1].split("\n## ", 1)[0]
+    plain = " ".join(section.replace("**", "").replace("`", "").split())
+    for note in (model.TIME_NOTE, model.SPREAD_NOTE):
+        for sentence in re.split(r"(?<=\.) ", note):
+            assert sentence in plain, f"results.md does not say: {sentence}"
 
 
 # --- recent files and browsing -------------------------------------------------

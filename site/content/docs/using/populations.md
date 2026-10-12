@@ -79,7 +79,11 @@ Each takes the keyword arguments `lower=0.0` and `upper=None`.
 - **Every distribution is truncated at 0 by default.** `Normal(10, 20)`
   never returns a negative value. Pass `lower=None` to allow them.
 - Values outside `[lower, upper]` are drawn again, up to 100 times.
-  Values still outside are then clipped to the bounds.
+  Values still outside are then clipped to the bounds. A `Fixed` value
+  outside the bounds is clipped without a message
+  ([Input checks]({{< relref "/docs/limitations#input-checks" >}})).
+- `mean` and `std` of `Normal` and `LogNormal` are those before
+  truncation.
 - `LogNormal(mean, std)` takes the mean and standard deviation of the
   variable itself, not of its logarithm.
 - `Weibull(alpha, beta)` takes the scale `alpha` and the shape `beta`.

@@ -20,6 +20,7 @@ and the snippets that call ``run_many(500)``) run in their own CI job;
 
 import contextlib
 import functools
+import html
 import io
 import json
 import math
@@ -46,6 +47,7 @@ from jupedsim_network import (
     Population,
     Triangular,
     Uniform,
+    Weibull,
     hydraulic,
 )
 
@@ -1930,3 +1932,203 @@ def test_command_line_page_shows_the_packaged_scenario():
     ]
     assert len(scenarios) == 1, "one scenario block expected on the page"
     assert scenarios[0] == json.loads(_packaged())
+
+
+# Terminal UI figures (#47) ----------------------------------------------------
+
+import copy_tui_snapshots as tui_figures  # noqa: E402
+
+# Left pane of a 120x35 snapshot: the right pane starts at column 61,
+# x = 744.2 at 12.2 px per column.
+LEFT_PANE_X = 730.0
+
+
+def test_tui_figures_are_the_snapshots(tmp_path):
+    tui_figures.copy(tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        tui_figures.FIGURES
+    )
+    for figure, source in tui_figures.FIGURES.items():
+        expected = (tui_figures.SNAPSHOTS / source).read_bytes()
+        assert (tmp_path / figure).read_bytes() == expected
+
+
+# What only that screen shows, so a swapped or mis-themed source fails.
+FIGURE_MARKS = {
+    "scenario.svg": "office-wing",
+    "edit-error.svg": 'expected a number, got the string "abc"',
+    "check.svg": "The scenario is valid.",
+    "run.svg": "Monte Carlo 132 / 500",
+    "results.svg": "Command line output",
+}
+NETWORK_DARK_BACKGROUND = "#121a24"  # tui/theme.py NETWORK_DARK.background
+
+
+def _screen(figure):
+    """All text of a page figure, tags removed, unescaped, collapsed."""
+    source = tui_figures.SNAPSHOTS / tui_figures.FIGURES[figure]
+    return _collapse(html.unescape(re.sub(r"<[^>]+>", " ", source.read_text())))
+
+
+@pytest.mark.parametrize("figure", sorted(FIGURE_MARKS))
+def test_tui_figure_is_its_screen_in_network_dark(figure):
+    assert sorted(FIGURE_MARKS) == sorted(tui_figures.FIGURES)
+    assert FIGURE_MARKS[figure] in _screen(figure)
+    others = [f for f in FIGURE_MARKS if f != figure]
+    assert all(FIGURE_MARKS[figure] not in _screen(f) for f in others)
+    source = tui_figures.SNAPSHOTS / tui_figures.FIGURES[figure]
+    fills = re.findall(r'<rect fill="(#[0-9a-f]{6})"', source.read_text())
+    assert NETWORK_DARK_BACKGROUND in fills
+
+
+def _left_pane(figure):
+    """Text of the left pane of a page figure, rows joined, collapsed."""
+    source = tui_figures.SNAPSHOTS / tui_figures.FIGURES[figure]
+    rows = {}
+    for match in re.finditer(
+        r'<text class="[^"]*-r\d+" x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*)</text>',
+        source.read_text(),
+    ):
+        x, y, text = float(match[1]), float(match[2]), match[3]
+        if x < LEFT_PANE_X:
+            rows.setdefault(y, []).append((x, html.unescape(text)))
+    return _collapse(
+        " ".join(
+            "".join(t for _, t in sorted(r)) for _, r in sorted(rows.items())
+        )
+    )
+
+
+def test_check_figure_shows_what_check_prints():
+    assert CLI_CHECK in _left_pane("check.svg")
+    assert cli_check() in _left_pane("check.svg")
+
+
+def test_results_figure_shows_what_run_prints():
+    """The Results figure is a 20-run set (``_results_before`` in
+    test_tui.py), not the registered 500-run output; it must still be
+    what ``run`` prints for that file, and its occupancy what
+    occupancy.csv holds at t = 120.0 s."""
+
+    def twenty_runs(data):
+        data["monte_carlo"]["runs"] = 20
+
+    files = {"scenario.json": _edited(twenty_runs)}
+    out, results = _ok(["run", "scenario.json"], files)
+    assert "Monte Carlo, 20 runs," in out
+    assert _collapse(out) in _left_pane("results.svg")
+    csv = results["occupancy.csv"].decode().splitlines()
+    assert csv[0] == "time,office,flight"
+    (row,) = [line for line in csv[1:] if float(line.split(",")[0]) == 120.0]
+    _, office, flight = row.split(",")
+    shown = tui_figures.SNAPSHOTS / tui_figures.FIGURES["results.svg"]
+    screen = _collapse(html.unescape(shown.read_text()))
+    assert "occupancy of the single run, seed 1: t = 120.0 s<" in screen
+    assert f"office room 200 m² ● {office}<" in screen
+    assert f"flight stair 10.8 m² ● {flight}<" in screen
+
+
+# Bounds and the run_many prefix (#47 PR 3) ------------------------------------
+
+
+def _draws(distribution):
+    """1000 draws, failing on any warning ("without a message")."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        return distribution.sample(np.random.default_rng(1), 1000)
+
+
+def _clipped():
+    low, high = (np.unique(_draws(d)) for d in (Fixed(-5), Fixed(10, upper=3)))
+    return f"`Fixed(-5)` gives {low[0]:g} and `Fixed(10, upper=3)` gives {high[0]:g}"
+
+
+INVERTED = (
+    Fixed(7, lower=2, upper=1),
+    Uniform(0, 10, lower=2, upper=1),
+    Normal(5, 1, lower=2, upper=1),
+    LogNormal(5, 1, lower=2, upper=1),
+    Triangular(0, 5, 10, lower=2, upper=1),
+    Weibull(2, 3, lower=2, upper=1),
+)
+
+
+def _inverted_gives_upper():
+    """Every distribution with lower 2 above upper 1 draws only 1."""
+    return all(set(_draws(d)) == {1.0} for d in INVERTED)
+
+
+def bounds_limitations():
+    gives = "gives the `upper` value" if _inverted_gives_upper() else "does not"
+    return (
+        f"its bounds is clipped to them: {_clipped()}.",
+        f"A distribution with `lower` greater than `upper` {gives} for every "
+        "draw, whatever its parameters, without a message.",
+    )
+
+
+def bounds_command_line():
+    fixed = _clipped() == "`Fixed(-5)` gives 0 and `Fixed(10, upper=3)` gives 3"
+    upper = "returns `upper`" if _inverted_gives_upper() else "does not"
+    return (
+        f"A `Fixed` value outside its bounds is "
+        f"{'clipped' if fixed else 'not clipped'}, and a distribution with "
+        f"`lower` above `upper` {upper} for every draw."
+    )
+
+
+def run_many_prefix():
+    """``run_many(100, seed=1)`` against the first 100 rows of runs.csv of
+    the packaged ``run`` (500 runs, seed 1), which the slow job makes
+    once for the command-line entries."""
+    from jupedsim_network.scenario import load_scenario
+
+    summary = json.loads(_packaged_run()[1]["summary.json"])
+    assert (summary["monte_carlo"]["runs"], summary["monte_carlo"]["seed"]) == (
+        500,
+        1,
+    )
+    rows = _packaged_run()[1]["runs.csv"].decode().splitlines()[1:]
+    five_hundred = [float(row.split(",")[1]) for row in rows]
+    sim = load_scenario(PACKAGED / "getting_started.json").build()[0]
+    hundred = sim.run_many(100, seed=1).evacuation_times.tolist()
+    same = (
+        "gives the first" if hundred == five_hundred[:100] else "differs from"
+    )
+    return (
+        "runs do not depend on `runs`: `run_many(100, seed=1)` "
+        f"{same} 100 runs of `run_many(500, seed=1)`."
+    )
+
+
+BOUNDS_REGISTRY = [
+    Number(
+        L,
+        (
+            "its bounds is clipped to them: `Fixed(-5)` gives 0 and "
+            "`Fixed(10, upper=3)` gives 3.",
+            "A distribution with `lower` greater than `upper` gives the "
+            "`upper` value for every draw, whatever its parameters, without "
+            "a message.",
+        ),
+        bounds_limitations,
+    ),
+    Number(
+        CLI_PAGE,
+        "A `Fixed` value outside its bounds is clipped, and a distribution "
+        "with `lower` above `upper` returns `upper` for every draw.",
+        bounds_command_line,
+    ),
+    Number(
+        "using/running.md",
+        "runs do not depend on `runs`: `run_many(100, seed=1)` gives the "
+        "first 100 runs of `run_many(500, seed=1)`.",
+        run_many_prefix,
+        slow=True,
+    ),
+]
+
+
+@pytest.mark.parametrize("number", [_param(n) for n in BOUNDS_REGISTRY])
+def test_bounds_and_prefix_claims(number):
+    test_page_shows_the_number_the_code_produces(number)

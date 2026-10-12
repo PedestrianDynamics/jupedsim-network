@@ -1569,3 +1569,38 @@ def test_dialogs_and_row_values(workdir, monkeypatch):
             assert opened == [["open", "a.csv"]]
 
     run(go())
+
+
+# --- the keys table of the Terminal UI page --------------------------------------
+
+
+def _keys_rows(text: str) -> list[tuple[str, str]]:
+    """``(key, action)`` of ``keys_text()``; an indented line continues
+    the action above it."""
+    rows: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        if line.startswith(" "):
+            key, action = rows.pop()
+            rows.append((key, f"{action} {line.strip()}"))
+            continue
+        key, action = re.split(r"\s{2,}", line, maxsplit=1)
+        rows.append((key, action))
+    return rows
+
+
+def test_page_keys_table_is_keys_text():
+    """The Keys table of using/terminal-ui.md, row by row, is what ``?``
+    shows."""
+    import docpages
+
+    from jupedsim_network.tui.app import keys_text
+
+    page = (docpages.DOCS / "using" / "terminal-ui.md").read_text()
+    section = page.split("\n## Keys\n", 1)[1].split("\n## ", 1)[0]
+    table = [
+        tuple(cell.strip().strip("`") for cell in line.strip("|").split("|"))
+        for line in section.splitlines()
+        if line.startswith("| ")
+    ]
+    assert table[0] == ("Key", "Action")
+    assert table[1:] == _keys_rows(keys_text())
