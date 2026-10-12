@@ -55,10 +55,13 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       # The figures are not in git: regenerate them from the current code,
       # so the site never shows a figure the code can no longer produce.
+      # The terminal UI figures are the SVG snapshots of this commit, which
+      # the test job checks and deploy waits for.
       - name: Generate figures
         run: |
           uv run --group docs python scripts/figures/make_figures.py
           uv run --group docs python scripts/figures/make_gifs.py
+          uv run --group docs python scripts/figures/copy_tui_snapshots.py
       - name: Read the package version
         run: echo "HUGO_PARAMS_VERSION=$(uv version --short)" >> "$GITHUB_ENV"
       - name: Build with Hugo

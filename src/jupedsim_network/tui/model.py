@@ -397,7 +397,9 @@ OUTCOMES = {
     1: ("✗", "error; nothing was written"),
     None: ("■", "cancelled"),
 }
-# Quoted from using/results.md, "Reporting".
+# Sentences of using/results.md, "Reporting", without its markup;
+# SPREAD_NOTE joins sentences of two bullets. test_tui_model.py
+# test_notes_are_sentences_of_results_reporting checks each sentence.
 TIME_NOTE = (
     "evacuation_time is pre-movement plus movement of the simulated "
     "occupants. Detection and alarm times are included only if you added "

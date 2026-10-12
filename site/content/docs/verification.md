@@ -15,17 +15,28 @@ models.
 The tests are in `tests/`. Run them from a clone of the repository:
 
 ```bash
-uv run pytest -q
+uv run --extra cli --extra tui --group tui-test pytest -q
 ```
 
-This runs the tests that every pull request runs: the hand calculations
-and IMO cases, the EvacuatioNZ cases, the property tests on random
-networks (hypothesis profile `pr`, derandomized) and the
-documented-number tests. It ends with no failures and lists the long
-tests as deselected. Two further commands run those:
+This runs the tests that every pull request runs on Python 3.13: the
+hand calculations and IMO cases, the EvacuatioNZ cases, the property
+tests on random networks (hypothesis profile `pr`, derandomized), the
+documented-number tests, the tests of the command line and those of the
+terminal UI. It ends with no failures and lists the long tests as
+deselected. In a fresh environment, a plain `uv run pytest -q` skips the tests of the coloured
+help and the pilot flows and snapshots of the terminal UI
+(`tests/test_tui.py`); `uv run --extra cli pytest -q`, the Python 3.10
+leg of CI, skips only the latter.
+
+The terminal UI is tested by pilot flows, by a byte-for-byte comparison
+of its result files with those of `jupedsim-network run`, and by SVG
+snapshots, which are also the figures of the
+[Terminal UI]({{< relref "/docs/using/terminal-ui" >}}) page.
+
+Two further commands run the long tests:
 
 ```bash
-uv run pytest -m slow
+uv run --extra cli pytest -m slow
 uv run pytest -m fuzz --hypothesis-profile=fuzz
 ```
 
@@ -523,4 +534,12 @@ uv run --group docs python scripts/figures/make_figures.py OUTDIR
 uv run --group docs python scripts/figures/make_gifs.py OUTDIR
 ```
 
-Without `OUTDIR` they write to `site/static/images/network/`.
+Without `OUTDIR` they write to `site/static/images/network/`. The
+figures of the [Terminal UI]({{< relref "/docs/using/terminal-ui" >}})
+page are the snapshots of the terminal UI tests;
+`scripts/figures/copy_tui_snapshots.py` copies them, by default to
+`site/static/images/tui/`:
+
+```bash
+uv run --group docs python scripts/figures/copy_tui_snapshots.py OUTDIR
+```

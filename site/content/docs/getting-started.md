@@ -22,7 +22,9 @@ error.
 The install also provides the `jupedsim-network` command. It runs the
 scenario below from a JSON file: `jupedsim-network init`, then
 `jupedsim-network run scenario.json`
-([Command line]({{< relref "/docs/using/command-line" >}})).
+([Command line]({{< relref "/docs/using/command-line" >}})). With the
+`tui` extra, `jupedsim-network tui` edits and runs it in forms
+([Terminal UI]({{< relref "/docs/using/terminal-ui" >}})).
 
 ## Run a first scenario
 
@@ -175,5 +177,7 @@ All error messages are listed in
   `max_density`, and replaying a critical run.
 - [Command line]({{< relref "/docs/using/command-line" >}}): the same
   scenario as a JSON file, run without Python.
+- [Terminal UI]({{< relref "/docs/using/terminal-ui" >}}): the same
+  scenario in forms, without Python or a text editor.
 - [Limitations]({{< relref "/docs/limitations" >}}): read before you use a
   result.

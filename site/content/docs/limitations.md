@@ -339,8 +339,10 @@ simulation.
 ## Behaviour
 
 - **Behaviour is minimal.** There are no lighting or smoke effects on
-  speed, no groups, refuges, phased evacuation or node delays. Mobility
-  impairment can be represented only through speed and area factor.
+  speed, no groups, phased evacuation or node delays, and no refuge
+  model: a refuge can only be a safe node, with unlimited capacity and
+  no onward movement. Mobility impairment can be represented only
+  through speed and area factor.
 - **Detection and alarm are not modelled.** They count only if added
   to `pre_movement`
   ([defaults](#defaults-compared-with-bounding-defaults)).
@@ -358,7 +360,12 @@ expect. They behave the same from Python and from a scenario file
   warning.
 - **Negative plain values become 0.** A plain negative `pre_movement`,
   `start_distance` or `count` is a `Fixed` value with `lower=0` and is
-  set to 0 without a message.
+  set to 0 without a message. More generally, a `Fixed` value outside
+  its bounds is clipped to them: `Fixed(-5)` gives 0 and
+  `Fixed(10, upper=3)` gives 3.
+- **`lower` above `upper` returns `upper`.** A distribution with `lower`
+  greater than `upper` gives the `upper` value for every draw, whatever
+  its parameters, without a message.
 - **`area_factor` 0 or negative is accepted.** It breaks the
   `max_density` limit of the nodes.
 - **A negative `boundary_layer` widens the door.**
