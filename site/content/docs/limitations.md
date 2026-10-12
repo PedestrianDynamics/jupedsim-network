@@ -261,11 +261,8 @@ simulation.
 ## Numerics
 
 - **Results are quantised by the time step.** Agents leave at the end of
-  a step, so exit times are multiples of $\Delta t$, up to
-  floating-point rounding: at $\Delta t = 0.1$ s an exit time can differ
-  in the last digits from the step time it belongs to
-  ([issue #54](https://github.com/PedestrianDynamics/jupedsim-network/issues/54)).
-  Every link costs at
+  a step, so exit times are multiples of $\Delta t$: each one is the
+  step time in `times`. Every link costs at
   least one step: six zero-length links in a row take 3.0 s at
   $\Delta t = 0.5$ s. Stair speeds need $\Delta t \approx 0.1$ s to
   match a hand calculation within 0.25 s.

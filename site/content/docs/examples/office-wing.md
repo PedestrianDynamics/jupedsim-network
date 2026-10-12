@@ -520,7 +520,7 @@ else:
 ```text
 side door  seed 1    median   95th pct  peak in GE
 0.9 m      156.5 s  155.1 s  158.3 s   19
-1.2 m      143.9 s  143.3 s  144.9 s   13
+1.2 m      143.9 s  143.4 s  144.9 s   13
 1.8 m      143.9 s  143.2 s  144.9 s   13
 same pre-movement times in every variant: True
 ```
@@ -529,13 +529,13 @@ With seed 1, every variant samples the same pre-movement times (last
 line), so the differences in that run come from the door alone. The
 `peak in GE` column is also from the run with seed 1.
 
-- **From 0.9 to 1.2 m** the median falls by 11.8 s, from 155.1 to
-  143.3 s, and the peak in GE from 19 to 13 agents. The side door must
+- **From 0.9 to 1.2 m** the median falls by 11.7 s, from 155.1 to
+  143.4 s, and the peak in GE from 19 to 13 agents. The side door must
   pass 84 agents, 12 more than come down the stair. At 0.78 persons/s it
   could not keep up; at 1.2 m it passes $1.3 \times 0.9 = 1.17$
   persons/s, more than the 0.78 persons/s that the stair door lets
   down.
-- **From 1.2 to 1.8 m** the median changes by 0.1 s and the run with
+- **From 1.2 to 1.8 m** the median changes by 0.2 s and the run with
   seed 1 stays at 143.9 s. The side door no longer limits. The upper
   floor drains at the pace of the stair door, which passes all 72
   people from upstairs at its capacity (see [One run](#one-run)). A

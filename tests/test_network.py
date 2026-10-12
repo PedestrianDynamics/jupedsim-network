@@ -1533,3 +1533,32 @@ def test_progress_comes_after_its_realisation(monkeypatch):
 
     sim.run_many(np.int64(3), 1, progress=progress)
     assert seen == [(1, 1, int), (2, 2, int), (3, 3, int)]
+
+
+def test_exit_time_is_a_step_time():
+    # Issue #54. One agent starts in the step beginning at t_921 = 92.1 and
+    # passes a zero-length opening in that step, so it is safe at t_922 =
+    # 92.2. The stored exit time must be that element of times, bit for bit,
+    # not the unrounded 92.1 + 0.1 = 92.19999999999999.
+    net = single_room(width=2.0, kind="opening")
+    pop = Population("room", 1, pre_movement=92.1)
+    result = NetworkSimulation(net, [pop], dt=0.1).run(seed=1)
+    assert result.exit_times[0] == result.times[922]
+    assert result.exit_times[0] == 92.2
+
+
+def test_exit_times_join_the_time_axis():
+    # Issue #54. 40 agents through a 1 m door (C = 0.91 /s) at dt = 0.1. The
+    # carry starts full, so floor(1 + j C dt) agents have passed by step j
+    # and the n-th agent leaves in step j_n = max(1, ceil((n - 1) / (C dt))).
+    # Every exit time must be an element of times (exact set membership) and
+    # the evacuation time the last of them.
+    net = single_room()
+    pop = Population("room", 40)
+    result = NetworkSimulation(net, [pop], dt=0.1).run(seed=1)
+    per_step = net.links[0].capacity * 0.1
+    steps = sorted({max(1, math.ceil(n / per_step)) for n in range(40)})
+    assert set(result.exit_times.tolist()) <= set(result.times.tolist())
+    assert result.evacuation_time == result.times[429]
+    np.testing.assert_array_equal(np.flatnonzero(result.link_flow[:, 0]), steps)
+    assert np.sort(result.exit_times).tolist() == result.times[steps].tolist()

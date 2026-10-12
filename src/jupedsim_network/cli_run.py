@@ -30,7 +30,7 @@ UNITS = {
     "row 0 is time 0, before the first step; the last time can exceed "
     "t_max by less than dt",
     "exit_time": "s, end of the step in which the agent reached safety "
-    "(an upper bound to within dt), not rounded",
+    "(an upper bound to within dt); equal to the time of that step",
     "pre_movement_sampled": "s, as sampled; the agent starts walking at "
     "the first step whose start is at or after it",
     "link_flow": "agents (heads) per step of dt that passed the link in "

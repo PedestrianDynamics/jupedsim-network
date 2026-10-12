@@ -745,7 +745,7 @@ class _Run:
         a.node[passed] = target
         done = passed[self.safe[target]]
         a.state[done] = _SAFE
-        a.exit_time[done] = t + self.sim.dt
+        a.exit_time[done] = round(t + self.sim.dt, 9)
         onward = passed[~self.safe[target]]
         next_link = self.route_matrix[a.route[onward], a.node[onward]]
         a.link[onward] = next_link
