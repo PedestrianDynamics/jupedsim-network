@@ -18,6 +18,16 @@ not validated against experiments, and it is not intended for
 regulatory or design use; see the
 [limitations](https://pedestriandynamics.org/jupedsim-network/docs/limitations/).
 
+## How jupedsim-network is built
+
+jupedsim-network is a research code written and maintained by
+researchers in pedestrian dynamics who use it in their own work. It is
+developed with generative AI coding tools (Claude Code; see
+[AI_USAGE.md](AI_USAGE.md)). The AI tools are development aids, not
+scientific authors. The named authors are responsible for the model, the
+results and the maintenance; the maintainer decides what goes in, every
+default, what merges and what ships.
+
 ## Install
 
 Python 3.10 or later:
