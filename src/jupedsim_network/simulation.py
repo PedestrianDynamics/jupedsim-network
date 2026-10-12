@@ -190,7 +190,8 @@ class NetworkSimulation:
         populations: agent groups
         dt: time step in s
         t_max: time in s after which a run stops
-        max_density: hard limit of agents per m² in a node
+        max_density: hard limit of agents (weighted by area factor) per
+            m² in a node
         supply_reduction: reduce link capacity when the target node is
             above the peak-flow density
         split_ties: split agents evenly between equally short routes;
@@ -198,7 +199,7 @@ class NetworkSimulation:
             issues a ``UserWarning`` if a population can reach a tie
         counterflow: how the two links of a two-way connection share one
             door. ``"bounding"`` (low end of the walkway data; stairs:
-            Tofilo et al.'s 75 %) and ``"estimate"`` (centre of the
+            Tofiło et al.'s 75 %) and ``"estimate"`` (centre of the
             data): the two links always share one carry, whether or not
             both have a queue; while both have a queue they pass
             together ``g * C`` with ``g`` between 0.75 and 1.0, split by

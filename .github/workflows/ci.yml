@@ -18,8 +18,24 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      # Coverage on one leg (issue #48); the threshold only goes up.
-      - run: uv run --extra cli pytest ${{ matrix.python-version == '3.13' && '--cov=jupedsim_network --cov-branch --cov-report=term-missing --cov-fail-under=97' || '' }}
+      # 3.13 tests the terminal UI (tui extra and its snapshot group) and
+      # carries the coverage gate (issue #48), which counts tui/; the
+      # threshold only goes up. 3.10 runs without textual, so the TUI tests
+      # skip and the install hint of the missing extra is tested for real;
+      # the TUI tests run on 3.10 in the weekly fuzz.yml job.
+      - if: matrix.python-version == '3.13'
+        run: uv run --extra cli --extra tui --group tui-test pytest --cov=jupedsim_network --cov-branch --cov-report=term-missing --cov-fail-under=97
+      - if: matrix.python-version != '3.13'
+        run: uv run --extra cli pytest
+      # The Textual snapshot report shows the expected and the actual screen
+      # of a failed SVG snapshot side by side.
+      - name: Upload the snapshot report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-report-${{ matrix.python-version }}
+          path: snapshot_report.html
+          if-no-files-found: ignore
 
   docs:
     runs-on: ubuntu-latest

@@ -42,6 +42,22 @@ jobs:
             fuzz-failures/
             .hypothesis/
 
+  # The terminal UI on the oldest Python; the PR job tests it on 3.13.
+  tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.10"
+      - run: uv run --extra cli --extra tui --group tui-test pytest tests/test_tui.py tests/test_tui_model.py
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: snapshot-report-3.10
+          path: snapshot_report.html
+          if-no-files-found: ignore
+
   bench:
     runs-on: ubuntu-latest
     steps:

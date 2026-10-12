@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-HEAVY = ("matplotlib", "jupedsim", "rich_argparse.__main__")
+HEAVY = ("matplotlib", "jupedsim", "rich_argparse.__main__", "textual")
 
 _PROBE = """\
 import contextlib, io, sys
@@ -36,6 +36,8 @@ print(code, heavy, len(calls))
     [
         (["--help"], 0),
         (["run", "--help"], 0),
+        (["tui", "--help"], 0),
+        (["tui", "--theme", "nope"], 1),
         ([], 1),
         (["run"], 1),
         (["run", "x.json", "--no-such"], 1),
