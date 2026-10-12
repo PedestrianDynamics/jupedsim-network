@@ -17,15 +17,30 @@ if TYPE_CHECKING:
 ROUTING_POLICIES = ("shortest_distance", "shortest_free_flow_time")
 
 
-def edge_costs(nodes, links, routing_policy) -> list[float]:
+def edge_costs(
+    nodes,
+    links,
+    routing_policy,
+    *,
+    parameters=hydraulic.DEFAULT_HYDRAULIC_PARAMETERS,
+) -> list[float]:
     if routing_policy not in ROUTING_POLICIES:
         raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
     return [
-        edge_cost(link, nodes[link.source], routing_policy) for link in links
+        edge_cost(
+            link, nodes[link.source], routing_policy, parameters=parameters
+        )
+        for link in links
     ]
 
 
-def edge_cost(link: Link, source: Node, routing_policy: str) -> float:
+def edge_cost(
+    link: Link,
+    source: Node,
+    routing_policy: str,
+    *,
+    parameters=hydraulic.DEFAULT_HYDRAULIC_PARAMETERS,
+) -> float:
     """Distance (m) or hydraulic reference travel time (s), independent of routing.
 
     Reference time uses the source node's density-floor hydraulic speed.
@@ -36,7 +51,9 @@ def edge_cost(link: Link, source: Node, routing_policy: str) -> float:
         return link.length
     if routing_policy != "shortest_free_flow_time":
         raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
-    reference_speed = float(hydraulic.speed(0, source.speed_constant))
+    reference_speed = float(
+        hydraulic.speed(0, source.speed_constant, parameters=parameters)
+    )
     if not math.isfinite(reference_speed) or reference_speed <= 0:
         raise ValueError(
             f"Node '{source.name}' must have a finite positive reference speed."

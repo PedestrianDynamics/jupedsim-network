@@ -25,7 +25,7 @@ pytest.importorskip("textual")
 from textual import events  # noqa: E402
 from textual.widgets import Input, OptionList, Select, Switch  # noqa: E402
 
-from jupedsim_network import cli, cli_init  # noqa: E402
+from jupedsim_network import cli, cli_init, scenario_from_dict  # noqa: E402
 from jupedsim_network.tui import engine as jobs  # noqa: E402
 from jupedsim_network.tui import model  # noqa: E402
 from jupedsim_network.tui.app import NetworkTui  # noqa: E402
@@ -155,7 +155,7 @@ def tree_files(folder: Path) -> dict[str, bytes]:
 # --- F1: new from example, save -----------------------------------------------
 
 
-def test_f1_example_saved_unchanged_is_the_packaged_file(workdir):
+def test_f1_example_saved_unchanged_migrates_hydraulic_defaults(workdir):
     async def go():
         app = make_app()
         async with app.run_test(size=SIZE) as pilot:
@@ -174,8 +174,12 @@ def test_f1_example_saved_unchanged_is_the_packaged_file(workdir):
             assert "● unsaved" not in text_of(app, "#summary")
 
     run(go())
-    expected = cli_init.example_bytes("getting-started")
-    assert (workdir / "scenario.json").read_bytes() == expected
+    original = json.loads(cli_init.example_bytes("getting-started"))
+    expected = scenario_from_dict(original).to_dict()
+    saved = json.loads((workdir / "scenario.json").read_text())
+    assert saved == expected
+    assert saved["nodes"] == original["nodes"]
+    assert saved["connections"] == original["connections"]
 
 
 def test_only_the_shown_form_is_built(workdir):

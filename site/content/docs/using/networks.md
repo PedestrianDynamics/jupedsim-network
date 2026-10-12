@@ -8,6 +8,60 @@ between them as directed links. This page shows how to build one and
 which defaults you get. The values behind the defaults and their
 sources are in [Model elements]({{< relref "/docs/model/elements" >}}).
 
+## Hydraulic configuration
+
+```python
+from jupedsim_network import HydraulicParameters, Network
+
+parameters = HydraulicParameters(
+    speed_density_slope=0.25, door_specific_flow=1.2
+)
+net = Network(parameters=parameters)
+```
+
+`Network()` retains the default configuration. Configuration fields are immutable
+scalars; separate networks can use different configurations in the same process.
+Node speeds and link capacities are resolved during construction. Simulation and
+hydraulic reference-time routing use `net.parameters`, without a separate
+simulation override. Rebuild the network to change the configuration.
+
+Every numerical result must be traceable to the network geometry, immutable
+hydraulic configuration, explicit local overrides and documented model
+implementation. Retain simulation settings and random seeds with results.
+
+Local `specific_flow` and `boundary_layer` overrides take precedence over
+configuration-derived values; omitted configuration fields use library defaults.
+Only `None` selects a connection default: an explicit zero boundary layer is
+retained. Geometry, including widths, lengths, areas and stair steps, remains
+in the original construction inputs, alongside the resolved graph records.
+
+| Configuration field | Meaning | Unit | Default |
+|---|---|---|---|
+| `speed_density_slope` | Empirical speed–density slope | m²/person | 0.266 |
+| `min_density` | Density floor used in the speed calculation | persons/m² | 0.54 |
+| `level_speed_constant` | Level-walking coefficient, not reference speed | m/s | `84 / 60` |
+| `door_specific_flow` | Prescribed specific flow for doors and openings | persons/(m·s) | 1.3 |
+| `stair_speed_coefficient` | EvacuatioNZ coefficient multiplying `sqrt(tread/riser)` | m/min | 51.8 |
+| `door_boundary_layer` | Excluded width per side | m | 0.15 |
+| `opening_boundary_layer` | Excluded width per side | m | 0.0 |
+| `stair_boundary_layer` | Excluded width per side | m | 0.15 |
+
+Coefficients must be finite and positive; boundary layers must be finite and
+nonnegative. The density floor must satisfy `0 <= min_density < jam_density`,
+and the slope must yield a representable finite jam density. Simulation still
+requires `max_density` below that jam density; an incompatible value raises an
+error, including when the default `max_density=2.75` is too high.
+`min_density` is **not** a minimum physical pedestrian density. The speed at
+zero density is a hydraulic reference speed, not an empirical individual
+free-walking speed.
+
+Jam density (`1/a`), peak-flow density (`max(min_density, 1/(2*a))`) and maximum
+specific flow are derived quantities. When the density floor exceeds `1/(2*a)`,
+the maximum is at the floor and uses `k * min_density * (1 - a * min_density)`;
+otherwise it is `k/(4*a)`. These are the extrema of the existing piecewise speed
+relation, not additional configurable coefficients. Stair applicability ranges
+remain reference limits in `hydraulic.py`, independent of the parameter set.
+
 ## Nodes
 
 ```python
@@ -102,7 +156,10 @@ net.connect(
   archway {{< cite 1 "Table 67.1" >}}.
 - **`stair`**: the exit of a stair flight. At least one of the two nodes
   must be a stair. The default specific flow comes from that stair node;
-  if both nodes are stairs, it comes from the source node.
+  if both nodes are stairs, it comes from the source node. Both directions
+  share that resolved capacity. A stair–level connection uses the stair's flow
+  in either construction direction. Door and opening kinds retain prescribed
+  doorway flow even when adjacent to stairs; explicit `specific_flow` wins.
 
 A connection without capacity, for example a width no larger than
 $2b$, raises a `ValueError`, and so does a `specific_flow` of 0, a negative
@@ -154,9 +211,9 @@ the run starts and is never updated.
   in metres. Speeds and queues play no part.
 - `routing_policy="shortest_free_flow_time"` minimizes **hydraulic reference
   travel time**, not predicted actual travel time. Each link costs
-  `link.length / hydraulic.speed(0, source.speed_constant)` seconds because
+  `link.length / hydraulic.speed(0, source.speed_constant, parameters=net.parameters)` seconds because
   its length is walked in the source node. The reference speed is
-  `k * (1 - 0.266 * 0.54)` m/s, including the hydraulic density floor;
+  `k * (1 - a * min_density)` m/s (`k * (1 - 0.266 * 0.54)` by default);
   it is not the coefficient `k` itself. Individual speed limits, congestion,
   and queueing delays are excluded. This does not minimize total evacuation
   time. Pass the policy to `NetworkSimulation`, `route_table`, or

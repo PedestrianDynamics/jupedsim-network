@@ -216,12 +216,19 @@ def test_office_wing_stair_literals_are_the_script_values():
 
 
 @pytest.mark.parametrize("path", [GETTING_STARTED, OFFICE_WING, FULL_KEYS])
-def test_save_reproduces_the_file(path, tmp_path):
+def test_save_preserves_inputs_and_migrates_legacy_hydraulics(path, tmp_path):
     scenario = load_scenario(path)
     out = tmp_path / "saved.json"
     save_scenario(scenario, out)
-    assert out.read_bytes() == path.read_bytes()
+    original = json.loads(path.read_text())
+    saved = json.loads(out.read_text())
+    assert saved["format_version"] == 2
+    for key, value in original.items():
+        if key != "format_version":
+            assert saved[key] == value
     assert load_scenario(out).data == scenario.data
+    save_scenario(load_scenario(out), out)
+    assert json.loads(out.read_text()) == saved
 
 
 def test_full_keys_sets_every_key():
@@ -275,6 +282,9 @@ def test_order_of_tied_connections_changes_the_route():
     """With split_ties false the first tied link in file order is taken."""
     data = json.loads(FULL_KEYS.read_text())
     swapped = copy.deepcopy(data)
+    del swapped[
+        "resolved_hydraulics"
+    ]  # Intentional change to construction order.
     links = swapped["connections"]
     links[2], links[3] = links[3], links[2]
     sim = scenario_from_dict(swapped).simulation
@@ -323,10 +333,10 @@ def test_section_keys_are_the_api_arguments(fn, section, skip):
     assert keys == names | set(scenario_module.FILE_ONLY.get(section, ()))
 
 
-def test_loader_has_no_default_literals():
-    """Defaults live only in the API: the loader never assigns one."""
+def test_loader_has_no_simulation_default_literals():
+    """Simulation defaults remain in the API; legacy hydraulics are pinned."""
     source = inspect.getsource(scenario_module)
-    for default in ("2.75", "3600", "1.2,", '"bounding"', "1.3"):
+    for default in ("2.75", "3600", "1.2,", '"bounding"'):
         assert default not in source, default
 
 
@@ -377,7 +387,7 @@ def _set(path, value):
 
 
 STRUCTURAL = [
-    (_set(["format_version"], 2), "format_version: 2 is not supported"),
+    (_set(["format_version"], 3), "format_version: 3 is not supported"),
     (_set(["format_version"], True), "format_version: true is not supported"),
     (
         lambda d: d.pop("format_version"),

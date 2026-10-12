@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """Scenario files: a network, its populations and the run settings in JSON.
 
-A scenario file maps one to one onto the public API. Every key is the
-name of an API argument and its value is passed to that argument
-unchanged; a key that is left out takes the API default. Nodes,
+Scenario construction keys map onto public API arguments and are passed
+unchanged. Schema 2 stores complete hydraulic parameters and a separate
+hydraulic model version. Schema 1 migrates using fixed historical hydraulic
+defaults. Other omitted API arguments take their API defaults. Nodes,
 connections and populations are arrays, created in file order, because
 the order of nodes, links and agents can change results.
 
@@ -56,11 +57,24 @@ from pathlib import Path
 
 import numpy as np
 
-from jupedsim_network import sampling
+from jupedsim_network import hydraulic, sampling
 from jupedsim_network.network import Network
 from jupedsim_network.simulation import NetworkSimulation, Population
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+
+# Schema 1 had implicit hydraulic defaults. These literals must not track
+# future library defaults; migration records the historical model explicitly.
+_LEGACY_PARAMETERS = hydraulic.HydraulicParameters(
+    speed_density_slope=0.266,
+    min_density=0.54,
+    level_speed_constant=84.0 / 60.0,
+    door_specific_flow=1.3,
+    stair_speed_coefficient=51.8,
+    door_boundary_layer=0.15,
+    opening_boundary_layer=0.0,
+    stair_boundary_layer=0.15,
+)
 
 _DISTRIBUTIONS = {
     cls.__name__: cls
@@ -80,8 +94,8 @@ _NODE_METHODS = {
     "safe": Network.add_safe,
 }
 
-# The three exceptions to "every key is an API argument": ``record`` of
-# ``run`` and ``progress`` of ``run_many`` are not in the file,
+# Besides schema/model metadata, exceptions to API argument keys are:
+# ``record`` of ``run`` and ``progress`` of ``run_many`` are not in the file,
 # ``quantiles`` is the argument of ``MonteCarloResult.quantile``, not of
 # ``run_many``.
 NOT_IN_FILE = {"run": ("record",), "monte_carlo": ("progress",)}
@@ -89,6 +103,9 @@ FILE_ONLY = {"monte_carlo": {"quantiles": list[float]}}
 
 _TOP = {
     "format_version": int,
+    "hydraulic_model_version": str,
+    "hydraulic_parameters": dict,
+    "resolved_hydraulics": dict,
     "description": str,
     "nodes": list,
     "connections": list,
@@ -164,7 +181,8 @@ class Scenario:
         Writes the arguments the network, the populations and the
         simulation were built with, in creation order; an argument equal
         to its API default is left out. Derived values such as link
-        capacities are never written.
+        capacities are written separately as verification snapshots,
+        never overrides.
 
         Arguments:
             simulation: the simulation to export
@@ -198,8 +216,8 @@ def scenario_from_dict(data, source=None) -> Scenario:
 
     The checks and errors are those of :func:`load_scenario`, except the
     checks of the JSON text itself (UTF-8, duplicate keys). The returned
-    :attr:`Scenario.data` is a copy of ``data``; it is not checked again
-    when the :class:`Scenario` is saved, so edit a dict of your own and
+    :attr:`Scenario.data` is a copy of ``data`` migrated to schema 2;
+    it is not checked again when the :class:`Scenario` is saved, so edit a dict of your own and
     save that dict with :func:`save_scenario`, which checks it first.
 
     Arguments:
@@ -213,7 +231,7 @@ def scenario_from_dict(data, source=None) -> Scenario:
         ScenarioError: ``data`` is not a valid scenario
     """
     _check_document(data)
-    plain = _plain(data)
+    plain = _migrate(_plain(data))
     simulation, warned = _build(plain)
     return Scenario(
         data=plain,
@@ -226,8 +244,9 @@ def scenario_from_dict(data, source=None) -> Scenario:
 def save_scenario(scenario, path) -> None:
     """Write a :class:`Scenario`, a scenario dict or a simulation as JSON.
 
-    Keys keep their order and no default is added. A dict is checked and
-    built first, so only valid scenarios are written. A
+    Keys keep their order; legacy hydraulic defaults become explicit in
+    schema 2. A dict is checked and built first, so only valid scenarios
+    are written. A
     :class:`NetworkSimulation` is exported with
     :meth:`Scenario.from_simulation` (no seed, no Monte Carlo section).
     """
@@ -309,7 +328,27 @@ def _check_document(data) -> None:
         raise ScenarioError("", "a scenario must be a JSON object")
     _check_values(data, "")
     _check_format_version(data)
-    _check_object(data, "", _TOP, _TOP_REQUIRED)
+    allowed = _TOP
+    required = _TOP_REQUIRED
+    if data["format_version"] == 1:
+        allowed = {
+            k: v
+            for k, v in _TOP.items()
+            if k
+            not in (
+                "hydraulic_model_version",
+                "hydraulic_parameters",
+                "resolved_hydraulics",
+            )
+        }
+    else:
+        required = required | {
+            "hydraulic_model_version",
+            "hydraulic_parameters",
+        }
+    _check_object(data, "", allowed, required)
+    if data["format_version"] == FORMAT_VERSION:
+        _check_hydraulic_configuration(data)
     for i, node in enumerate(data["nodes"]):
         _check_node(node, f"nodes[{i}]")
     connect = _spec(Network.connect)
@@ -391,13 +430,39 @@ def _check_format_version(data: dict) -> None:
     if "format_version" not in data:
         raise ScenarioError("", "missing required key 'format_version'")
     version = data["format_version"]
-    if version == FORMAT_VERSION and _is_int(version):
+    if _is_int(version) and version in (1, FORMAT_VERSION):
         return
     raise ScenarioError(
         "format_version",
         f"{json.dumps(version)} is not supported; this version of "
-        f"jupedsim-network reads {FORMAT_VERSION}",
+        f"jupedsim-network reads 1 and {FORMAT_VERSION}",
     )
+
+
+def _check_hydraulic_configuration(data: dict) -> None:
+    version = data["hydraulic_model_version"]
+    if version != hydraulic.HYDRAULIC_MODEL_VERSION:
+        raise ScenarioError(
+            "hydraulic_model_version", f"unsupported model {version!r}"
+        )
+    fields = {
+        f.name: float for f in dataclasses.fields(hydraulic.HydraulicParameters)
+    }
+    _check_object(
+        data["hydraulic_parameters"],
+        "hydraulic_parameters",
+        fields,
+        set(fields),
+    )
+
+
+def _migrate(data: dict) -> dict:
+    """Upgrade schema 1 without consulting current model defaults."""
+    if data["format_version"] == 1:
+        data["format_version"] = FORMAT_VERSION
+        data["hydraulic_model_version"] = "1"
+        data["hydraulic_parameters"] = dataclasses.asdict(_LEGACY_PARAMETERS)
+    return data
 
 
 def _check_node(node, path: str) -> None:
@@ -613,7 +678,19 @@ ELEMENTS = (
 # Help of the keys that are no API argument.
 FILE_ONLY_HELP: dict[tuple[str, str], str] = {
     ("document", "format_version"): "version of the file format; this "
-    f"version of jupedsim-network reads {FORMAT_VERSION}",
+    f"version of jupedsim-network reads 1 and {FORMAT_VERSION}",
+    (
+        "document",
+        "hydraulic_model_version",
+    ): "hydraulic implementation version, independent of file schema",
+    (
+        "document",
+        "hydraulic_parameters",
+    ): "complete immutable hydraulic configuration",
+    (
+        "document",
+        "resolved_hydraulics",
+    ): "optional verification snapshot; reconstructed values remain authoritative",
     ("document", "description"): "free text; not used by the model",
     ("document", "nodes"): "rooms, stairs and safe places, created in "
     "file order",
@@ -823,13 +900,16 @@ def _none_means() -> dict[str, str]:
         "width": area,
         "specific_flow": f"{hydraulic.DOOR_SPECIFIC_FLOW:g} persons/s/m for "
         "doors and openings; for stairs, the maximum flow of the adjacent "
-        "stair node",
-        "boundary_layer": layers,
+        "stair in source-target order (configuration defaults)",
+        "boundary_layer": layers + " in the default configuration",
         "name": "source->target",
         "target": "the nearest safe node",
         "upper": "no upper bound",
         "seed": "the command line draws a seed and records it in "
         "summary.json (seed_drawn: true)",
+        "hydraulic_model_version": "required in schema 2; historical model in schema 1",
+        "hydraulic_parameters": "required in schema 2; fixed historical defaults in schema 1",
+        "resolved_hydraulics": "no verification snapshot",
         "description": "no description",
         "simulation": "every setting takes the API default",
         "run": "run.seed absent: the command line draws a seed",
@@ -946,17 +1026,35 @@ def _message(exc: Exception) -> str:
 
 def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     """Build the simulation, attributing each error to its element."""
+    _check_hydraulic_configuration(data)
     warned: list[str] = []
     settings = data.get("simulation", {})
-    attempt("simulation", functools.partial(_probe_settings, settings), warned)
+    parameters = attempt(
+        "hydraulic_parameters",
+        functools.partial(
+            hydraulic.HydraulicParameters, **data["hydraulic_parameters"]
+        ),
+        warned,
+    )
+    attempt(
+        "simulation",
+        functools.partial(_probe_settings, settings, parameters),
+        warned,
+    )
     # The settings alone warned these; every population build repeats them.
     from_settings = {w.removeprefix("simulation: ") for w in warned}
-    net = Network()
+    net = Network(parameters=parameters)
     for i, node in enumerate(data["nodes"]):
         attempt(f"nodes[{i}]", functools.partial(_add_node, net, node), warned)
     for i, link in enumerate(data["connections"]):
         attempt(
             f"connections[{i}]", functools.partial(_connect, net, link), warned
+        )
+    if "resolved_hydraulics" in data:
+        _verify_snapshot(
+            data["resolved_hydraulics"],
+            _hydraulic_snapshot(net),
+            "resolved_hydraulics",
         )
     populations = []
     for i, entry in enumerate(data["populations"]):
@@ -978,12 +1076,16 @@ def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     return attempt("populations", full, None), tuple(warned)
 
 
-def _probe_settings(settings: dict) -> None:
+def _probe_settings(
+    settings: dict, parameters: hydraulic.HydraulicParameters
+) -> None:
     """Let the API check the ``simulation`` settings on their own."""
-    net = Network()
+    net = Network(parameters=parameters)
     net.add_room("room", area=100.0)
     net.add_safe("safe")
-    net.connect("room", "safe", width=1.0)
+    net.connect(
+        "room", "safe", width=1.0, boundary_layer=0.0, specific_flow=1.0
+    )
     NetworkSimulation(net, [Population("room", 1)], **settings)
 
 
@@ -1032,8 +1134,65 @@ def _value(value):
 # Writing a simulation built in Python
 
 
+def _hydraulic_snapshot(net: Network) -> dict:
+    """Resolved records for verification only; null denotes a safe node's area."""
+    return {
+        "nodes": [_snapshot_record(node) for node in net.nodes],
+        "links": [_snapshot_record(link) for link in net.links],
+    }
+
+
+def _snapshot_record(record) -> dict:
+    values = dataclasses.asdict(record)
+    for field in dataclasses.fields(record):
+        if field.type is float:
+            value = float(values[field.name])
+            values[field.name] = (
+                None if field.name == "area" and math.isinf(value) else value
+            )
+    return values
+
+
+def _verify_snapshot(given, resolved, path: str) -> None:
+    """Reject structural differences and numeric drift beyond roundoff."""
+    if isinstance(resolved, dict):
+        if not isinstance(given, dict) or given.keys() != resolved.keys():
+            raise ScenarioError(
+                path, "snapshot keys differ from reconstructed properties"
+            )
+        for key, value in resolved.items():
+            _verify_snapshot(given[key], value, _join(path, key))
+        return
+    if isinstance(resolved, list):
+        if not isinstance(given, list) or len(given) != len(resolved):
+            raise ScenarioError(
+                path, "snapshot length differs from reconstructed properties"
+            )
+        for i, value in enumerate(resolved):
+            _verify_snapshot(given[i], value, f"{path}[{i}]")
+        return
+    if isinstance(resolved, float):
+        if (
+            isinstance(given, (int, float))
+            and not isinstance(given, bool)
+            and math.isclose(given, resolved, rel_tol=1e-12, abs_tol=0.0)
+        ):
+            return
+    elif type(given) is type(resolved) and given == resolved:
+        return
+    raise ScenarioError(
+        path,
+        f"snapshot {given!r} differs from reconstructed value {resolved!r}",
+    )
+
+
 def _export(sim, seed, monte_carlo, description) -> dict:
-    data: dict = {"format_version": FORMAT_VERSION}
+    data: dict = {
+        "format_version": FORMAT_VERSION,
+        "hydraulic_model_version": hydraulic.HYDRAULIC_MODEL_VERSION,
+        "hydraulic_parameters": dataclasses.asdict(sim.network.parameters),
+        "resolved_hydraulics": _hydraulic_snapshot(sim.network),
+    }
     if description is not None:
         data["description"] = description
     data["nodes"], data["connections"] = [], []
