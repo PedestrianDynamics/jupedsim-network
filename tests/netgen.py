@@ -556,9 +556,7 @@ def tied(link, dist, hops) -> bool:
     tol = TIE_TOLERANCE
     if not math.isclose(there + link.length, here, rel_tol=tol, abs_tol=tol):
         return False
-    return there < here - tol * max(1.0, here) or (
-        hops[link.target] < hops[link.source]
-    )
+    return (there, hops[link.target]) < (here, hops[link.source])
 
 
 def tied_distance(link, dist) -> bool:
