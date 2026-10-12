@@ -461,3 +461,17 @@ def test_numeric_snapshot_fields_accept_equivalent_integer_json_values():
     data["resolved_hydraulics"]["links"][-1]["capacity"] = 2
     data["connections"][-1]["specific_flow"] = 2.0
     assert scenario_from_dict(data).simulation.network.links[-1].capacity == 2
+
+
+def test_configured_flow_cannot_create_nonfinite_capacity():
+    net = Network(parameters=HydraulicParameters(door_specific_flow=1e308))
+    net.add_room("room", area=10)
+    net.add_safe("exit")
+    with pytest.raises(ValueError, match="capacity must be finite"):
+        net.connect("room", "exit", width=3)
+    assert net.links == ()
+    assert len(net._inputs) == 2
+    # A finite local override takes precedence over the configured flow.
+    assert (
+        net.connect("room", "exit", width=3, specific_flow=1)[0].capacity == 2.7
+    )
