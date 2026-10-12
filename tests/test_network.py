@@ -1211,16 +1211,17 @@ def test_supply_reduction_is_off_at_or_below_peak_density():
     # max_density <= 1.88 leaves the supply ramp no range: only the hard
     # limit acts, so supply_reduction makes no difference.
     pops = [Population("a", 300), Population("b", 300)]
-    results = [
-        NetworkSimulation(
-            corridor_with_rooms(),
-            pops,
-            max_density=1.5,
-            supply_reduction=on,
-            t_max=200.0,
-        ).run(seed=3)
-        for on in (True, False)
-    ]
+    with pytest.warns(UserWarning, match="supply reduction has no effect"):
+        results = [
+            NetworkSimulation(
+                corridor_with_rooms(),
+                pops,
+                max_density=1.5,
+                supply_reduction=on,
+                t_max=200.0,
+            ).run(seed=3)
+            for on in (True, False)
+        ]
     corridor = results[0].node_names.index("corridor")
     assert results[0].node_occupancy[:, corridor].max() == 6
     np.testing.assert_array_equal(results[0].link_flow, results[1].link_flow)
@@ -1341,13 +1342,25 @@ def test_non_positive_speed_is_rejected_at_run(speed):
 
 
 def test_distribution_clips_after_redraws():
-    # Every draw lies outside [0, 2]: after 100 redraws the values are
-    # clipped to the bound.
+    # Practically every draw lies above 2: after 100 redraws the values
+    # are clipped to the bound.
     rng = np.random.default_rng(1)
     np.testing.assert_array_equal(
-        Fixed(5.0, upper=2.0).sample(rng, 3), [2.0] * 3
+        Normal(100.0, 1.0, upper=2.0).sample(rng, 3), [2.0] * 3
     )
-    np.testing.assert_array_equal(Fixed(-5.0).sample(rng, 2), [0.0] * 2)
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: Fixed(5.0, upper=2.0), r"Fixed value 5.0 lies outside .*2.0"),
+        (lambda: Fixed(-5.0), r"Fixed value -5.0 lies outside .*\[0.0, None\]"),
+    ],
+)
+def test_fixed_value_outside_bounds_is_rejected(make, message):
+    # A fixed value cannot be redrawn, so clipping it would hide a typo.
+    with pytest.raises(ValueError, match=message):
+        make()
 
 
 def test_distribution_without_lower_bound_keeps_negative_values():
@@ -1362,6 +1375,288 @@ def test_base_distribution_has_no_draw():
 
     with pytest.raises(NotImplementedError):
         Distribution().sample(np.random.default_rng(1), 1)
+
+
+# Input checks (issue #53) -----------------------------------------------------
+#
+# Each input here was accepted on v0.4.0 and changed the result without a
+# message. None of the checks adds a draw or changes an accepted result.
+
+
+@pytest.mark.parametrize("area_factor", [0.0, -1.0, math.nan, math.inf])
+def test_area_factor_must_be_positive(area_factor):
+    with pytest.raises(ValueError, match="area_factor: must be positive, got"):
+        Population("room", 10, area_factor=area_factor)
+
+
+def test_area_factor_zero_would_break_max_density():
+    # With area_factor 0 the agents take no space: 200 of them crowd into
+    # a 10 m² room limited to 27. The population is rejected instead.
+    net = Network()
+    net.add_room("A", area=100.0)
+    net.add_room("B", area=10.0)
+    net.add_safe("s")
+    net.connect("A", "B", width=2.0, length=5.0)
+    net.connect("B", "s", width=0.6, length=5.0)
+    with pytest.raises(ValueError, match="area_factor"):
+        NetworkSimulation(net, [Population("A", 200, area_factor=0.0)])
+    result = NetworkSimulation(net, [Population("A", 200)]).run(seed=1)
+    assert result.node_occupancy[:, 1].max() <= 27
+
+
+@pytest.mark.parametrize("layer", [-0.5, math.nan, -math.inf, math.inf])
+def test_boundary_layer_must_be_non_negative(layer):
+    with pytest.raises(ValueError, match="boundary_layer: must be >= 0 m, got"):
+        single_room(boundary_layer=layer)
+
+
+def test_boundary_layer_zero_is_valid():
+    assert single_room(boundary_layer=0.0).links[0].capacity == 1.3
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("pre_movement", -10), ("start_distance", -5), ("count", -5)],
+)
+def test_negative_plain_values_are_rejected(key, value):
+    pattern = f"{key}: Fixed value {float(value)} lies outside"
+    with pytest.raises(ValueError, match=pattern):
+        Population("room", **({"count": 10} | {key: value}))
+
+
+def test_count_zero_is_valid():
+    sim = NetworkSimulation(single_room(), [Population("room", 0)])
+    assert sim.run(seed=1).exit_times.size == 0
+
+
+def test_population_keeps_plain_numbers_as_given():
+    pop = Population("room", 10, pre_movement=5)
+    assert pop.count == 10 and pop.pre_movement == 5
+    assert type(pop.count) is int
+    # Objects that are no number are left to run() and the exporter.
+    assert Population("room", 1, speed=object()).node == "room"
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda n: n.add_room("hall", area=10.0, length=5.0, width=4.0),
+        lambda n: n.add_room("hall", area=10.0, length=5.0),
+        lambda n: n.add_room("hall", area=10.0, width=4.0),
+        lambda n: n.add_stair(
+            "s", riser=0.18, tread=0.28, area=10.0, length=5.0, width=4.0
+        ),
+    ],
+)
+def test_area_with_length_or_width_is_rejected(build):
+    with pytest.raises(ValueError, match="not both"):
+        build(Network())
+
+
+@pytest.mark.parametrize(
+    ("length", "width", "named"),
+    [(-5.0, -4.0, "length -5.0"), (5.0, -4.0, "width -4.0")],
+)
+def test_each_dimension_must_be_positive(length, width, named):
+    with pytest.raises(
+        ValueError, match=f"Node area must be positive, got {named}"
+    ):
+        Network().add_room("hall", length=length, width=width)
+
+
+@pytest.mark.parametrize(
+    ("riser", "tread"), [(180, 280), (0.18, 280), (180, 0.28), (1.0, 0.28)]
+)
+def test_stair_dimensions_must_be_below_one_metre(riser, tread):
+    with pytest.raises(ValueError, match="must be below 1 m"):
+        hydraulic.stair_speed_constant(riser, tread)
+    with pytest.raises(ValueError, match="must be below 1 m"):
+        Network().add_stair("s", riser=riser, tread=tread, area=10.0)
+
+
+def test_stair_outside_sfpe_range_still_warns_only():
+    with pytest.warns(UserWarning, match="outside the SFPE range"):
+        node = Network().add_stair("s", riser=0.20, tread=0.28, area=10.0)
+    assert node.speed_constant == pytest.approx(51.8 * math.sqrt(1.4) / 60.0)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: Fixed(7, lower=2, upper=1),
+        lambda: Uniform(0, 10, lower=2, upper=1),
+        lambda: Normal(5, 1, lower=2, upper=1),
+        lambda: LogNormal(5, 1, lower=2, upper=1),
+        lambda: Triangular(0, 5, 10, lower=2, upper=1),
+        lambda: Weibull(2, 3, lower=2, upper=1),
+    ],
+)
+def test_lower_above_upper_is_rejected(make):
+    with pytest.raises(ValueError, match="lower 2 is greater than upper 1"):
+        make()
+
+
+def test_lower_equal_to_upper_is_valid():
+    rng = np.random.default_rng(1)
+    assert Normal(5, 1, lower=2, upper=2).sample(rng, 3).tolist() == [2.0] * 3
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (
+            lambda: Weibull(-2, 3),
+            "Weibull alpha and beta must be positive, got -2, 3",
+        ),
+        (
+            lambda: Weibull(30, 0),
+            "Weibull alpha and beta must be positive, got 30, 0",
+        ),
+        (lambda: LogNormal(120.0, -60.0), "std must be >= 0, got -60.0"),
+    ],
+)
+def test_distribution_parameters_numpy_accepts_are_checked(make, message):
+    with pytest.raises(ValueError, match=message):
+        make()
+
+
+def test_lognormal_with_zero_std_gives_the_mean():
+    rng = np.random.default_rng(1)
+    assert LogNormal(120.0, 0.0).sample(rng, 2) == pytest.approx([120.0] * 2)
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: Fixed(math.nan), "value must be finite, got nan"),
+        (lambda: Fixed(math.inf), "value must be finite, got inf"),
+        (lambda: Normal(math.nan, 1), "mean must be finite, got nan"),
+        (
+            lambda: Fixed(7, lower=math.nan),
+            "lower must be a finite number or None",
+        ),
+        (
+            lambda: Fixed(7, upper=math.inf),
+            "upper must be a finite number or None",
+        ),
+        (
+            lambda: Population("room", 1, speed=math.inf),
+            "speed: value must be finite",
+        ),
+        (lambda: Population("room", math.nan), "count: value must be finite"),
+        (
+            lambda: Network().add_room("r", area=math.nan),
+            "Node area must be positive",
+        ),
+        (
+            lambda: Network().add_room("r", area=math.inf),
+            "Node area must be positive",
+        ),
+        (lambda: single_room(width=math.nan), "Width and merge weight"),
+        (lambda: single_room(width=math.inf), "Width and merge weight"),
+        (lambda: single_room(length=math.nan), "Width and merge weight"),
+        (lambda: single_room(length=math.inf), "Width and merge weight"),
+        (lambda: single_room(merge_weight=math.nan), "Width and merge weight"),
+        (lambda: single_room(merge_weight=math.inf), "Width and merge weight"),
+        (lambda: single_room(specific_flow=math.inf), "specific_flow must be"),
+        (
+            lambda: hydraulic.stair_speed_constant(math.nan, 0.28),
+            "Riser and tread must be positive",
+        ),
+        (
+            lambda: hydraulic.stair_speed_constant(0.18, math.inf),
+            "must be below 1 m",
+        ),
+    ],
+)
+def test_non_finite_inputs_are_rejected(make, message):
+    with pytest.raises(ValueError, match=message):
+        make()
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (dict(dt=math.nan), "dt and t_max must be positive and finite"),
+        (dict(dt=math.inf), "dt and t_max must be positive and finite"),
+        (dict(t_max=math.nan), "dt and t_max must be positive and finite"),
+        (dict(t_max=math.inf), "dt and t_max must be positive and finite"),
+        (dict(dt=1e-300), "dt must be at least 1e-6 s, got 1e-300"),
+        (dict(dt=1e-7), "dt must be at least 1e-6 s, got 1e-07"),
+    ],
+)
+def test_time_settings_must_be_finite_and_dt_not_tiny(options, message):
+    with pytest.raises(ValueError, match=message):
+        NetworkSimulation(single_room(), [Population("room", 1)], **options)
+
+
+def test_smallest_dt_is_accepted():
+    sim = NetworkSimulation(single_room(), [Population("room", 1)], dt=1e-6)
+    assert sim.dt == 1e-6
+
+
+def test_max_density_at_or_below_peak_warns_when_supply_reduction_is_on():
+    pops = [Population("room", 1)]
+    for max_density in (1.5, hydraulic.PEAK_FLOW_DENSITY):
+        with pytest.warns(UserWarning) as record:
+            NetworkSimulation(single_room(), pops, max_density=max_density)
+        assert len(record) == 1
+        assert str(record[0].message) == (
+            f"max_density {max_density} is at or below the peak-flow density "
+            "1.88 m⁻²; supply reduction has no effect."
+        )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        NetworkSimulation(
+            single_room(), pops, max_density=1.5, supply_reduction=False
+        )
+        NetworkSimulation(single_room(), pops, max_density=2.0)
+
+
+@pytest.mark.parametrize(
+    "start_distance",
+    [
+        Fixed(-50.0, lower=None),
+        Normal(5.0, 3.0, lower=None),
+        Normal(5.0, 3.0, lower=-1.0),
+    ],
+)
+def test_start_distance_needs_a_non_negative_lower_bound(start_distance):
+    lower = start_distance.lower
+    with pytest.raises(
+        ValueError,
+        match=f"start_distance: must have lower >= 0, got lower={lower}",
+    ):
+        Population("room", 10, start_distance=start_distance)
+
+
+def test_start_distance_with_default_lower_is_valid():
+    pop = Population("room", 10, start_distance=Normal(5.0, 3.0))
+    assert pop.start_distance.lower == 0.0
+
+
+def test_negative_sampled_pre_movement_is_kept():
+    # An explicit opt-out: the agent starts at t = 0, the value stays visible.
+    net = single_room(length=10.0)
+    early = Population("room", 3, pre_movement=Fixed(-10.0, lower=None))
+    prompt = Population("room", 3)
+    a = NetworkSimulation(net, [early]).run(seed=1)
+    b = NetworkSimulation(net, [prompt]).run(seed=1)
+    assert a.pre_movement_times.tolist() == [-10.0] * 3
+    assert a.exit_times.tolist() == b.exit_times.tolist()
+
+
+def test_distribution_repr_and_fields_are_unchanged():
+    import dataclasses
+
+    assert repr(LogNormal(0, 60.0)) == (
+        "LogNormal(lower=0.0, upper=None, mean=0, std=60.0)"
+    )
+    assert [f.name for f in dataclasses.fields(Fixed)] == [
+        "lower",
+        "upper",
+        "value",
+    ]
 
 
 # Progress of run_many and public tied route choices (issue #47)

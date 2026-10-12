@@ -54,9 +54,9 @@ with a `kind="stair"` link. SFPE applies stair speed to landings as well
 The stair speed grows with $\sqrt{T/R}$ (tread over riser). SFPE
 supports this only for risers of 165–191 mm and treads of 254–330 mm
 {{< cite 1 "Table 67.2, p. 2174; p. 2175" >}}. Other step sizes are an
-extrapolation. `add_stair` accepts any positive riser and tread, computes
-the speed as usual, and issues a `UserWarning` when either lies outside
-this range. For a riser of 0.20 m:
+extrapolation. `add_stair` takes riser and tread in m, each below 1 m,
+computes the speed as usual, and issues a `UserWarning` when either lies
+outside this range. For a riser of 0.20 m:
 
 ```text
 UserWarning: Stair 'flight': riser 200.0 mm and tread 280.0 mm lie outside the SFPE range (risers 165-191 mm, treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant k = 51.8 sqrt(T/R) m/min is extrapolated.
@@ -189,16 +189,19 @@ the run starts and is never updated.
 | Error | When |
 |-------|------|
 | `Node '...' already exists.` | A name is used twice. |
-| `Give either area or both length and width.` / `Node area must be positive.` | Missing or non-positive area. |
+| `Give either area or both length and width.` / `Node area must be positive, got ...` | Missing area, or an `area`, `length` or `width` that is not positive or not finite. |
+| `Give either area or length and width, not both.` | `area` together with `length` or `width`. |
 | `Unknown connection kind '...'.` | `kind` is not door, opening or stair. |
 | `A stair connection needs an adjacent stair node.` | `kind="stair"` between two non-stair nodes. |
 | `Cannot connect two safe nodes.` | Both nodes are safe. |
-| `Width and merge weight must be positive, length non-negative.` | Invalid numbers. |
+| `Width and merge weight must be positive, length non-negative, all finite; got ...` | Invalid or non-finite numbers. |
+| `boundary_layer: must be >= 0 m, got ...` | A negative or non-finite `boundary_layer`. |
 | `A connection needs two different nodes.` | `source` and `target` are the same node. |
 | `Connection ...-... has no capacity.` | Effective width is zero. |
-| `specific_flow must be positive, got ...` | `specific_flow` is 0, negative or NaN. |
+| `specific_flow must be positive, got ...` | `specific_flow` is 0, negative, NaN or infinite. |
 | `Unknown node '...'.` | `connect` or `node()` names a node that does not exist. |
-| `Riser and tread must be positive.` | `add_stair` with a riser or tread of 0 or less. |
+| `Riser and tread must be positive, got ...` | `add_stair` with a riser or tread of 0 or less, or NaN. |
+| `riser and tread are in m and must be below 1 m; got ...` | `add_stair` with a riser or tread of 1 m or more, such as values in mm. |
 
 Errors raised when the simulation is created or run are listed in
 [Running]({{< relref "/docs/using/running#errors" >}}).

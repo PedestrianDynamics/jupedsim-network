@@ -904,14 +904,35 @@ def _recorder(caught: list[str], previous):
 
 
 _POPULATION = re.compile(r"population (\d+): (.*)", re.S)
+_KEYED = re.compile(r"(\w+): (.*)", re.S)
+_ELEMENT_PATH = re.compile(r"(nodes|connections|populations)\[\d+\]|simulation")
 
 
 def _located(path: str, message: str) -> tuple[str, str]:
-    """``populations[i]`` and the rest for an API "population i: ..." message."""
+    """The path and the rest of an API message that names its element.
+
+    ``population i: ...`` locates at ``populations[i]``; ``key: ...`` with
+    a key of the element at ``path`` locates at ``path.key``. API messages
+    that must land at a key therefore start with ``key: ``; any other
+    message starting with a key name and ``: `` would be relocated too.
+    """
     match = _POPULATION.fullmatch(message)
-    if match is None:
+    if match is not None:
+        return f"populations[{match.group(1)}]", match.group(2)
+    match = _KEYED.fullmatch(message)
+    if match is None or match.group(1) not in _keys_of(path):
         return path, message
-    return f"populations[{match.group(1)}]", match.group(2)
+    return _join(path, match.group(1)), match.group(2)
+
+
+def _keys_of(path: str) -> set[str]:
+    """The keys of the element at ``path``; empty if it is no element."""
+    if _ELEMENT_PATH.fullmatch(path) is None:
+        return set()
+    if path.startswith("nodes"):
+        return {k.name for kind in _NODE_METHODS for k in keys("node", kind)}
+    element = {"c": "connection", "p": "population", "s": "simulation"}
+    return {k.name for k in keys(element[path[0]])}
 
 
 def _message(exc: Exception) -> str:
@@ -925,6 +946,8 @@ def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     warned: list[str] = []
     settings = data.get("simulation", {})
     attempt("simulation", functools.partial(_probe_settings, settings), warned)
+    # The settings alone warned these; every population build repeats them.
+    from_settings = {w.removeprefix("simulation: ") for w in warned}
     net = Network()
     for i, node in enumerate(data["nodes"]):
         attempt(f"nodes[{i}]", functools.partial(_add_node, net, node), warned)
@@ -935,10 +958,16 @@ def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     populations = []
     for i, entry in enumerate(data["populations"]):
         path = f"populations[{i}]"
-        pop = attempt(path, functools.partial(_population, entry), warned)
+        pop = _population(entry, path, warned)
         _probe_sampling(pop, entry, path, warned)
         one = functools.partial(NetworkSimulation, net, [pop], **settings)
-        attempt(path, one, warned)
+        caught: list[str] = []
+        attempt(path, one, caught)
+        warned.extend(
+            w
+            for w in caught
+            if w.removeprefix(f"{path}: ") not in from_settings
+        )
         populations.append(pop)
     # Every check of the full build ran per population above; its
     # warnings repeat theirs and are dropped.
@@ -980,8 +1009,13 @@ def _connect(net: Network, link: dict) -> None:
     net.connect(**link)
 
 
-def _population(entry: dict) -> Population:
-    return Population(**{key: _value(value) for key, value in entry.items()})
+def _population(entry: dict, path: str, warned) -> Population:
+    """Build each value at its own key, then the population at ``path``."""
+    fields = {
+        key: attempt(_join(path, key), functools.partial(_value, value), warned)
+        for key, value in entry.items()
+    }
+    return attempt(path, functools.partial(Population, **fields), warned)
 
 
 def _value(value):

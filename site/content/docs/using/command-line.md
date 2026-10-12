@@ -333,25 +333,21 @@ Three behaviours belong to the command line and are not in the API:
 
 `"runs": 0` in the file is an error, even when `--runs` is given.
 
-### Inputs accepted without a message
+### Input checks
 
-A few inputs pass every check but change the result in a way you may
-not expect. The file and Python behave the same; the full list is on
+The file and Python reject the same inputs with the same message, at
+the JSON path of the entry; the list is on
 [Limitations]({{< relref "/docs/limitations#input-checks" >}})
 ([issue #53](https://github.com/PedestrianDynamics/jupedsim-network/issues/53)).
-
-- `riser` and `tread` in mm (`180` and `280`) give the same stair speed
-  as in m, because the speed depends only on their ratio. The only sign
-  is the warning that the stair lies outside the SFPE range.
-- A negative plain `pre_movement`, `start_distance` or `count` becomes
-  0.
-- `area_factor` 0 or negative, a negative `boundary_layer`, a Weibull
-  `alpha` below 0 and a very small `dt` are accepted.
-- A room with both `area` and `length` and `width` uses `area`.
-- A `Fixed` value outside its bounds is clipped, and a distribution
-  with `lower` above `upper` returns `upper` for every draw.
-- `max_density` at or below 1.88 m⁻² turns supply reduction off
-  ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
+For example, `riser` and `tread` in mm (`180` and `280`), a negative
+plain `pre_movement`, `start_distance`, `speed` or `count`,
+`area_factor` 0 or negative, a negative `boundary_layer`, a room with
+`area` together with `length` or `width`, and a `dt` below 1e-6 s are
+errors. A `Fixed`
+value outside its bounds and a distribution with `lower` above `upper`
+are rejected when the file is loaded. `max_density` at or below
+1.88 m⁻² turns supply reduction off with a warning
+([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
 ## Result files
 
@@ -533,8 +529,8 @@ packaged file.
   - `seed=None` leaves out the `run` section, and `monte_carlo` takes a
     dict as above.
   - What the format cannot express raises `ScenarioError` with its
-    path: a `Distribution` subclass of your own, `nan`, `upper=inf` or a
-    node name that is not a string. Nothing is dropped without notice.
+    path: a `Distribution` subclass of your own or a node name that is
+    not a string. Nothing is dropped without notice.
 - **`save_scenario(scenario, path)`** writes UTF-8 JSON indented by two
   spaces, in key order, and adds no defaults. `scenario` is a
   `Scenario`, a scenario dict, which is checked and built first, or a

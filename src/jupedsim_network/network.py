@@ -107,9 +107,9 @@ class Network:
         Arguments:
             name: unique name of the node
             area: floor area in m²; give it, or both ``length`` and
-                ``width``
+                ``width``, not both
             length: length in m; with ``width``, the area is
-                ``length * width`` when ``area`` is not given
+                ``length * width``
             width: width in m; see ``length``
         """
         node = self._add(name, ROOM, _area(area, length, width), None)
@@ -135,13 +135,13 @@ class Network:
 
         Arguments:
             name: unique name of the node
-            riser: riser height in m; with ``tread`` it sets the walking
-                speed on the flight
-            tread: tread depth in m
+            riser: riser height in m, below 1 m; with ``tread`` it sets
+                the walking speed on the flight
+            tread: tread depth in m, below 1 m
             area: area of the flight in m², which holds the agents on
-                it; give it, or both ``length`` and ``width``
+                it; give it, or both ``length`` and ``width``, not both
             length: length of the flight in m; with ``width``, the area is
-                ``length * width`` when ``area`` is not given
+                ``length * width``
             width: width of the flight in m; see ``length``
         """
         k = hydraulic.stair_speed_constant(riser, tread)
@@ -200,8 +200,8 @@ class Network:
             specific_flow: persons/s/m effective width, must be positive.
                 Defaults to 1.3 for doors and openings, and to the maximum
                 flow of the adjacent stair node for stairs.
-            boundary_layer: per side in m. Defaults to 0.15 for doors and
-                stairs and 0 for openings.
+            boundary_layer: per side in m, at least 0. Defaults to 0.15
+                for doors and stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
             bidirectional: also create the link from target to source;
                 the two links share one door (``counterflow`` of
@@ -219,11 +219,13 @@ class Network:
         fs = specific_flow
         if fs is None:
             fs = _default_specific_flow(kind, src, dst)
-        if not fs > 0:
+        if not 0 < fs < math.inf:
             raise ValueError(f"specific_flow must be positive, got {fs}.")
         layer = (
             _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
         )
+        if not 0 <= layer < math.inf:
+            raise ValueError(f"boundary_layer: must be >= 0 m, got {layer}.")
         capacity = fs * hydraulic.effective_width(width, layer)
         if capacity <= 0:
             raise ValueError(f"Connection {source}-{target} has no capacity.")
@@ -438,12 +440,19 @@ def _check_acyclic(choices, links) -> None:
 
 
 def _area(area, length, width) -> float:
+    if area is not None and (length is not None or width is not None):
+        raise ValueError("Give either area or length and width, not both.")
     if area is None and (length is None or width is None):
         raise ValueError("Give either area or both length and width.")
-    value = area if area is not None else length * width
-    if value <= 0:
-        raise ValueError("Node area must be positive.")
-    return float(value)
+    given = (
+        {"area": area}
+        if area is not None
+        else {"length": length, "width": width}
+    )
+    for name, value in given.items():
+        if not 0 < value < math.inf:
+            raise ValueError(f"Node area must be positive, got {name} {value}.")
+    return float(area if area is not None else length * width)
 
 
 def _validate_connection(src, dst, width, kind, length, merge_weight) -> None:
@@ -453,9 +462,17 @@ def _validate_connection(src, dst, width, kind, length, merge_weight) -> None:
         raise ValueError("A connection needs two different nodes.")
     if src.kind == SAFE and dst.kind == SAFE:
         raise ValueError("Cannot connect two safe nodes.")
-    if width <= 0 or length < 0 or merge_weight <= 0:
+    checks = (
+        ("width", width, 0 < width < math.inf),
+        ("length", length, 0 <= length < math.inf),
+        ("merge_weight", merge_weight, 0 < merge_weight < math.inf),
+    )
+    for name, value, valid in checks:
+        if valid:
+            continue
         raise ValueError(
-            "Width and merge weight must be positive, length non-negative."
+            "Width and merge weight must be positive, length non-negative, "
+            f"all finite; got {name} {value}."
         )
 
 

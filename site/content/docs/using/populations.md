@@ -28,7 +28,7 @@ Population(
 | `speed` | Free walking speed $v_i^\text{max}$, sampled per agent; must be positive | m/s |
 | `pre_movement` | Time before the agent starts walking, sampled per agent | s |
 | `start_distance` | Extra distance walked in the start node, sampled per agent | m |
-| `area_factor` | Space the agent takes relative to an average adult; one fixed number for the population | |
+| `area_factor` | Space the agent takes relative to an average adult; one fixed number for the population; must be positive | |
 | `target` | Name of a safe node to head for; `None` for the nearest | |
 
 Plain numbers are accepted for every distribution argument.
@@ -77,11 +77,12 @@ Weibull(alpha, beta)
 Each takes the keyword arguments `lower=0.0` and `upper=None`.
 
 - **Every distribution is truncated at 0 by default.** `Normal(10, 20)`
-  never returns a negative value. Pass `lower=None` to allow them.
+  never returns a negative value. Pass `lower=None` to allow them,
+  except for `start_distance`, whose `lower` must stay at or above 0.
 - Values outside `[lower, upper]` are drawn again, up to 100 times.
   Values still outside are then clipped to the bounds. A `Fixed` value
-  outside the bounds is clipped without a message
-  ([Input checks]({{< relref "/docs/limitations#input-checks" >}})).
+  outside the bounds raises `ValueError`, and so does `lower` above
+  `upper` ([Input checks]({{< relref "/docs/limitations#input-checks" >}})).
 - `mean` and `std` of `Normal` and `LogNormal` are those before
   truncation.
 - `LogNormal(mean, std)` takes the mean and standard deviation of the
