@@ -409,13 +409,14 @@ run,evacuation_time,agents
 
 - The `time` column starts at 0, before the first step. Its last value
   can exceed `t_max` by less than `dt`. The values are those of the
-  API's `times`, rounded to 9 decimals.
+  API's `times`, which the step loop rounds to 9 decimals.
 - `exit_time` is the end of the step in which the agent reached safety,
-  an upper bound to within `dt`. It is not rounded. At `dt` 0.1 it can
-  differ from the matching `time` value in the last digits, so join the
-  two with a tolerance. The value is the API's, written unchanged so
-  that the files match Python
-  ([issue #54](https://github.com/PedestrianDynamics/jupedsim-network/issues/54)).
+  an upper bound to within `dt`. It equals the `time` value of that step
+  in `link_flow.csv` and `occupancy.csv`, so the files join exactly. The
+  value is the API's `exit_times`, written unchanged so that the files
+  match Python.
+- Monte Carlo quantiles in `summary.json` are interpolated between runs
+  and are not step times.
 - `pre_movement_sampled` is the sampled time. The agent starts walking
   at the first step that starts at or after it.
 - The files keep every value at full precision. The terminal rounds

@@ -21,8 +21,9 @@ it.
 | `evacuated` | Number of agents that reached safety |
 
 An agent's exit time is the end of the step in which it passed its last
-link, so exit times are multiples of `dt`, up to floating-point
-rounding ([Limitations]({{< relref "/docs/limitations#numerics" >}})).
+link, so exit times are multiples of `dt`: each one equals the entry
+of `times` for that step
+([Limitations]({{< relref "/docs/limitations#numerics" >}})).
 
 `node_occupancy` counts heads. The density the model uses counts area
 factors, so with area factors other than 1 the two differ.
