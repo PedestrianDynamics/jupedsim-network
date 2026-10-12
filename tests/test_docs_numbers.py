@@ -1874,7 +1874,7 @@ CLI_REGISTRY = [
     Number(
         CLI_PAGE,
         "jupedsim-network check: error: typo.json: simulation: unknown key "
-        "'max_densty'; valid keys: counterflow, dt, max_density, split_ties, "
+        "'max_densty'; valid keys: counterflow, dt, max_density, routing_policy, split_ties, "
         "supply_reduction, t_max jupedsim-network check: error: speed0.json: "
         "populations[0]: Agent speeds must be positive. jupedsim-network "
         "check: error: ln0.json: populations[0].pre_movement: cannot sample "

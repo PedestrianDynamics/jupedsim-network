@@ -263,7 +263,7 @@ jupedsim-network check typo.json
 ```
 
 ```console
-jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, split_ties, supply_reduction, t_max
+jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, routing_policy, split_ties, supply_reduction, t_max
 ```
 
 ### Watch for these
@@ -581,7 +581,7 @@ A scenario error ends the command with one line on stderr: the file,
 the JSON path of the entry and the message.
 
 ```console
-jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, split_ties, supply_reduction, t_max
+jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, routing_policy, split_ties, supply_reduction, t_max
 jupedsim-network check: error: speed0.json: populations[0]: Agent speeds must be positive.
 jupedsim-network check: error: ln0.json: populations[0].pre_movement: cannot sample LogNormal(lower=0.0, upper=None, mean=0, std=60.0): float division by zero
 ```

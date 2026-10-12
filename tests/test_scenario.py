@@ -172,6 +172,7 @@ def _same_simulation(a: NetworkSimulation, b: NetworkSimulation) -> None:
         "supply_reduction",
         "split_ties",
         "counterflow",
+        "routing_policy",
     ):
         assert getattr(a, name) == getattr(b, name), name
 
@@ -775,7 +776,12 @@ def test_export_keeps_inputs_order_and_settings():
         if k != "bidirectional"
     }
     assert all("capacity" not in c for c in data["connections"])
-    assert data["simulation"] == fixture["simulation"]
+    # The all-keys fixture includes the default policy; exports omit defaults.
+    assert data["simulation"] == {
+        key: value
+        for key, value in fixture["simulation"].items()
+        if key != "routing_policy"
+    }
     assert data["run"] == fixture["run"]
     assert data["monte_carlo"] == fixture["monte_carlo"]
     assert data["populations"][0] == fixture["populations"][0]

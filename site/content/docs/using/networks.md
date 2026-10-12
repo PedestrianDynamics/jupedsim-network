@@ -144,17 +144,28 @@ example do.
 
 ## Routes
 
-Every agent follows a fixed route to the nearest safe node, measured as
-the sum of link lengths (Dijkstra's algorithm, in
+By default, every agent follows a fixed route to the nearest safe node,
+measured as the sum of link lengths (Dijkstra's algorithm, in
 `network.Network.route_table`). With `target`, a population heads for
 that safe node instead. One route table is computed per target before
 the run starts and is never updated.
 
-- Routes use distance only. Walking speed, stairs and queues play no
-  part.
+- `routing_policy="shortest_distance"` is the default and sums link lengths
+  in metres. Speeds and queues play no part.
+- `routing_policy="shortest_free_flow_time"` minimizes **hydraulic reference
+  travel time**, not predicted actual travel time. Each link costs
+  `link.length / hydraulic.speed(0, source.speed_constant)` seconds because
+  its length is walked in the source node. The reference speed is
+  `k * (1 - 0.266 * 0.54)` m/s, including the hydraulic density floor;
+  it is not the coefficient `k` itself. Individual speed limits, congestion,
+  and queueing delays are excluded. This does not minimize total evacuation
+  time. Pass the policy to `NetworkSimulation`, `route_table`, or
+  `route_choices`; scenario files store it under `simulation.routing_policy`.
+  One static table per destination is shared across populations. Explicit
+  population targets still select the destination; speeds do not select tables.
 - Equally short routes are split. A node where several links start a
-  shortest route is a tie; route lengths count as equal if they agree
-  to within 10⁻⁹ of their length (at least 10⁻⁹ m), that is, up to
+  minimum-cost route is a tie; selected costs count as equal if they agree
+  to within 10⁻⁹ of their cost (at least 10⁻⁹ m or 10⁻⁹ s), that is, up to
   floating-point rounding. Agents deciding at a tie alternate between the
   tied links in the order the links were created: at the start in
   population order, later in the order they reached the link they just
@@ -162,8 +173,9 @@ the run starts and is never updated.
   link getting one more if their number is odd. Ties are split wherever
   they occur along a route, and with `target` within the routes to that
   safe node. No random numbers are drawn.
-- A link is on a route only if it brings agents closer to safety, or as
-  close over fewer links; this holds at ties and elsewhere. A
+- A link is on a route only if it strictly decreases the computed cost
+  to safety, or decreases the hop count at exactly equal cost. This strict
+  lexicographic ordering is independent of approximate equality. A
   zero-length detour is therefore never taken, and agents cannot walk
   in circles.
 - With `NetworkSimulation(..., split_ties=False)`, every agent at a node

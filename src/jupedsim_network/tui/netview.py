@@ -53,7 +53,8 @@ def build(sim) -> Routes:
     net = sim.network
     targets = tuple(dict.fromkeys(pop.target for pop in sim.populations))
     trees = tuple(
-        _tree(net, t, sim.split_ties, SAFE) for t in targets or (None,)
+        _tree(net, t, sim.split_ties, SAFE, sim.routing_policy)
+        for t in targets or (None,)
     )
     used = {link for tree in trees for link in _used(tree)}
     nodes = tuple(
@@ -72,9 +73,9 @@ def _used(tree: Tree) -> set[int]:
     return set(tree.via.values()) | {i for t in tree.ties.values() for i in t}
 
 
-def _tree(net, target, split: bool, safe: str) -> Tree:
-    table = net.route_table(target)
-    choices = net.route_choices(target)
+def _tree(net, target, split: bool, safe: str, routing_policy: str) -> Tree:
+    table = net.route_table(target, routing_policy=routing_policy)
+    choices = net.route_choices(target, routing_policy=routing_policy)
     children: dict[int, list[int]] = {}
     via = {}
     for node, link in enumerate(table):

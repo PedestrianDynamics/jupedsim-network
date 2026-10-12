@@ -712,9 +712,12 @@ def _population_keys() -> tuple[Key, ...]:
 
 
 def _simulation_keys() -> tuple[Key, ...]:
-    from jupedsim_network import simulation
+    from jupedsim_network import network, simulation
 
-    choices = {"counterflow": tuple(simulation._COUNTERFLOW)}
+    choices = {
+        "counterflow": tuple(simulation._COUNTERFLOW),
+        "routing_policy": network.ROUTING_POLICIES,
+    }
     skip = ("network", "populations")
     return _signature_keys(
         NetworkSimulation, NetworkSimulation, skip, choices=choices
