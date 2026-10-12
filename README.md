@@ -27,6 +27,41 @@ not validated against experiments, and it is not intended for
 regulatory or design use; see the
 [limitations](https://pedestriandynamics.org/jupedsim-network/docs/limitations/).
 
+## Model architecture
+
+The architecture introduced by [routing extraction (#69)](https://github.com/PedestrianDynamics/jupedsim-network/pull/69)
+and [hydraulic configuration (#70)](https://github.com/PedestrianDynamics/jupedsim-network/pull/70)
+separates the following responsibilities. Arrows point from a module to a
+runtime dependency; supporting modules and type-only imports are omitted.
+
+```mermaid
+flowchart TD
+    scenario["scenario.py<br/>Scenario I/O, schema migration, verification"]
+    simulation["simulation.py<br/>Movement, queues, flow allocation"]
+    network["network.py<br/>Public builder, Node and Link records<br/>Resolved hydraulic graph and retained configuration"]
+    routing["routing.py<br/>Shortest paths over supplied costs<br/>Ties, strict progress, cycle checks"]
+    costs["routing_costs.py<br/>Distance and hydraulic reference-time costs"]
+    hydraulic["hydraulic.py<br/>Immutable parameters and hydraulic relations"]
+
+    scenario --> simulation
+    scenario --> network
+    scenario --> hydraulic
+    simulation --> network
+    simulation --> hydraulic
+    network --> routing
+    network --> costs
+    network --> hydraulic
+    costs --> hydraulic
+```
+
+`Network` owns the authoritative graph and retains its immutable hydraulic
+configuration alongside resolved node speeds and link capacities. Routing
+algorithms receive edge costs and do not depend on hydraulic equations.
+Construction, reference-time costs, and movement use the network's retained
+configuration. Scenario I/O reconstructs from configuration and construction
+inputs; resolved snapshots verify those values rather than override them.
+Construction-input recording remains in `Network`.
+
 ## How jupedsim-network is built
 
 jupedsim-network is a research code written and maintained by
