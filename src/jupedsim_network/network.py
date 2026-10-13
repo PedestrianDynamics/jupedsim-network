@@ -2,7 +2,8 @@
 """Directed graph with resolved physical properties for the network model.
 
 The builder resolves hydraulic defaults into node speeds and link capacities.
-Routing uses static distance or reference-time costs. Flow sharing and agent
+Routing minimizes static link costs, either lengths or hydraulic
+reference travel times (the ``routing_policy``). Flow sharing and agent
 movement belong to the simulation. Reverse links identify directions of one
 physical connection.
 """
@@ -14,6 +15,9 @@ from dataclasses import dataclass
 from jupedsim_network import hydraulic, routing, routing_costs
 from jupedsim_network.routing import TIE_TOLERANCE as TIE_TOLERANCE
 from jupedsim_network.routing_costs import ROUTING_POLICIES as ROUTING_POLICIES
+from jupedsim_network.routing_costs import (
+    check_routing_policy as check_routing_policy,
+)
 
 ROOM = "room"
 STAIR = "stair"
@@ -146,8 +150,8 @@ class Network:
             tread: tread depth in m, below 1 m
             area: area of the flight in m², which holds the agents on
                 it; give it, or both ``length`` and ``width``, not both.
-                No projection or adjustment for landings is performed.
-            length: length of the flight in m; with ``width``, the area is
+            length: length of the flight in m along the incline, like the
+                stair link, without landings; with ``width``, the area is
                 ``length * width``
             width: width of the flight in m; see ``length``
         """
@@ -300,10 +304,10 @@ class Network:
         nodes, links = self.nodes, self.links
         costs = routing_costs.edge_costs(nodes, links, routing_policy)
         targets = [node.index for node in self._targets(target)]
-        metric, unit = routing_costs.units(routing_policy)
-        return routing.route_table(
-            nodes, links, targets, costs, metric=metric, unit=unit
-        )
+        try:
+            return routing.route_table(nodes, links, targets, costs)
+        except routing.CostOverflowError as error:
+            raise routing_costs.overflow_error(error, routing_policy) from None
 
     def route_choices(
         self,
@@ -349,10 +353,10 @@ class Network:
         nodes, links = self.nodes, self.links
         costs = routing_costs.edge_costs(nodes, links, routing_policy)
         targets = [node.index for node in self._targets(target)]
-        metric, unit = routing_costs.units(routing_policy)
-        return routing.route_choices(
-            nodes, links, targets, costs, metric=metric, unit=unit
-        )
+        try:
+            return routing.route_choices(nodes, links, targets, costs)
+        except routing.CostOverflowError as error:
+            raise routing_costs.overflow_error(error, routing_policy) from None
 
     def _targets(self, target: str | None) -> list[Node]:
         if target is not None:

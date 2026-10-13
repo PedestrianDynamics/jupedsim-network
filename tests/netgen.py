@@ -517,7 +517,7 @@ def oracle_distances(net, target):
     """Shortest distance and fewest links to safety, computed afresh.
 
     Distances by Bellman-Ford; hops by a Dijkstra on (distance, hops) with
-    exact float comparison, as ``Network._distances`` defines them.
+    exact float comparison, as ``routing.distances`` defines them.
     """
     n = len(net.nodes)
     goals = [
@@ -549,7 +549,7 @@ def _fewest_hops(link, dist, hops):
 
 
 def tied(link, dist, hops) -> bool:
-    """The tie rule of ``Network._route_choices``, as documented."""
+    """The tie rule of ``routing.route_choices``, as documented."""
     here, there = dist[link.source], dist[link.target]
     if not math.isfinite(here):
         return False

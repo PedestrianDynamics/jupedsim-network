@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Exact differential baseline captured from corrected implementation aa1460f.
+"""Exact differential snapshot of the pre-extraction ``Network`` routing.
 
-The fixture records the public methods before extraction. It must not be
-regenerated merely because a routing result changes: investigate that change.
+The fixture records the public methods of the ``Network`` code at 40926b5,
+before routing moved to ``routing.py`` and ``routing_costs.py``; the
+extracted code was verified equal to it. The ``overflow`` cases were added
+afterwards from the extracted code. It must not be regenerated merely
+because a routing result changes: investigate that change.
 """
 
 import copy
@@ -14,7 +17,7 @@ import pytest
 
 from jupedsim_network import Network
 
-BASELINE = Path(__file__).parent / "data" / "routing_aa1460f.json"
+BASELINE = Path(__file__).parent / "data" / "routing_snapshot.json"
 
 
 def generated_network(seed):
@@ -50,11 +53,20 @@ def generated_network(seed):
     return net
 
 
+def overflow_network():
+    """A stair link whose time cost overflows, beside a finite alternative."""
+    net = Network()
+    net.add_stair("A", area=10, riser=0.18, tread=0.28)
+    net.add_safe("exit")
+    net.connect("A", "exit", width=1, length=1.7e308, bidirectional=False)
+    net.connect("A", "exit", width=1, length=1, bidirectional=False)
+    return net
+
+
 @pytest.fixture(scope="module")
 def baseline():
     recorded = json.loads(BASELINE.read_text())
-    assert recorded["baseline_commit"] == "aa1460f"
-    assert len(recorded["cases"]) == 192
+    assert len(recorded["cases"]) == 194
     return recorded["cases"]
 
 
@@ -74,6 +86,19 @@ def test_exact_pre_extraction_equivalence(seed, baseline):
     assert vars(net) == before
     assert all(a is b for a, b in zip(nodes, net.nodes))
     assert all(a is b for a, b in zip(links, net.links))
+
+
+@pytest.mark.parametrize(
+    "policy", ["shortest_distance", "shortest_free_flow_time"]
+)
+def test_overflowing_cost_with_finite_alternative(policy, baseline):
+    net = overflow_network()
+    (case,) = [
+        c for c in baseline if c["seed"] == "overflow" and c["policy"] == policy
+    ]
+    kwargs = dict(target=case["target"], routing_policy=policy)
+    assert net.route_table(**kwargs) == case["table"]
+    assert net.route_choices(**kwargs) == [tuple(c) for c in case["choices"]]
 
 
 def test_algorithms_use_supplied_costs_without_hydraulics(monkeypatch):

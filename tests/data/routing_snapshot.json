@@ -1,5 +1,4 @@
 {
-  "baseline_commit": "aa1460f",
   "cases": [
     {"seed": 0, "policy": "shortest_distance", "target": null, "table": [18, 1, 10, 4, 7, 15, null, null, null], "choices": [[11, 18], [1], [10], [4], [7], [15], [], [], []]},
     {"seed": 0, "policy": "shortest_distance", "target": "s0", "table": [18, 1, 10, 12, 2, 5, null, null, null], "choices": [[11, 18], [1], [10], [12, 19], [2, 7, 13], [5], [], [], []]},
@@ -192,6 +191,8 @@
     {"seed": 31, "policy": "shortest_distance", "target": "s1", "table": [10, 9, 18, 17, 5, 8, null, null, null], "choices": [[10], [9], [18], [17], [5], [8], [], [], []]},
     {"seed": 31, "policy": "shortest_free_flow_time", "target": null, "table": [10, 9, 18, 17, 5, 8, null, null, null], "choices": [[10], [9], [18], [17], [5], [8], [], [], []]},
     {"seed": 31, "policy": "shortest_free_flow_time", "target": "s0", "table": [10, 9, 7, 17, 5, 2, null, null, null], "choices": [[10], [9], [7], [17], [5], [2], [], [], []]},
-    {"seed": 31, "policy": "shortest_free_flow_time", "target": "s1", "table": [10, 9, 18, 17, 5, 8, null, null, null], "choices": [[10], [9], [18], [17], [5], [8], [], [], []]}
+    {"seed": 31, "policy": "shortest_free_flow_time", "target": "s1", "table": [10, 9, 18, 17, 5, 8, null, null, null], "choices": [[10], [9], [18], [17], [5], [8], [], [], []]},
+    {"seed": "overflow", "policy": "shortest_distance", "target": null, "table": [1, null], "choices": [[1], []]},
+    {"seed": "overflow", "policy": "shortest_free_flow_time", "target": null, "table": [1, null], "choices": [[1], []]}
   ]
 }

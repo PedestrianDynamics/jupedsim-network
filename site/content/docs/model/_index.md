@@ -107,8 +107,10 @@ Predtechenskii and Milinskii {{< cite 15 "p. 819" >}}. As in WAYOUT,
 where entry speeds into a twig at maximum density are corrected and
 newcomers join the queue {{< cite 19 "p. 627" >}}, agents wait to enter
 a full node. Routes are fixed
-before the run: the shortest walking distance to the nearest safe node or to a
-given target. In the
+before the run: by default the shortest walking distance to the nearest
+safe node or to a given target, or with
+`routing_policy="shortest_free_flow_time"` the shortest free-flow
+reference time. In the
 code: the module docstring of `jupedsim_network.simulation`,
 `NetworkSimulation.run`, `Network.route_table` and
 `hydraulic.SPEED_DENSITY_SLOPE`.

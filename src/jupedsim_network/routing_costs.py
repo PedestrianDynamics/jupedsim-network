@@ -6,7 +6,6 @@ Cost construction is separate from the shortest-path implementation.
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from jupedsim_network import hydraulic
@@ -17,9 +16,17 @@ if TYPE_CHECKING:
 ROUTING_POLICIES = ("shortest_distance", "shortest_free_flow_time")
 
 
+def check_routing_policy(routing_policy) -> None:
+    if routing_policy in ROUTING_POLICIES:
+        return
+    valid = ", ".join(repr(p) for p in ROUTING_POLICIES)
+    raise ValueError(
+        f"routing_policy must be one of {valid}; got {routing_policy!r}."
+    )
+
+
 def edge_costs(nodes, links, routing_policy) -> list[float]:
-    if routing_policy not in ROUTING_POLICIES:
-        raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
+    check_routing_policy(routing_policy)
     return [
         edge_cost(link, nodes[link.source], routing_policy) for link in links
     ]
@@ -34,22 +41,22 @@ def edge_cost(link: Link, source: Node, routing_policy: str) -> float:
     """
     if routing_policy == "shortest_distance":
         return link.length
-    if routing_policy != "shortest_free_flow_time":
-        raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
     reference_speed = float(hydraulic.speed(0, source.speed_constant))
-    if not math.isfinite(reference_speed) or reference_speed <= 0:
-        raise ValueError(
-            f"Node '{source.name}' must have a finite positive reference speed."
-        )
     # Infinity records an unrepresentable cost; routing raises only when
     # no finite route exists, after considering all alternatives.
     return link.length / reference_speed
 
 
-def units(routing_policy):
-    """Diagnostic label and unit for the selected cost."""
-    return (
-        ("distance", "m")
+def overflow_error(error, routing_policy) -> ValueError:
+    """The public message for a routing cost overflow, with metric and unit."""
+    metric, unit, what = (
+        ("distance", "m", "length")
         if routing_policy == "shortest_distance"
-        else ("cost", "s")
+        else ("cost", "s", "cost")
+    )
+    return ValueError(
+        f"Shortest route {metric} from '{error.node}' exceeds the "
+        f"floating-point range at link '{error.link}' (index {error.index}): "
+        f"accumulated {metric} {error.accumulated!r} {unit} "
+        f"+ link {what} {error.cost!r} {unit} is non-finite."
     )

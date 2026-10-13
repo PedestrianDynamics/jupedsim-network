@@ -6,7 +6,8 @@ one calculation; only temporary adjacency lists and algorithm state are built.
 This module does not construct costs or depend on hydraulic equations.
 Callers supply nonnegative costs indexed by Link.index and target node
 indices. Positive infinity denotes a cost outside the floating-point range;
-it raises only if a reachable node has no finite route. No graph records or caller-owned collections are modified.
+it raises only if a reachable node has no finite route. No graph records
+or caller-owned collections are modified.
 """
 
 from __future__ import annotations
@@ -24,14 +25,27 @@ if TYPE_CHECKING:
 TIE_TOLERANCE = 1e-9
 
 
+class CostOverflowError(ValueError):
+    """A shortest route's cost left the floating-point range.
+
+    Carries the raw numbers; the caller words the message with units.
+    """
+
+    def __init__(self, node, link, index, accumulated, cost):
+        super().__init__(
+            f"Shortest route cost from '{node}' exceeds the floating-point "
+            f"range at link '{link}' (index {index}): accumulated cost "
+            f"{accumulated!r} + link cost {cost!r} is non-finite."
+        )
+        self.node, self.link, self.index = node, link, index
+        self.accumulated, self.cost = accumulated, cost
+
+
 def route_table(
     nodes: tuple[Node, ...],
     links: tuple[Link, ...],
     targets: list[int],
     costs: list[float],
-    *,
-    metric="distance",
-    unit="m",
 ) -> list[int | None]:
     """Next links at minimum supplied cost, preserving first-found tie order."""
     distance = [math.inf] * len(nodes)
@@ -46,9 +60,7 @@ def route_table(
             continue
         for link in incoming[index]:
             _relax(link, d, distance, next_link, heap, costs[link.index])
-    choices = route_choices(
-        nodes, links, targets, costs, metric=metric, unit=unit
-    )
+    choices = route_choices(nodes, links, targets, costs)
     return [
         link if not tied or link in tied else tied[0]
         for link, tied in zip(next_link, choices)
@@ -60,17 +72,12 @@ def route_choices(
     links: tuple[Link, ...],
     targets: list[int],
     costs: list[float],
-    *,
-    metric="distance",
-    unit="m",
 ) -> list[tuple[int, ...]]:
     """Eligible equal-cost first links in creation order.
 
     Progress strictly decreases (cost, hops), independently of tie tolerance.
     """
-    distance, hops = distances(
-        nodes, links, targets, costs, metric=metric, unit=unit
-    )
+    distance, hops = distances(nodes, links, targets, costs)
     choices: list[list[int]] = [[] for _ in nodes]
     for link in links:
         if _is_tied(link, distance, hops, costs[link.index]):
@@ -84,9 +91,6 @@ def distances(
     links: tuple[Link, ...],
     targets: list[int],
     costs: list[float],
-    *,
-    metric="distance",
-    unit="m",
 ) -> tuple[list[float], list[float]]:
     """Minimum supplied costs and minimum hops on such routes."""
     distance = [math.inf] * len(nodes)
@@ -113,11 +117,12 @@ def distances(
     # An overflowing candidate is harmless if a finite alternative exists.
     for link, accumulated, cost in overflows:
         if math.isinf(distance[link.source]):
-            raise ValueError(
-                f"Shortest route {metric} from '{nodes[link.source].name}' "
-                f"exceeds the floating-point range at link '{link.name}' "
-                f"(index {link.index}): accumulated {metric} {accumulated!r} {unit} "
-                f"+ link {'length' if unit == 'm' else 'cost'} {cost!r} {unit} is non-finite."
+            raise CostOverflowError(
+                nodes[link.source].name,
+                link.name,
+                link.index,
+                accumulated,
+                cost,
             )
     return distance, hops
 
