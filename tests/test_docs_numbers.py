@@ -485,9 +485,12 @@ def networks_slope_bounds():
             speed_density_slope=floor + 1e-3, **low_flow
         )
     hydraulic.HydraulicParameters(speed_density_slope=floor, **low_flow)
+    default = hydraulic.HydraulicParameters()
+    door_bound = default.level_speed_constant / (4 * default.door_specific_flow)
     return (
         f"$a \\le {floor:.3f}$ m²/person",
-        f"for a slope above {1 / default_density:.3f}.",
+        f"this bound is reached at a slope of {door_bound:.3f}, ",
+        f"for a slope of {1 / default_density:.3f} (1/2.75) or more.",
     )
 
 
@@ -1346,7 +1349,8 @@ REGISTRY = [
         "using/networks.md",
         (
             "$a \\le 0.926$ m²/person",
-            "for a slope above 0.364.",
+            "this bound is reached at a slope of 0.269, ",
+            "for a slope of 0.364 (1/2.75) or more.",
         ),
         networks_slope_bounds,
     ),

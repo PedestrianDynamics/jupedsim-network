@@ -45,6 +45,16 @@ def test_parameter_domain(field, value):
         dataclasses.replace(DEFAULT, **{field: value})
 
 
+def test_slope_keeps_the_peak_density_above_the_floor():
+    """The door-flow bound must not mask the floor bound: a large level
+    speed constant keeps k/(4a) above the default door flow."""
+    bound = 1 / (2 * hydraulic.MIN_DENSITY)
+    fast = {"level_speed_constant": 10.0}
+    HydraulicParameters(speed_density_slope=bound, **fast)
+    with pytest.raises(ValueError, match="0.926"):
+        HydraulicParameters(speed_density_slope=bound + 1e-3, **fast)
+
+
 @pytest.mark.parametrize("field", [f.name for f in dataclasses.fields(DEFAULT)])
 @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, True, [], {}])
 def test_all_parameters_are_finite_immutable_scalars(field, value):

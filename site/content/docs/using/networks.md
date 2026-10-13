@@ -43,9 +43,12 @@ $1/(2a)$ and maximum specific flow $k/(4a)$. The slope must keep the
 peak-flow density at or above the density floor of 0.54 m⁻², that is
 $a \le 0.926$ m²/person. `door_specific_flow` must not exceed $k/(4a)$ of
 the level constant, because a door cannot pass more than the
-speed–density relation allows; the error names both values. Simulation
-requires `max_density` below the jam density, so the default 2.75 fails
-for a slope above 0.364.
+speed–density relation allows; the error names both values. With the
+default `door_specific_flow` of 1.3 this bound is reached at a slope
+of 0.269, so to raise the slope further lower `door_specific_flow` in
+the same step. `NetworkSimulation` (and `check`) requires `max_density`
+below the jam density, so the default 2.75 fails for a slope of 0.364
+(1/2.75) or more.
 
 The opening boundary layer (0 m) and the density floor 0.54 m⁻² are not
 coefficients and cannot be changed. The floor is an applicability bound
