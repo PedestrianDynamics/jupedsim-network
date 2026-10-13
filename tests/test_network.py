@@ -1857,3 +1857,64 @@ def test_exit_times_join_the_time_axis():
     assert result.evacuation_time == result.times[429]
     np.testing.assert_array_equal(np.flatnonzero(result.link_flow[:, 0]), steps)
     assert np.sort(result.exit_times).tolist() == result.times[steps].tolist()
+
+
+@pytest.mark.parametrize("size", [1e308, 1e-300])
+@pytest.mark.parametrize("kind", ["room", "stair"])
+def test_computed_area_must_be_finite_and_positive(size, kind):
+    net = Network()
+    add = net.add_room if kind == "room" else net.add_stair
+    kwargs = {} if kind == "room" else {"riser": 0.18, "tread": 0.28}
+    with pytest.raises(ValueError, match="Computed node area"):
+        add("space", length=size, width=size, **kwargs)
+    assert net.nodes == ()
+    assert net._inputs == []
+
+
+def test_computed_capacity_must_be_finite():
+    net = Network()
+    net.add_room("room", area=10.0)
+    net.add_safe("exit")
+    with pytest.raises(ValueError, match="capacity must be finite"):
+        net.connect("room", "exit", width=1e308, specific_flow=1e308)
+    assert net.links == ()
+    assert not net._reverse
+    assert len(net._inputs) == 2
+
+
+@pytest.mark.parametrize("value", [0.0, -1.0, math.inf, math.nan])
+def test_node_speed_constant_must_be_finite_and_positive(value):
+    # No public path reaches _add with such a value today: add_stair
+    # derives the constant from a validated riser and tread. The check
+    # guards configurable speed constants.
+    net = Network()
+    with pytest.raises(ValueError, match="speed_constant"):
+        net._add("room", "room", 10.0, value)
+    assert net.nodes == ()
+
+
+@pytest.mark.parametrize("counterflow", ["bounding", "estimate"])
+def test_shared_capacity_survives_flow_reversal(counterflow):
+    net = Network()
+    net.add_room("A", area=10.0)
+    net.add_room("B", area=10.0)
+    net.add_safe("xA")
+    net.add_safe("xB")
+    net.connect("A", "B", width=1.0)
+    net.connect("A", "xA", width=20.0, kind="opening")
+    net.connect("B", "xB", width=20.0, kind="opening")
+    populations = [
+        Population("A", 1, target="xB"),
+        Population("B", 1, target="xA", pre_movement=0.5),
+        Population("A", 1, target="xB", pre_movement=2.0),
+    ]
+    sim = NetworkSimulation(net, populations, counterflow=counterflow, dt=0.1)
+    result = sim.run(seed=1)
+    assert result.evacuated == 3
+    assert worst_pair_excess(result, ("A->B", "B->A"), 0.091) <= 1e-9
+    forward = passage_times(result, "A->B")
+    backward = passage_times(result, "B->A")
+    assert forward[0] < backward[0] < forward[1]
+    exited = np.cumsum(result.link_flow[:, 2:].sum(axis=1))
+    assert np.all(result.node_occupancy.sum(axis=1) + exited == 3)
+    assert np.all(result.node_occupancy[:, :2] <= sim.max_density * 10.0)

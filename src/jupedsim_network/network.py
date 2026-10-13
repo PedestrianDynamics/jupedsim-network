@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Graph of spaces (nodes) and constrictions (links) for the network model."""
+"""Directed graph with resolved physical properties for the network model.
+
+The builder resolves hydraulic defaults into node speeds and link capacities.
+Routing uses distances only; flow sharing and agent movement belong to the
+simulation. Reverse links identify directions of one physical connection.
+"""
 
 import heapq
 import math
@@ -28,7 +33,9 @@ class Node:
     """A space agents occupy: a room, a stair flight or a safe place.
 
     ``speed_constant`` is the k of the SFPE speed-density relation used for
-    walking inside the node. Safe nodes have infinite area.
+    walking inside the node. ``area`` is the supplied occupancy area in m²,
+    used for both density and storage; no gross-to-usable area conversion is
+    performed. Safe nodes have infinite area.
     """
 
     name: str
@@ -44,7 +51,9 @@ class Link:
 
     ``length`` is walked inside the source node before the constriction is
     reached, along the incline on stair links. ``capacity`` is the maximum
-    flow in persons/s.
+    unidirectional flow in persons/s. Paired reverse links represent one
+    physical connection; the simulation's counterflow policy determines
+    their combined flow, rather than summing their capacities unconditionally.
     """
 
     name: str
@@ -139,8 +148,9 @@ class Network:
                 the walking speed on the flight
             tread: tread depth in m, below 1 m
             area: area of the flight in m², which holds the agents on
-                it; give it, or both ``length`` and ``width``, not both
-            length: length of the flight in m; with ``width``, the area is
+                it; give it, or both ``length`` and ``width``, not both.
+            length: length of the flight in m along the incline, like the
+                stair link, without landings; with ``width``, the area is
                 ``length * width``
             width: width of the flight in m; see ``length``
         """
@@ -199,7 +209,9 @@ class Network:
                 including landings, not the horizontal run.
             specific_flow: persons/s/m effective width, must be positive.
                 Defaults to 1.3 for doors and openings, and to the maximum
-                flow of the adjacent stair node for stairs.
+                flow of the adjacent stair node for stairs. If both nodes
+                are stairs, the source node sets the capacity in both
+                directions; give an explicit value to override this rule.
             boundary_layer: per side in m, at least 0. Defaults to 0.15
                 for doors and stairs and 0 for openings.
             merge_weight: relative share when several links feed a full node
@@ -216,19 +228,9 @@ class Network:
         """
         src, dst = self.node(source), self.node(target)
         _validate_connection(src, dst, width, kind, length, merge_weight)
-        fs = specific_flow
-        if fs is None:
-            fs = _default_specific_flow(kind, src, dst)
-        if not 0 < fs < math.inf:
-            raise ValueError(f"specific_flow must be positive, got {fs}.")
-        layer = (
-            _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
+        capacity = _connection_capacity(
+            src, dst, width, kind, specific_flow, boundary_layer
         )
-        if not 0 <= layer < math.inf:
-            raise ValueError(f"boundary_layer: must be >= 0 m, got {layer}.")
-        capacity = fs * hydraulic.effective_width(width, layer)
-        if capacity <= 0:
-            raise ValueError(f"Connection {source}-{target} has no capacity.")
         label = name or f"{source}->{target}"
         pairs = [(src, dst)] + ([(dst, src)] if bidirectional else [])
         links = []
@@ -416,12 +418,16 @@ class Network:
     def _add(self, name, kind, area, speed_constant) -> Node:
         if name in self._by_name:
             raise ValueError(f"Node '{name}' already exists.")
+        if speed_constant is None:
+            speed_constant = hydraulic.LEVEL_SPEED_CONSTANT
+        if not 0 < speed_constant < math.inf:
+            raise ValueError("speed_constant must be finite and positive.")
         node = Node(
             name=name,
             index=len(self._nodes),
             kind=kind,
             area=area,
-            speed_constant=speed_constant or hydraulic.LEVEL_SPEED_CONSTANT,
+            speed_constant=speed_constant,
         )
         self._nodes.append(node)
         self._by_name[name] = node
@@ -479,7 +485,10 @@ def _area(area, length, width) -> float:
     for name, value in given.items():
         if not 0 < value < math.inf:
             raise ValueError(f"Node area must be positive, got {name} {value}.")
-    return float(area if area is not None else length * width)
+    resolved = float(area if area is not None else length * width)
+    if not 0 < resolved < math.inf:
+        raise ValueError("Computed node area must be finite and positive.")
+    return resolved
 
 
 def _validate_connection(src, dst, width, kind, length, merge_weight) -> None:
@@ -501,6 +510,26 @@ def _validate_connection(src, dst, width, kind, length, merge_weight) -> None:
             "Width and merge weight must be positive, length non-negative, "
             f"all finite; got {name} {value}."
         )
+
+
+def _connection_capacity(
+    src, dst, width, kind, specific_flow, boundary_layer
+) -> float:
+    """Resolve hydraulic assumptions into unidirectional capacity (persons/s)."""
+    fs = specific_flow
+    if fs is None:
+        fs = _default_specific_flow(kind, src, dst)
+    if not 0 < fs < math.inf:
+        raise ValueError(f"specific_flow must be positive, got {fs}.")
+    layer = _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
+    if not 0 <= layer < math.inf:
+        raise ValueError(f"boundary_layer: must be >= 0 m, got {layer}.")
+    capacity = fs * hydraulic.effective_width(width, layer)
+    if capacity <= 0:
+        raise ValueError(f"Connection {src.name}-{dst.name} has no capacity.")
+    if not math.isfinite(capacity):
+        raise ValueError("Connection capacity must be finite.")
+    return capacity
 
 
 def _default_specific_flow(kind, src, dst) -> float:
