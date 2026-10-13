@@ -1883,6 +1883,9 @@ def test_computed_capacity_must_be_finite():
 
 @pytest.mark.parametrize("value", [0.0, -1.0, math.inf, math.nan])
 def test_node_speed_constant_must_be_finite_and_positive(value):
+    # No public path reaches _add with such a value today: add_stair
+    # derives the constant from a validated riser and tread. The check
+    # guards configurable speed constants.
     net = Network()
     with pytest.raises(ValueError, match="speed_constant"):
         net._add("room", "room", 10.0, value)

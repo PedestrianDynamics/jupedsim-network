@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """Analytical configuration checks, independent of routing/flow allocation."""
 
-import copy
 import dataclasses
 import math
 
@@ -21,6 +20,7 @@ from jupedsim_network import (
     save_scenario,
     scenario_from_dict,
 )
+from jupedsim_network import scenario as scenario_module
 from jupedsim_network.simulation import _Run
 
 DEFAULT = HydraulicParameters()
@@ -32,14 +32,11 @@ DEFAULT = HydraulicParameters()
         ("speed_density_slope", 0),
         ("speed_density_slope", -0.1),
         ("speed_density_slope", 5e-324),
-        ("min_density", -0.1),
-        ("min_density", DEFAULT.jam_density),
-        ("min_density", DEFAULT.jam_density + 1),
+        ("speed_density_slope", 1 / (2 * hydraulic.MIN_DENSITY) + 0.01),
         ("level_speed_constant", 0),
         ("door_specific_flow", 0),
         ("stair_speed_coefficient", -1),
         ("door_boundary_layer", -0.1),
-        ("opening_boundary_layer", -0.1),
         ("stair_boundary_layer", -0.1),
     ],
 )
@@ -55,25 +52,43 @@ def test_all_parameters_are_finite_immutable_scalars(field, value):
         dataclasses.replace(DEFAULT, **{field: value})
 
 
-@pytest.mark.parametrize(
-    "floor,peak,flow", [(0, 2, 2), (1, 2, 2), (2, 2, 2), (3, 3, 1.5)]
-)
-def test_density_floor_peak_and_flow_are_piecewise_consistent(
-    floor, peak, flow
-):
+def test_derived_quantities_follow_the_slope_and_level_constant():
     parameters = HydraulicParameters(
-        speed_density_slope=0.25, min_density=floor
+        speed_density_slope=0.25, level_speed_constant=2
     )
     assert parameters.jam_density == 4
-    assert parameters.peak_flow_density == peak
-    assert hydraulic.max_specific_flow(2, parameters=parameters) == flow
+    assert parameters.peak_flow_density == 2
+    assert parameters.max_specific_flow == 2
+    assert hydraulic.max_specific_flow(2, parameters=parameters) == 2
     assert hydraulic.speed(0, 2, parameters=parameters) == 2 * (
-        1 - 0.25 * floor
+        1 - 0.25 * hydraulic.MIN_DENSITY
     )
     assert hydraulic.speed(4, 2, parameters=parameters) == 0
     densities = np.linspace(0, 4, 1001)
     flows = densities * hydraulic.speed(densities, 2, parameters=parameters)
-    assert np.max(flows) == pytest.approx(flow)
+    assert np.max(flows) == pytest.approx(2)
+
+
+@pytest.mark.parametrize(
+    "removed",
+    ["min_density", "opening_boundary_layer", "hydraulic_model_version"],
+)
+def test_removed_fields_are_not_parameters(removed):
+    assert removed not in {f.name for f in dataclasses.fields(DEFAULT)}
+    with pytest.raises(TypeError):
+        HydraulicParameters(**{removed: 1})
+
+
+def test_door_specific_flow_above_speed_density_maximum_is_rejected():
+    limit = 1.4 / (4 * 0.266)
+    HydraulicParameters(door_specific_flow=limit)
+    with pytest.raises(ValueError) as error:
+        HydraulicParameters(door_specific_flow=limit + 0.01)
+    text = str(error.value)
+    assert "door_specific_flow" in text and str(limit + 0.01) in text
+    assert "k_level/(4a)" in text and f"{limit:.4g}" in text
+    # Raising k_level lifts the bound.
+    HydraulicParameters(door_specific_flow=2, level_speed_constant=2.2)
 
 
 def room_network(parameters=None):
@@ -89,15 +104,14 @@ def room_network(parameters=None):
     [
         {},
         {"speed_density_slope": 0.2},
-        {"min_density": 1.0},
-        {"level_speed_constant": 1.0},
+        {"level_speed_constant": 1.0, "door_specific_flow": 0.9},
     ],
 )
 def test_level_speed_sensitivity_reaches_routing_and_movement(change):
     parameters = dataclasses.replace(DEFAULT, **change)
     net = room_network(parameters)
     expected_speed = parameters.level_speed_constant * (
-        1 - parameters.speed_density_slope * parameters.min_density
+        1 - parameters.speed_density_slope * hydraulic.MIN_DENSITY
     )
     expected_time = 12 / expected_speed
     assert net.node("room").speed_constant == parameters.level_speed_constant
@@ -121,7 +135,6 @@ def test_level_speed_sensitivity_reaches_routing_and_movement(change):
     "kind,field",
     [
         ("door", "door_boundary_layer"),
-        ("opening", "opening_boundary_layer"),
         ("stair", "stair_boundary_layer"),
     ],
 )
@@ -141,16 +154,26 @@ def test_boundary_defaults_and_explicit_zero_override(kind, field):
     assert net._inputs[-1][1]["boundary_layer"] == 0
 
 
+def test_opening_boundary_layer_is_zero_in_every_configuration():
+    parameters = HydraulicParameters(
+        door_boundary_layer=0.4, stair_boundary_layer=0.4
+    )
+    net = Network(parameters=parameters)
+    net.add_room("a", area=20)
+    net.add_room("b", area=20)
+    link = net.connect("a", "b", kind="opening", width=2, specific_flow=1)[0]
+    assert link.capacity == 2
+
+
 @pytest.mark.parametrize("kind", ["door", "opening", "stair"])
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize(
     "change",
     [
         {},
-        {"door_specific_flow": 2},
+        {"door_specific_flow": 1.0},
         {"stair_speed_coefficient": 60},
         {"speed_density_slope": 0.2},
-        {"min_density": 2.5},
     ],
 )
 def test_stair_level_capacity_rule_and_local_flow_override(
@@ -164,7 +187,7 @@ def test_stair_level_capacity_rule_and_local_flow_override(
     assert stair.speed_constant == k
     endpoints = ("stair", "level") if reverse else ("level", "stair")
     links = net.connect(*endpoints, kind=kind, width=2, boundary_layer=0)
-    peak = max(parameters.min_density, 1 / (2 * parameters.speed_density_slope))
+    peak = parameters.peak_flow_density
     stair_flow = k * peak * (1 - parameters.speed_density_slope * peak)
     flow = stair_flow if kind == "stair" else parameters.door_specific_flow
     assert [link.capacity for link in links] == pytest.approx([2 * flow] * 2)
@@ -205,12 +228,12 @@ def test_stair_coefficient_reaches_reference_cost_and_movement(coefficient):
 
 def test_networks_remain_independent_and_configuration_cannot_be_replaced():
     first = room_network(
-        HydraulicParameters(level_speed_constant=1, door_specific_flow=2)
+        HydraulicParameters(level_speed_constant=1, door_specific_flow=0.9)
     )
     sim = NetworkSimulation(first, [Population("room", 5, speed=10)])
     before = sim.run(seed=1)
     second = room_network(
-        HydraulicParameters(level_speed_constant=2, door_specific_flow=3)
+        HydraulicParameters(level_speed_constant=2, door_specific_flow=1.5)
     )
     NetworkSimulation(second, [Population("room", 5)]).run(seed=1)
     after = sim.run(seed=1)
@@ -219,7 +242,7 @@ def test_networks_remain_independent_and_configuration_cannot_be_replaced():
     assert second.node("room").speed_constant == 2
     assert first.links[0].capacity != second.links[0].capacity
     with pytest.raises(dataclasses.FrozenInstanceError):
-        first.parameters.min_density = 1
+        first.parameters.speed_density_slope = 1
     with pytest.raises(AttributeError):
         first.parameters = second.parameters
     with pytest.raises(TypeError):
@@ -238,122 +261,13 @@ def test_custom_jam_density_is_used_by_simulation_and_scenario_probe():
 
 
 def test_custom_peak_is_used_by_existing_supply_reduction_equation():
-    net = room_network(
-        HydraulicParameters(speed_density_slope=0.2, min_density=3)
-    )
+    net = room_network(HydraulicParameters(speed_density_slope=0.2))
     sim = NetworkSimulation(net, [Population("room", 1)], max_density=4)
     run = _Run(sim, np.random.default_rng(1), False)
-    allowance = run._allowance(np.array([3.5, 0]), np.array([10, 0]))
-    assert allowance[0] == 5  # (4 - 3.5) / (4 - 3) * 10
+    allowance = run._allowance(np.array([3.25, 0]), np.array([10, 0]))
+    assert allowance[0] == 5  # (4 - 3.25) / (4 - 2.5) * 10
     with pytest.warns(UserWarning, match="peak-flow"):
-        NetworkSimulation(net, [Population("room", 1)], max_density=2.8)
-
-
-def custom_scenario():
-    net = room_network(
-        HydraulicParameters(speed_density_slope=0.2, door_boundary_layer=0.2)
-    )
-    net.connect("room", "safe", width=1, specific_flow=2, boundary_layer=0)
-    return Scenario.from_simulation(
-        NetworkSimulation(net, [Population("room", 4)]), seed=17
-    )
-
-
-def test_schema_round_trip_preserves_inputs_configuration_and_results(tmp_path):
-    original = custom_scenario()
-    path = tmp_path / "custom.json"
-    save_scenario(original, path)
-    restored = load_scenario(path)
-    assert restored.data == original.data
-    a, b = original.simulation, restored.simulation
-    assert a.network.parameters == b.network.parameters
-    assert a.network.nodes == b.network.nodes
-    assert a.network.links == b.network.links
-    assert a.network._inputs == b.network._inputs
-    np.testing.assert_array_equal(
-        a.run(seed=17).exit_times, b.run(seed=17).exit_times
-    )
-    assert restored.data["connections"][-1]["boundary_layer"] == 0
-    assert restored.data["connections"][-1]["specific_flow"] == 2
-
-
-@pytest.mark.parametrize(
-    "section,key", [("nodes", "speed_constant"), ("links", "capacity")]
-)
-def test_inconsistent_snapshot_is_rejected_and_never_used_as_override(
-    section, key
-):
-    data = custom_scenario().to_dict()
-    data["resolved_hydraulics"][section][0][key] *= 2
-    with pytest.raises(
-        ScenarioError, match=rf"resolved_hydraulics.{section}\[0\].{key}"
-    ):
-        scenario_from_dict(data)
-
-
-def test_changed_inputs_require_removing_or_updating_snapshot():
-    data = custom_scenario().to_dict()
-    data["hydraulic_parameters"]["level_speed_constant"] = 2
-    with pytest.raises(ScenarioError, match="snapshot"):
-        scenario_from_dict(data)
-    del data["resolved_hydraulics"]
-    rebuilt = scenario_from_dict(data)
-    assert rebuilt.simulation.network.node("room").speed_constant == 2
-
-
-@pytest.mark.parametrize(
-    "key,value", [("format_version", 999), ("hydraulic_model_version", "999")]
-)
-def test_schema_and_model_versions_are_checked_independently(key, value):
-    data = custom_scenario().to_dict()
-    data[key] = value
-    with pytest.raises(ScenarioError, match=key):
-        scenario_from_dict(data)
-
-
-def test_schema_requires_complete_configuration():
-    data = custom_scenario().to_dict()
-    del data["hydraulic_parameters"]["min_density"]
-    with pytest.raises(ScenarioError, match="min_density"):
-        scenario_from_dict(data)
-
-
-def test_legacy_defaults_do_not_follow_library_defaults(monkeypatch, tmp_path):
-    legacy = {
-        "format_version": 1,
-        "nodes": [
-            {"name": "room", "kind": "room", "area": 100},
-            {"name": "safe", "kind": "safe"},
-        ],
-        "connections": [{"source": "room", "target": "safe", "width": 1}],
-        "populations": [{"node": "room", "count": 1}],
-    }
-    original = copy.deepcopy(legacy)
-    monkeypatch.setattr(
-        hydraulic,
-        "DEFAULT_HYDRAULIC_PARAMETERS",
-        HydraulicParameters(level_speed_constant=2, door_specific_flow=3),
-    )
-    restored = scenario_from_dict(legacy)
-    net = restored.simulation.network
-    assert net.parameters == DEFAULT
-    assert net.node("room").speed_constant == 84 / 60
-    assert net.links[0].capacity == 1.3 * 0.7
-    assert legacy == original
-    path = tmp_path / "migrated.json"
-    save_scenario(restored, path)
-    data = load_scenario(path).data
-    assert data["format_version"] == 2
-    assert data["hydraulic_model_version"] == "1"
-    assert data["hydraulic_parameters"] == dataclasses.asdict(DEFAULT)
-
-
-def test_peak_flow_remains_representable_when_four_times_slope_overflows():
-    parameters = HydraulicParameters(speed_density_slope=1e308, min_density=0)
-    peak = parameters.peak_flow_density
-    expected = peak * float(hydraulic.speed(peak, 2, parameters=parameters))
-    assert expected > 0
-    assert hydraulic.max_specific_flow(2, parameters=parameters) == expected
+        NetworkSimulation(net, [Population("room", 1)], max_density=2.4)
 
 
 def test_scalar_too_large_for_float_is_rejected():
@@ -367,7 +281,9 @@ def test_public_reference_routes_use_resolved_custom_node_speeds(
 ):
     net = Network(
         parameters=HydraulicParameters(
-            level_speed_constant=level_k, stair_speed_coefficient=60
+            level_speed_constant=level_k,
+            stair_speed_coefficient=60,
+            door_specific_flow=0.4,
         )
     )
     net.add_room("a", area=100)
@@ -387,7 +303,7 @@ def test_public_reference_routes_use_resolved_custom_node_speeds(
     assert len(net.route_choices()[0]) == 2
 
 
-@pytest.mark.parametrize("flow,layer", [(1, 0), (2, 0.25), (3, 0.1)])
+@pytest.mark.parametrize("flow,layer", [(1, 0), (1.2, 0.25), (1.3, 0.1)])
 def test_configured_door_capacity_controls_existing_flow_allocation(
     flow, layer
 ):
@@ -404,48 +320,10 @@ def test_configured_door_capacity_controls_existing_flow_allocation(
     assert sim.run(seed=1).evacuation_time == pytest.approx(expected, abs=0.02)
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        lambda s: s["nodes"].pop(),
-        lambda s: s["links"][0].pop("capacity"),
-        lambda s: s["links"][0].update(index=True),
-        lambda s: s["nodes"][1].update(area=100),
-    ],
-)
-def test_snapshot_structure_and_non_numeric_fields_are_checked(change):
-    data = custom_scenario().to_dict()
-    change(data["resolved_hydraulics"])
-    with pytest.raises(ScenarioError, match="resolved_hydraulics"):
-        scenario_from_dict(data)
-
-
-def test_snapshot_roundoff_tolerance_does_not_override_reconstruction():
-    data = custom_scenario().to_dict()
-    expected = data["resolved_hydraulics"]["links"][0]["capacity"]
-    data["resolved_hydraulics"]["links"][0]["capacity"] *= 1 + 5e-13
-    restored = scenario_from_dict(data)
-    assert restored.simulation.network.links[0].capacity == expected
-
-
-def test_unrecognized_historical_model_is_not_silently_reinterpreted(
-    monkeypatch,
-):
-    data = custom_scenario().to_dict()
-    data["format_version"] = 1
-    for key in (
-        "hydraulic_parameters",
-        "hydraulic_model_version",
-        "resolved_hydraulics",
-    ):
-        del data[key]
-    monkeypatch.setattr(hydraulic, "HYDRAULIC_MODEL_VERSION", "unsupported")
-    with pytest.raises(ScenarioError, match="hydraulic_model_version"):
-        scenario_from_dict(data)
-
-
 def test_lower_custom_jam_density_rejects_incompatible_simulation_default():
-    net = room_network(HydraulicParameters(speed_density_slope=0.5))
+    net = room_network(
+        HydraulicParameters(speed_density_slope=0.5, door_specific_flow=0.7)
+    )
     with pytest.raises(ValueError, match="max_density must be in"):
         NetworkSimulation(net, [Population("room", 1)])
 
@@ -456,22 +334,73 @@ def test_scenario_probe_does_not_impose_geometry_on_global_parameters():
     assert Scenario.from_simulation(sim).simulation.network.links == net.links
 
 
-def test_numeric_snapshot_fields_accept_equivalent_integer_json_values():
-    data = custom_scenario().to_dict()
-    data["resolved_hydraulics"]["links"][-1]["capacity"] = 2
-    data["connections"][-1]["specific_flow"] = 2.0
-    assert scenario_from_dict(data).simulation.network.links[-1].capacity == 2
-
-
-def test_configured_flow_cannot_create_nonfinite_capacity():
-    net = Network(parameters=HydraulicParameters(door_specific_flow=1e308))
-    net.add_room("room", area=10)
-    net.add_safe("exit")
-    with pytest.raises(ValueError, match="capacity must be finite"):
-        net.connect("room", "exit", width=3)
-    assert net.links == ()
-    assert len(net._inputs) == 2
-    # A finite local override takes precedence over the configured flow.
-    assert (
-        net.connect("room", "exit", width=3, specific_flow=1)[0].capacity == 2.7
+def custom_scenario():
+    net = room_network(
+        HydraulicParameters(speed_density_slope=0.2, door_boundary_layer=0.2)
     )
+    net.connect("room", "safe", width=1, specific_flow=1, boundary_layer=0)
+    return Scenario.from_simulation(
+        NetworkSimulation(net, [Population("room", 4)]), seed=17
+    )
+
+
+def test_scenario_round_trip_keeps_only_changed_parameters(tmp_path):
+    original = custom_scenario()
+    assert original.data["hydraulic_parameters"] == {
+        "speed_density_slope": 0.2,
+        "door_boundary_layer": 0.2,
+    }
+    assert original.data["format_version"] == 1
+    path = tmp_path / "custom.json"
+    save_scenario(original, path)
+    restored = load_scenario(path)
+    assert restored.data == original.data
+    a, b = original.simulation, restored.simulation
+    assert a.network.parameters == b.network.parameters
+    assert a.network.links == b.network.links
+    np.testing.assert_array_equal(
+        a.run(seed=17).exit_times, b.run(seed=17).exit_times
+    )
+
+
+def test_default_parameters_are_omitted_and_absent_means_defaults():
+    data = Scenario.from_simulation(
+        NetworkSimulation(room_network(), [Population("room", 1)])
+    ).data
+    assert "hydraulic_parameters" not in data
+    assert data["software_version"] == scenario_module.software_version()
+    assert scenario_from_dict(data).simulation.network.parameters == DEFAULT
+
+
+def test_software_version_is_ignored_by_the_loader():
+    data = custom_scenario().to_dict()
+    data["software_version"] = "not a version"
+    assert scenario_from_dict(data).simulation.network.parameters == (
+        custom_scenario().simulation.network.parameters
+    )
+
+
+@pytest.mark.parametrize(
+    "key,value,match",
+    [
+        ("min_density", 1.0, "min_density"),
+        ("opening_boundary_layer", 0.1, "opening_boundary_layer"),
+        ("speed_density_slope", "0.2", "speed_density_slope"),
+        ("door_specific_flow", 2.0, "door_specific_flow.*k_level"),
+    ],
+)
+def test_scenario_rejects_removed_and_invalid_parameters(key, value, match):
+    data = custom_scenario().to_dict()
+    data["hydraulic_parameters"][key] = value
+    with pytest.raises(ScenarioError, match=match):
+        scenario_from_dict(data)
+
+
+@pytest.mark.parametrize(
+    "key", ["hydraulic_model_version", "resolved_hydraulics"]
+)
+def test_removed_top_level_keys_are_rejected(key):
+    data = custom_scenario().to_dict()
+    data[key] = {} if key == "resolved_hydraulics" else "1"
+    with pytest.raises(ScenarioError, match=key):
+        scenario_from_dict(data)

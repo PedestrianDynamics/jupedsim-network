@@ -19,48 +19,50 @@ parameters = HydraulicParameters(
 net = Network(parameters=parameters)
 ```
 
-`Network()` retains the default configuration. Configuration fields are immutable
-scalars; separate networks can use different configurations in the same process.
-Node speeds and link capacities are resolved during construction. Simulation and
-hydraulic reference-time routing use `net.parameters`, without a separate
-simulation override. Rebuild the network to change the configuration.
+`Network()` uses the defaults. The coefficients are immutable scalars;
+separate networks can use different ones in the same process. Node speeds
+and link capacities are resolved when you build the network, and the
+simulation and the `"shortest_free_flow_time"` routing cost read
+`net.parameters`. Rebuild the network to change a coefficient. A local
+`specific_flow` or `boundary_layer` on `connect` takes precedence, and an
+explicit zero boundary layer is kept.
 
-Every numerical result must be traceable to the network geometry, immutable
-hydraulic configuration, explicit local overrides and documented model
-implementation. Retain simulation settings and random seeds with results.
+| Field | Meaning | Unit | Default | Source |
+|---|---|---|---|---|
+| `speed_density_slope` | Slope $a$ of the speed–density relation | m²/person | 0.266 | SFPE Eq. 67.3 |
+| `level_speed_constant` | Level-walking constant $k$ | m/s | `84 / 60` | SFPE Table 67.2 |
+| `door_specific_flow` | Specific flow of doors and openings | persons/(m·s) | 1.3 | SFPE Table 67.5 |
+| `stair_speed_coefficient` | Coefficient of $\sqrt{T/R}$ in the stair $k$ | m/min | 51.8 | EvacuatioNZ |
+| `door_boundary_layer` | Excluded width per side of a door | m | 0.15 | SFPE Table 67.1 |
+| `stair_boundary_layer` | Excluded width per side of a stair link | m | 0.15 | SFPE Table 67.1 |
 
-Local `specific_flow` and `boundary_layer` overrides take precedence over
-configuration-derived values; omitted configuration fields use library defaults.
-Only `None` selects a connection default: an explicit zero boundary layer is
-retained. Geometry, including widths, lengths, areas and stair steps, remains
-in the original construction inputs, alongside the resolved graph records.
+The coefficients and boundary layers are finite; the four coefficients
+are positive and the boundary layers nonnegative. Three quantities are
+derived and cannot be set: jam density $1/a$, peak-flow density
+$1/(2a)$ and maximum specific flow $k/(4a)$. The slope must keep the
+peak-flow density at or above the density floor of 0.54 m⁻², that is
+$a \le 0.926$ m²/person. `door_specific_flow` must not exceed $k/(4a)$ of
+the level constant, because a door cannot pass more than the
+speed–density relation allows; the error names both values. Simulation
+requires `max_density` below the jam density, so the default 2.75 fails
+for a slope above 0.364.
 
-| Configuration field | Meaning | Unit | Default |
-|---|---|---|---|
-| `speed_density_slope` | Empirical speed–density slope | m²/person | 0.266 |
-| `min_density` | Density floor used in the speed calculation | persons/m² | 0.54 |
-| `level_speed_constant` | Level-walking coefficient, not reference speed | m/s | `84 / 60` |
-| `door_specific_flow` | Prescribed specific flow for doors and openings | persons/(m·s) | 1.3 |
-| `stair_speed_coefficient` | EvacuatioNZ coefficient multiplying `sqrt(tread/riser)` | m/min | 51.8 |
-| `door_boundary_layer` | Excluded width per side | m | 0.15 |
-| `opening_boundary_layer` | Excluded width per side | m | 0.0 |
-| `stair_boundary_layer` | Excluded width per side | m | 0.15 |
+The opening boundary layer (0 m) and the density floor 0.54 m⁻² are not
+coefficients and cannot be changed. The floor is an applicability bound
+of the relation, not a minimum physical density; the speed at zero
+density is a hydraulic reference speed, not a free-walking speed.
 
-Coefficients must be finite and positive; boundary layers must be finite and
-nonnegative. The density floor must satisfy `0 <= min_density < jam_density`,
-and the slope must yield a representable finite jam density. Simulation still
-requires `max_density` below that jam density; an incompatible value raises an
-error, including when the default `max_density=2.75` is too high.
-`min_density` is **not** a minimum physical pedestrian density. The speed at
-zero density is a hydraulic reference speed, not an empirical individual
-free-walking speed.
+The defaults come from the sources in the table; see
+[Model elements]({{< relref "/docs/model/elements#default-values-and-sources" >}}).
+Changed values are study assumptions, not validated ranges, and the
+package does not check them against data. Stair riser and tread ranges stay
+reference limits, independent of the coefficients.
 
-Jam density (`1/a`), peak-flow density (`max(min_density, 1/(2*a))`) and maximum
-specific flow are derived quantities. When the density floor exceeds `1/(2*a)`,
-the maximum is at the floor and uses `k * min_density * (1 - a * min_density)`;
-otherwise it is `k/(4*a)`. These are the extrema of the existing piecewise speed
-relation, not additional configurable coefficients. Stair applicability ranges
-remain reference limits in `hydraulic.py`, independent of the parameter set.
+In a scenario file, give the coefficients that differ from the defaults
+under `hydraulic_parameters`; an absent block means all defaults
+([Command line]({{< relref "/docs/using/command-line#the-scenario-file" >}})).
+Retain the package version and seeds with results; an exported file
+records the version in `software_version`.
 
 ## Nodes
 
@@ -209,17 +211,25 @@ the run starts and is never updated.
 
 - `routing_policy="shortest_distance"` is the default and sums link lengths
   in metres. Speeds and queues play no part.
-- `routing_policy="shortest_free_flow_time"` minimizes **hydraulic reference
-  travel time**, not predicted actual travel time. Each link costs
-  `link.length / hydraulic.speed(0, source.speed_constant, parameters=net.parameters)` seconds because
-  its length is walked in the source node. The reference speed is
-  `k * (1 - a * min_density)` m/s (`k * (1 - 0.266 * 0.54)` by default);
-  it is not the coefficient `k` itself. Individual speed limits, congestion,
-  and queueing delays are excluded. This does not minimize total evacuation
-  time. Pass the policy to `NetworkSimulation`, `route_table`, or
+- `routing_policy="shortest_free_flow_time"` sums a reference time per
+  link, `link.length / hydraulic.speed(0, source.speed_constant)` in
+  seconds, where `source` is the node the link leaves, because a link's
+  length is walked in that node. `speed(0, k)` is the SFPE speed at the
+  density floor, $k\,(1 - 0.266 \cdot 0.54) = 0.856\,k$ m/s, so the floor
+  only fixes the unit of the cost; the policy differs from
+  `"shortest_distance"` only through the speed constants $k$ of the
+  nodes, 1.4 m/s for rooms and $51.8\sqrt{T/R}/60$ m/s for stairs
+  (1.077 m/s for 18/28 cm steps). Stair length is thereby weighted by
+  about 1.3 relative to level length, and nothing else changes. A
+  `kind="stair"` link that leaves a room is costed at the room's speed;
+  only links leaving a stair node use the stair speed. This stair-entry
+  rule and the policy itself are engineering choices of this model, not
+  taken from SFPE, EvacuatioNZ or Tsai. The reference time excludes
+  individual speeds, congestion and queues and is not a prediction of
+  travel time ([Limitations]({{< relref "/docs/limitations#routes" >}})).
+  Pass the policy to `NetworkSimulation`, `route_table` or
   `route_choices`; scenario files store it under `simulation.routing_policy`.
-  One static table per destination is shared across populations. Explicit
-  population targets still select the destination; speeds do not select tables.
+  One static table per destination is shared across populations.
 - Equally short routes are split. A node where several links start a
   minimum-cost route is a tie; selected costs count as equal if they agree
   to within 10⁻⁹ of their cost (at least 10⁻⁹ m or 10⁻⁹ s), that is, up to

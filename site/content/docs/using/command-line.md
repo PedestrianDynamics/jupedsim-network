@@ -226,10 +226,9 @@ Each section goes to one part of the API:
 
 | Key | Type | Goes to | Arguments on |
 |-----|------|---------|--------------|
-| `format_version` | integer, required | `2`; legacy `1` is migrated | |
-| `hydraulic_model_version` | string, required in v2 | Hydraulic implementation identifier, currently `"1"`; independent of schema version | |
-| `hydraulic_parameters` | object, required in v2 | All eight hydraulic configuration fields | [Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}}) |
-| `resolved_hydraulics` | object, optional in v2 | Verification snapshot of reconstructed nodes and links; never an override | |
+| `format_version` | integer, required | Must be `1` | |
+| `software_version` | string | Version of jupedsim-network that wrote the file; written by the export, ignored when reading | |
+| `hydraulic_parameters` | object | `HydraulicParameters` fields that differ from the defaults; absent means all defaults | [Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}}) |
 | `description` | string | Free text, not passed on | |
 | `nodes` | array, required | `add_room`, `add_stair` or `add_safe`, chosen by `kind` (`"room"`, `"stair"`, `"safe"`) | [Networks]({{< relref "/docs/using/networks#nodes" >}}) |
 | `connections` | array, required | `Network.connect` | [Networks]({{< relref "/docs/using/networks#links" >}}) |
@@ -244,8 +243,8 @@ the pages in the last column. The rules below are those of the file.
 ### Keys are the argument names of the API
 
 The loader reads the allowed keys from the signatures of the API, so
-construction values are passed on unchanged. Schema and hydraulic model
-metadata are validated separately. Two names differ from what you might guess: a population
+the file has no names of its own, and every value is passed on
+unchanged. Two names differ from what you might guess: a population
 starts in `node`, and a stair takes `riser` and `tread` in m.
 
 Three names are not shared between the file and the API:
@@ -256,8 +255,8 @@ Three names are not shared between the file and the API:
 - `quantiles` is in the file only. It is not an argument of
   `run_many()`; it feeds `MonteCarloResult.quantile()`.
 
-Omitted construction and simulation keys take API defaults. Hydraulic fields
-are complete in schema 2; schema 1 receives fixed historical hydraulic defaults. An unknown key is an error that lists the valid keys, so a
+A key you leave out takes the API default. The loader adds no defaults
+of its own. An unknown key is an error that lists the valid keys, so a
 typo cannot fall back to a default without notice. Here `typo.json` is
 a copy of `scenario.json` with `max_density` misspelt as `max_densty`:
 
@@ -470,24 +469,13 @@ A result is fixed by four things: the scenario file (its `sha256` is in
 `summary.json`) and the major version of NumPy. Keep `summary.json`
 with the results.
 
-- **Hydraulic assumptions are explicit in schema 2.** `format_version` versions
-  the document layout. `hydraulic_model_version` independently identifies the
-  hydraulic equations, units and resolution rules. Unsupported versions fail
-  explicitly. The complete configuration and original construction inputs are
-  authoritative; no reconstructed value is replaced by a stored snapshot.
-- **Legacy hydraulic defaults are fixed.** Schema 1 migrates to model `"1"`
-  using slope 0.266, density floor 0.54, level coefficient `84/60` m/s,
-  doorway flow 1.3 persons/(m·s), stair coefficient 51.8 m/min, and boundary
-  layers 0.15/0/0.15 m for doors/openings/stairs. Migration does not consult
-  future library defaults. Saving through `save_scenario` writes schema 2.
-- **Snapshots detect inconsistencies.** Python exports include optional
-  `resolved_hydraulics` node/link records. Safe-node infinite area is encoded
-  as `null`. Structure, ordering and non-floating fields must match exactly;
-  floating fields use relative tolerance `1e-12` and zero absolute tolerance.
-  A mismatch raises `ScenarioError` with the affected field. When intentionally
-  editing geometry or coefficients, remove or regenerate the snapshot.
-  Simulation settings and seeds remain scenario inputs; retain the package
-  and numerical-library versions for full reproducibility.
+- **A file means "these inputs under this version's defaults".**
+  `format_version` versions the layout of the file, not the model
+  defaults. A key left out takes the default of the installed version,
+  which can change between versions. This holds for `hydraulic_parameters`
+  too: a coefficient not listed there takes its default. An exported file
+  records the version that wrote it in `software_version`; the loader does
+  not use it.
 - **NumPy 1 and NumPy 2 differ slightly.** `summary.json`,
   `link_flow.csv`, `occupancy.csv` and `runs.csv` are the same.
   `agents.csv` differs in the last digits of a few sampled pre-movement
@@ -550,7 +538,7 @@ packaged file.
     path: a `Distribution` subclass of your own or a node name that is
     not a string. Nothing is dropped without notice.
 - **`save_scenario(scenario, path)`** writes UTF-8 JSON indented by two
-  spaces, in key order; legacy hydraulic defaults become explicit in schema 2. `scenario` is a
+  spaces, in key order, and adds no defaults. `scenario` is a
   `Scenario`, a scenario dict, which is checked and built first, or a
   `NetworkSimulation`, which is written without a `run` or
   `monte_carlo` section. A file written by `save_scenario` is written
@@ -564,7 +552,7 @@ packaged file.
     numbers, booleans and `None`. A tuple is rejected.
   - The checks and messages are those of `load_scenario`, except the
     checks of the JSON text itself (UTF-8, duplicate keys).
-  - It returns a `Scenario` whose `data` is a copy migrated to schema 2.
+  - It returns a `Scenario` whose `data` is a copy of `data`.
   - `source` is stored as `Scenario.source`.
   - It raises `ScenarioError`.
 - **`Scenario`** is a frozen dataclass with
@@ -585,12 +573,13 @@ packaged file.
   `"connections[1].width"`) and `message`. `str()` gives
   `"<path>: <message>"`.
 
-An exported file includes hydraulic configuration and verification snapshots.
-Construction and simulation arguments equal to API defaults are omitted. From the
+An exported file is shorter than the packaged one, apart from the
+`software_version` line. Exported from the
 Getting started simulation, it has no `"speed": 1.2`, an empty
 `"simulation": {}` (0.5 s is the default `dt`) and the stair keys in
 the order of the signature. Both files build the same simulation, but
-the exported one also records the hydraulic assumptions explicitly.
+the exported one lists only what differs from the defaults of the
+installed version.
 
 ## Errors
 
@@ -601,6 +590,7 @@ the JSON path of the entry and the message.
 jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, routing_policy, split_ties, supply_reduction, t_max
 jupedsim-network check: error: speed0.json: populations[0]: Agent speeds must be positive.
 jupedsim-network check: error: ln0.json: populations[0].pre_movement: cannot sample LogNormal(lower=0.0, upper=None, mean=0, std=60.0): float division by zero
+jupedsim-network check: error: policy.json: simulation.routing_policy: routing_policy must be one of 'shortest_distance', 'shortest_free_flow_time'; got 'fastest'.
 ```
 
 The first and the last are found while the file is loaded. The second

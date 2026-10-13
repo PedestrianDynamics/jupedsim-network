@@ -2,7 +2,8 @@
 """Directed graph with resolved physical properties for the network model.
 
 The builder resolves hydraulic defaults into node speeds and link capacities.
-Routing uses static distance or reference-time costs. Flow sharing and agent
+Routing minimizes static link costs, either lengths or hydraulic
+reference travel times (the ``routing_policy``). Flow sharing and agent
 movement belong to the simulation. Reverse links identify directions of one
 physical connection.
 """
@@ -14,6 +15,9 @@ from dataclasses import dataclass
 from jupedsim_network import hydraulic, routing, routing_costs
 from jupedsim_network.routing import TIE_TOLERANCE as TIE_TOLERANCE
 from jupedsim_network.routing_costs import ROUTING_POLICIES as ROUTING_POLICIES
+from jupedsim_network.routing_costs import (
+    check_routing_policy as check_routing_policy,
+)
 
 ROOM = "room"
 STAIR = "stair"
@@ -22,10 +26,10 @@ SAFE = "safe"
 DOOR = "door"
 OPENING = "opening"
 
-# Compatibility defaults for schema help; construction uses the retained parameters.
+# Defaults for schema help; construction uses the retained parameters.
 _BOUNDARY_LAYERS = {
     DOOR: hydraulic.DEFAULT_HYDRAULIC_PARAMETERS.door_boundary_layer,
-    OPENING: hydraulic.DEFAULT_HYDRAULIC_PARAMETERS.opening_boundary_layer,
+    OPENING: hydraulic.OPENING_BOUNDARY_LAYER,
     STAIR: hydraulic.DEFAULT_HYDRAULIC_PARAMETERS.stair_boundary_layer,
 }
 
@@ -168,8 +172,8 @@ class Network:
             tread: tread depth in m, below 1 m
             area: area of the flight in m², which holds the agents on
                 it; give it, or both ``length`` and ``width``, not both.
-                No projection or adjustment for landings is performed.
-            length: length of the flight in m; with ``width``, the area is
+            length: length of the flight in m along the incline, like the
+                stair link, without landings; with ``width``, the area is
                 ``length * width``
             width: width of the flight in m; see ``length``
         """
@@ -335,10 +339,10 @@ class Network:
             nodes, links, routing_policy, parameters=self.parameters
         )
         targets = [node.index for node in self._targets(target)]
-        metric, unit = routing_costs.units(routing_policy)
-        return routing.route_table(
-            nodes, links, targets, costs, metric=metric, unit=unit
-        )
+        try:
+            return routing.route_table(nodes, links, targets, costs)
+        except routing.CostOverflowError as error:
+            raise routing_costs.overflow_error(error, routing_policy) from None
 
     def route_choices(
         self,
@@ -386,10 +390,10 @@ class Network:
             nodes, links, routing_policy, parameters=self.parameters
         )
         targets = [node.index for node in self._targets(target)]
-        metric, unit = routing_costs.units(routing_policy)
-        return routing.route_choices(
-            nodes, links, targets, costs, metric=metric, unit=unit
-        )
+        try:
+            return routing.route_choices(nodes, links, targets, costs)
+        except routing.CostOverflowError as error:
+            raise routing_costs.overflow_error(error, routing_policy) from None
 
     def _targets(self, target: str | None) -> list[Node]:
         if target is not None:
@@ -470,11 +474,9 @@ def _connection_capacity(
         fs = _default_specific_flow(kind, src, dst, parameters)
     if not 0 < fs < math.inf:
         raise ValueError(f"specific_flow must be positive, got {fs}.")
-    layer = (
-        getattr(parameters, f"{kind}_boundary_layer")
-        if boundary_layer is None
-        else boundary_layer
-    )
+    layer = _default_boundary_layer(kind, parameters)
+    if boundary_layer is not None:
+        layer = boundary_layer
     if not 0 <= layer < math.inf:
         raise ValueError(f"boundary_layer: must be >= 0 m, got {layer}.")
     capacity = fs * hydraulic.effective_width(width, layer)
@@ -483,6 +485,12 @@ def _connection_capacity(
     if not math.isfinite(capacity):
         raise ValueError("Connection capacity must be finite.")
     return capacity
+
+
+def _default_boundary_layer(kind, parameters) -> float:
+    if kind == OPENING:
+        return hydraulic.OPENING_BOUNDARY_LAYER
+    return getattr(parameters, f"{kind}_boundary_layer")
 
 
 def _default_specific_flow(kind, src, dst, parameters) -> float:

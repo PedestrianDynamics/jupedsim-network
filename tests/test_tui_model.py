@@ -695,8 +695,7 @@ def test_jobs_open_validate_and_save(tmp_path):
     path = tmp_path / "s.json"
     path.write_bytes(cli_init.example_bytes("office-wing"))
     opened = call(jobs.open_file(str(path)))
-    assert opened.doc == scenario_from_dict(example("office-wing")).to_dict()
-    assert opened.error == ""
+    assert opened.doc == example("office-wing") and opened.error == ""
     missing = call(jobs.open_file(str(tmp_path / "none.json")))
     assert missing.doc is None and missing.error.startswith("cannot read ")
     typo = example()
@@ -707,11 +706,12 @@ def test_jobs_open_validate_and_save(tmp_path):
         bad.doc is None and "simulation: unknown key 'max_densty'" in bad.error
     )
     example_doc = call(jobs.open_example("getting-started"))
-    migrated = scenario_from_dict(example()).to_dict()
-    assert example_doc.path is None and example_doc.doc == migrated
+    assert example_doc.path is None and example_doc.doc == example()
     saved = call(jobs.save(example(), str(tmp_path / "new.json")))
-    assert saved.doc == migrated
-    assert json.loads((tmp_path / "new.json").read_text()) == migrated
+    assert saved.doc == example()
+    assert (tmp_path / "new.json").read_bytes() == cli_init.example_bytes(
+        "getting-started"
+    )
     doc = example()
     doc["connections"][0]["width"] = -1.0
     refused = call(jobs.save(doc, str(tmp_path / "refused.json")))

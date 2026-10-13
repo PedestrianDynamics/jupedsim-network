@@ -23,6 +23,7 @@ import pytest
 
 from jupedsim_network import (
     Fixed,
+    HydraulicParameters,
     LogNormal,
     Network,
     NetworkSimulation,
@@ -74,7 +75,11 @@ def _office_wing_module():
 
 
 def _full_keys_python() -> NetworkSimulation:
-    net = Network()
+    net = Network(
+        parameters=HydraulicParameters(
+            door_specific_flow=1.2, door_boundary_layer=0.1
+        )
+    )
     net.add_room("west", area=60.0)
     net.add_room("east", length=10.0, width=6.0)
     net.add_room("hall", area=40.0)
@@ -150,6 +155,7 @@ def _full_keys_python() -> NetworkSimulation:
             supply_reduction=False,
             split_ties=False,
             counterflow="estimate",
+            routing_policy="shortest_free_flow_time",
         )
 
 
@@ -216,19 +222,12 @@ def test_office_wing_stair_literals_are_the_script_values():
 
 
 @pytest.mark.parametrize("path", [GETTING_STARTED, OFFICE_WING, FULL_KEYS])
-def test_save_preserves_inputs_and_migrates_legacy_hydraulics(path, tmp_path):
+def test_save_reproduces_the_file(path, tmp_path):
     scenario = load_scenario(path)
     out = tmp_path / "saved.json"
     save_scenario(scenario, out)
-    original = json.loads(path.read_text())
-    saved = json.loads(out.read_text())
-    assert saved["format_version"] == 2
-    for key, value in original.items():
-        if key != "format_version":
-            assert saved[key] == value
+    assert out.read_bytes() == path.read_bytes()
     assert load_scenario(out).data == scenario.data
-    save_scenario(load_scenario(out), out)
-    assert json.loads(out.read_text()) == saved
 
 
 def test_full_keys_sets_every_key():
@@ -282,9 +281,6 @@ def test_order_of_tied_connections_changes_the_route():
     """With split_ties false the first tied link in file order is taken."""
     data = json.loads(FULL_KEYS.read_text())
     swapped = copy.deepcopy(data)
-    del swapped[
-        "resolved_hydraulics"
-    ]  # Intentional change to construction order.
     links = swapped["connections"]
     links[2], links[3] = links[3], links[2]
     sim = scenario_from_dict(swapped).simulation
@@ -333,10 +329,10 @@ def test_section_keys_are_the_api_arguments(fn, section, skip):
     assert keys == names | set(scenario_module.FILE_ONLY.get(section, ()))
 
 
-def test_loader_has_no_simulation_default_literals():
-    """Simulation defaults remain in the API; legacy hydraulics are pinned."""
+def test_loader_has_no_default_literals():
+    """Defaults live only in the API: the loader never assigns one."""
     source = inspect.getsource(scenario_module)
-    for default in ("2.75", "3600", "1.2,", '"bounding"'):
+    for default in ("2.75", "3600", "1.2,", '"bounding"', "1.3"):
         assert default not in source, default
 
 
@@ -387,7 +383,7 @@ def _set(path, value):
 
 
 STRUCTURAL = [
-    (_set(["format_version"], 3), "format_version: 3 is not supported"),
+    (_set(["format_version"], 2), "format_version: 2 is not supported"),
     (_set(["format_version"], True), "format_version: true is not supported"),
     (
         lambda d: d.pop("format_version"),
@@ -612,14 +608,21 @@ API = [
         lambda: NetworkSimulation(Network(), [], max_density=4),
     ),
     (
-        _set(["simulation", "counterflow"], "free"),
-        "simulation",
-        lambda: NetworkSimulation(Network(), [], counterflow="free"),
-    ),
-    (
         _set(["populations", 0, "node"], "street"),
         "populations[0]",
         lambda: _sim_from(Population("street", 1)),
+    ),
+]
+KEYED_API = [
+    (
+        _set(["simulation", "counterflow"], "free"),
+        "simulation.counterflow",
+        lambda: NetworkSimulation(Network(), [], counterflow="free"),
+    ),
+    (
+        _set(["simulation", "routing_policy"], "fastest"),
+        "simulation.routing_policy",
+        lambda: NetworkSimulation(Network(), [], routing_policy="fastest"),
     ),
 ]
 
@@ -631,12 +634,29 @@ def _sim_from(pop):
     return NetworkSimulation(net, [pop])
 
 
-@pytest.mark.parametrize("change, path, call", API)
+@pytest.mark.parametrize("change, path, call", API + KEYED_API)
 def test_api_errors_keep_the_api_message(change, path, call):
     with pytest.raises(ScenarioError) as info:
         scenario_from_dict(_edit(change))
     assert info.value.path == path
     assert info.value.message == _api_message(call)
+
+
+def test_unknown_routing_policy_names_the_valid_values():
+    with pytest.raises(ScenarioError) as info:
+        scenario_from_dict(
+            _edit(_set(["simulation", "routing_policy"], "fastest"))
+        )
+    assert info.value.message == (
+        "routing_policy must be one of 'shortest_distance', "
+        "'shortest_free_flow_time'; got 'fastest'."
+    )
+
+
+def test_scenario_without_routing_policy_uses_the_default():
+    data = _edit(lambda d: d["simulation"].pop("routing_policy", None))
+    sim = scenario_from_dict(data).simulation
+    assert sim.routing_policy == "shortest_distance"
 
 
 def test_population_errors_name_the_population():
@@ -786,12 +806,7 @@ def test_export_keeps_inputs_order_and_settings():
         if k != "bidirectional"
     }
     assert all("capacity" not in c for c in data["connections"])
-    # The all-keys fixture includes the default policy; exports omit defaults.
-    assert data["simulation"] == {
-        key: value
-        for key, value in fixture["simulation"].items()
-        if key != "routing_policy"
-    }
+    assert data["simulation"] == fixture["simulation"]
     assert data["run"] == fixture["run"]
     assert data["monte_carlo"] == fixture["monte_carlo"]
     assert data["populations"][0] == fixture["populations"][0]
@@ -1177,6 +1192,10 @@ def test_keys_name_the_rules_the_signature_cannot():
         "bounding",
         "estimate",
         "independent",
+    )
+    assert simulation["routing_policy"].choices == (
+        "shortest_distance",
+        "shortest_free_flow_time",
     )
     seed = {k.name: k for k in scenario_module.keys("run")}["seed"]
     assert seed.annotation == (int | None)

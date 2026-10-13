@@ -54,7 +54,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from jupedsim_network import hydraulic
-from jupedsim_network.network import SAFE, STAIR, Network
+from jupedsim_network.network import (
+    SAFE,
+    STAIR,
+    Network,
+    check_routing_policy,
+)
 from jupedsim_network.sampling import Distribution, as_distribution
 
 # Smallest time step: the clock ``t = round(t + dt, 9)`` keeps its rounding
@@ -301,6 +306,7 @@ class NetworkSimulation:
                 "counterflow must be one of 'bounding', 'estimate', "
                 f"'independent'; got {counterflow!r}."
             )
+        check_routing_policy(routing_policy)
         if not populations:
             raise ValueError("At least one population is required.")
         self.network = network

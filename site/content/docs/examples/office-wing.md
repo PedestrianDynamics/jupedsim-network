@@ -419,7 +419,8 @@ persons/s and the 1.8 m main door 1.95 persons/s
 link passes 0.92 persons/s, the maximum stair flow for these steps times
 the effective width of 0.9 m.
 
-Routes follow the shortest walking distance. From GE the side door is
+Routes follow the shortest walking distance, the default
+`routing_policy="shortest_distance"`. From GE the side door is
 9 m away and the main door 18 m, so the routes are not tied
 ([issue #7](https://github.com/PedestrianDynamics/jupedsim-network/issues/7)).
 Everyone upstairs comes down the stair into GE and therefore leaves by
@@ -542,8 +543,10 @@ line), so the differences in that run come from the door alone. The
   wider side door cannot help; the door to widen next is the stair door.
 
 In the model, the main door stays almost unused in every variant.
-Routes use distance only, so nobody from upstairs walks the extra 9 m to
-the main door. To test a different exit choice, send part of the upper
+Routes use distance only by default, so nobody from upstairs walks the
+extra 9 m to the main door. `routing_policy="shortest_free_flow_time"`
+changes nothing here: the stair lies on both routes and the rest is
+level. To test a different exit choice, send part of the upper
 floor to the main door with `target="main"` ([Networks]({{< relref "/docs/using/networks#routes" >}})).
 
 ## Limits of this example

@@ -18,8 +18,9 @@ import os
 import shutil
 import tempfile
 from dataclasses import dataclass
-from importlib import metadata
 from pathlib import Path
+
+from jupedsim_network.scenario import software_version
 
 # Quantiles reported when neither the file nor --quantile gives any.
 DEFAULT_QUANTILES = (0.5, 0.95)
@@ -233,7 +234,7 @@ def _summary(scenario, outcome, path, warned) -> str:
     net = sim.network
     summary = {
         "format_version": 1,
-        "jupedsim_network": _version(),
+        "jupedsim_network": software_version(),
         "scenario": {
             "path": str(path),
             "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
@@ -280,13 +281,6 @@ def _monte_carlo_summary(outcome: Outcome):
             for q, v in zip(outcome.quantiles, outcome.values)
         ],
     }
-
-
-def _version() -> str:
-    try:
-        return metadata.version("jupedsim-network")
-    except metadata.PackageNotFoundError:
-        return "unknown"
 
 
 def write(out: Path, files: dict[str, str]) -> None:

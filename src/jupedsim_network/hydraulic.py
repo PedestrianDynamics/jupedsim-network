@@ -16,25 +16,31 @@ from numbers import Real
 
 import numpy as np
 
+#: Density floor used in speed calculation, not a minimum physical density.
+#: An applicability bound of the relation, fixed for every configuration.
+MIN_DENSITY = 0.54
+
+#: Boundary layer per side of an opening, zero by definition.
+OPENING_BOUNDARY_LAYER = 0.0
+
 
 @dataclass(frozen=True, slots=True)
 class HydraulicParameters:
-    """Empirical parameters and density-floor assumption of the SFPE model.
+    """Empirical coefficients of the SFPE model, defaults from the handbook.
 
-    Units are documented per field. The stair coefficient retains m/min from
-    its reference and is converted to m/s by the stair relation. Derived
-    densities describe the implemented relation, not a scientifically validated
-    applicability range for custom parameters.
+    The defaults follow SFPE Handbook Eq. 67.3 (speed-density relation),
+    Tables 67.1, 67.2 and 67.5; the stair coefficient follows EvacuatioNZ.
+    Changed values are study assumptions, not validated ranges. Jam density
+    ``1/a``, peak-flow density ``1/(2a)`` and maximum specific flow
+    ``k/(4a)`` are derived and cannot be set.
     """
 
     speed_density_slope: float = 0.266  # m²/person
-    min_density: float = 0.54  # persons/m²; density floor in speed calculation
     level_speed_constant: float = 84.0 / 60.0  # m/s
     door_specific_flow: float = 1.3  # persons/(m*s); prescribed capacity
 
     stair_speed_coefficient: float = 51.8  # m/min; EvacuatioNZ
     door_boundary_layer: float = 0.15  # m per side
-    opening_boundary_layer: float = 0.0  # m per side
     stair_boundary_layer: float = 0.15  # m per side
 
     def __post_init__(self) -> None:
@@ -56,24 +62,36 @@ class HydraulicParameters:
             "stair_speed_coefficient",
         ):
             value = getattr(self, name)
-            if not math.isfinite(value) or value <= 0:
-                raise ValueError(f"{name} must be finite and positive.")
-        for name in (
-            "door_boundary_layer",
-            "opening_boundary_layer",
-            "stair_boundary_layer",
-        ):
-            if getattr(self, name) < 0:
-                raise ValueError(f"{name} must be nonnegative.")
+            if value <= 0:
+                raise ValueError(f"{name} must be positive, got {value}.")
+        for name in ("door_boundary_layer", "stair_boundary_layer"):
+            value = getattr(self, name)
+            if value < 0:
+                raise ValueError(f"{name} must be nonnegative, got {value}.")
+        self._check_density_floor()
+        self._check_door_flow()
+
+    def _check_density_floor(self) -> None:
+        a = self.speed_density_slope
         if not math.isfinite(self.jam_density):
             raise ValueError(
-                "speed_density_slope must give a finite jam_density."
+                f"speed_density_slope {a} is too small: 1/a must be finite."
             )
-        if not math.isfinite(self.min_density) or not (
-            0 <= self.min_density < self.jam_density
-        ):
+        if not self.peak_flow_density >= MIN_DENSITY:
             raise ValueError(
-                "min_density must be finite and in [0, jam_density)."
+                "speed_density_slope must keep the peak-flow density 1/(2a) "
+                f"at or above the density floor {MIN_DENSITY}, so "
+                f"a <= {1 / (2 * MIN_DENSITY):.3f}; got {a}."
+            )
+
+    def _check_door_flow(self) -> None:
+        limit = self.max_specific_flow
+        if self.door_specific_flow > limit:
+            raise ValueError(
+                f"door_specific_flow {self.door_specific_flow} exceeds the "
+                f"maximum specific flow k_level/(4a) = {limit:.4g} given by "
+                f"level_speed_constant {self.level_speed_constant} and "
+                f"speed_density_slope {self.speed_density_slope}."
             )
 
     @property
@@ -83,21 +101,20 @@ class HydraulicParameters:
 
     @property
     def peak_flow_density(self) -> float:
-        """Density maximizing flow with the density floor, in persons/m²."""
-        return max(self.min_density, self.jam_density / 2.0)
+        """Density maximizing the specific flow, in persons/m²."""
+        return 1.0 / (2.0 * self.speed_density_slope)
 
+    @property
+    def max_specific_flow(self) -> float:
+        """Maximum specific flow ``k/(4a)`` of the level relation."""
+        return self.level_speed_constant / (4.0 * self.speed_density_slope)
 
-# Identifies the equations, units and resolution rules, independently of JSON schema.
-HYDRAULIC_MODEL_VERSION = "1"
 
 DEFAULT_HYDRAULIC_PARAMETERS = HydraulicParameters()
 
 # Compatibility aliases for callers using the default model.
 #: Slope of the linear speed-density relation ``S = k (1 - a D)``.
 SPEED_DENSITY_SLOPE = DEFAULT_HYDRAULIC_PARAMETERS.speed_density_slope
-
-#: Density floor used in speed calculation, not a minimum physical density.
-MIN_DENSITY = DEFAULT_HYDRAULIC_PARAMETERS.min_density
 
 #: Speed constant k for level walkways and doorways (84 m/min).
 LEVEL_SPEED_CONSTANT = DEFAULT_HYDRAULIC_PARAMETERS.level_speed_constant
@@ -166,21 +183,11 @@ def max_specific_flow(
     *,
     parameters: HydraulicParameters = DEFAULT_HYDRAULIC_PARAMETERS,
 ) -> float:
-    """Maximum of ``S(D) * D`` for nonnegative k, in persons/(m*s).
+    """Maximum of ``S(D) * D`` for nonnegative k, ``k/(4a)``, in persons/(m*s).
 
-    The analytical maximum k/(4a) applies when the unconstrained optimum
-    lies above the density floor; otherwise the maximum is at the floor.
     This derived flow is independent of the prescribed doorway capacity.
     """
-    a = parameters.speed_density_slope
-    if parameters.min_density <= parameters.jam_density / 2.0:
-        denominator = 4.0 * a
-        if math.isfinite(denominator):
-            return speed_constant / denominator
-        # Avoid an overflowing intermediate when the quotient is representable.
-        return (speed_constant / a) / 4.0
-    d = parameters.peak_flow_density
-    return speed_constant * (1.0 - a * d) * d
+    return speed_constant / (4.0 * parameters.speed_density_slope)
 
 
 def speed(
@@ -189,14 +196,14 @@ def speed(
     *,
     parameters: HydraulicParameters = DEFAULT_HYDRAULIC_PARAMETERS,
 ):
-    """Congested walking speed ``k (1 - a D)`` with D floored at min_density.
+    """Congested walking speed ``k (1 - a D)`` with D floored at MIN_DENSITY.
 
-    ``min_density`` is a computational floor, not a minimum physical density.
+    ``MIN_DENSITY`` is a computational floor, not a minimum physical density.
     At zero density this gives a hydraulic reference speed, not an empirical
     individual free-walking speed. Works element-wise on numpy arrays.
     The result is never negative.
     """
-    d = np.maximum(density, parameters.min_density)
+    d = np.maximum(density, MIN_DENSITY)
     return np.maximum(
         speed_constant * (1.0 - parameters.speed_density_slope * d), 0.0
     )

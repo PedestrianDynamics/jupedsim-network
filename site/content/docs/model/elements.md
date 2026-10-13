@@ -86,20 +86,27 @@ A link also has:
 
 ## Default values and sources
 
+The hydraulic coefficients below are the defaults of
+`HydraulicParameters`, which a study can change per network
+([Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}})).
+Changed values are study assumptions, not validated ranges. The lower
+density and the opening boundary layer are fixed.
+
 | Quantity | Value | Source | Code |
 |----------|-------|--------|------|
-| Slope $a$ | 0.266 m² per person | {{< cite 1 "Eq. 67.3, p. 2174" >}} | `hydraulic.SPEED_DENSITY_SLOPE` |
+| Slope $a$ | 0.266 m² per person | {{< cite 1 "Eq. 67.3, p. 2174" >}} | `HydraulicParameters.speed_density_slope` |
 | Lower density | 0.54 m⁻² | {{< cite 1 "p. 2174" >}} | `hydraulic.MIN_DENSITY` |
-| $k$, level | 84 m/min = 1.40 m/s | {{< cite 1 "Table 67.2, p. 2174" >}} | `hydraulic.LEVEL_SPEED_CONSTANT` |
+| $k$, level | 84 m/min = 1.40 m/s | {{< cite 1 "Table 67.2, p. 2174" >}} | `HydraulicParameters.level_speed_constant` |
 | $k$, stair | $51.8\sqrt{T/R}$ m/min | EvacuatioNZ {{< cite 2 "§2.1.3" 3 "p. 17" >}} | `hydraulic.stair_speed_constant` |
-| $F_s$, `door` and `opening` | 1.3 persons/s/m | {{< cite 1 "Table 67.5, p. 2176" >}} | `hydraulic.DOOR_SPECIFIC_FLOW` |
+| $F_s$, `door` and `opening` | 1.3 persons/s/m | {{< cite 1 "Table 67.5, p. 2176" >}} | `HydraulicParameters.door_specific_flow` |
 | $F_s$, `stair` | $k/(4a)$; 1.01 for 18/28 cm | derived, see below | `hydraulic.max_specific_flow` |
-| $b$, `door` and `stair` | 0.15 m | {{< cite 1 "Table 67.1, p. 2174" >}} | `network._BOUNDARY_LAYERS` |
-| $b$, `opening` | 0 m | as EvacuatioNZ `enz_opening` {{< cite 3 "p. 14" >}} | `network._BOUNDARY_LAYERS` |
-| Peak-flow density | $1/(2a) = 1.88$ m⁻² | SFPE gives 1.9 {{< cite 1 "pp. 2175–2176" >}} | `hydraulic.PEAK_FLOW_DENSITY` |
-| Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `hydraulic.JAM_DENSITY` |
+| $b$, `door` and `stair` | 0.15 m | {{< cite 1 "Table 67.1, p. 2174" >}} | `HydraulicParameters.door_boundary_layer`, `stair_boundary_layer` |
+| $b$, `opening` | 0 m | as EvacuatioNZ `enz_opening` {{< cite 3 "p. 14" >}} | `hydraulic.OPENING_BOUNDARY_LAYER` |
+| Peak-flow density | $1/(2a) = 1.88$ m⁻² | SFPE gives 1.9 {{< cite 1 "pp. 2175–2176" >}} | `HydraulicParameters.peak_flow_density` |
+| Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `HydraulicParameters.jam_density` |
 | `max_density` | 2.75 m⁻² | EvacuatioNZ default {{< cite 3 "p. 3" >}} | `NetworkSimulation` |
 | `counterflow` | `"bounding"` | choice of this model ([Counterflow]({{< relref "/docs/model/counterflow" >}})) | `NetworkSimulation` |
+| `routing_policy` | `"shortest_distance"`; `"shortest_free_flow_time"` costs a link at `length / speed(0, k)` of the node it leaves | choice of this model, no source ([Networks]({{< relref "/docs/using/networks#routes" >}})) | `NetworkSimulation`, `network._edge_cost` |
 | Minimum pass share $y_0$ | 0.17 | adapted from {{< cite 21 "p. 36" >}} | `simulation._COUNTERFLOW` |
 | $g_0 \to g_{1/2}$, door and opening | 0.84 → 0.94 (`bounding`), 0.90 → 1.00 (`estimate`) | walkway data {{< cite 21 "Table III, p. 36" 22 "p. 4" 28 "Fig. 6" 31 "p. 11-7" 24 "p. 1613" 23 "p. 44" >}} | `simulation._COUNTERFLOW` |
 | $g_0 \to g_{1/2}$, stair | 0.75 → 0.94 (`bounding`), 0.80 → 1.00 (`estimate`) | {{< cite 29 "p. 520" 24 "Fig. 3, p. 1615" >}}; $g_{1/2}$ = 0.94 from walkways | `simulation._COUNTERFLOW` |
@@ -131,8 +138,10 @@ is not that method.
 
 ## Routes
 
-Each agent follows a fixed route to the nearest safe node, measured as
-the sum of link lengths. A population with a `target` heads for that
+Each agent follows a fixed route to the nearest safe node, measured by
+default as the sum of link lengths; `routing_policy="shortest_free_flow_time"`
+measures it as the sum of `length / speed(0, k)` of the node each link
+leaves. A population with a `target` heads for that
 safe node instead. One shortest-path table is computed per target before
 the run starts. Details and the handling of ties are in
 [Networks]({{< relref "/docs/using/networks#routes" >}}).

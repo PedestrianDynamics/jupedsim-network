@@ -21,6 +21,7 @@ NetworkSimulation(
     supply_reduction=True,
     split_ties=True,
     counterflow="bounding",
+    routing_policy="shortest_distance",
 )
 ```
 
@@ -32,6 +33,7 @@ NetworkSimulation(
 | `supply_reduction` | `True` | Reduce what a node accepts above the peak-flow density of 1.88 m⁻² |
 | `split_ties` | `True` | Alternate agents between equally short routes; `False` takes the route found first and warns ([Networks]({{< relref "/docs/using/networks#routes" >}})). Neither setting bounds the result ([Limitations]({{< relref "/docs/limitations#defaults-compared-with-bounding-defaults" >}})) |
 | `counterflow` | `"bounding"` | How the two links of a two-way connection share one door. `"bounding"` (low end of the walkway data; stairs: Tofiło et al.'s 75 %) and `"estimate"` (centre of the data): the pair keeps one carry at all times; while both directions have a queue they pass together $g\,C$, $g$ between 0.75 and 1.0, split by queue share with at least 17 % of passages per direction. `"independent"`: two separate links, each with full capacity and its own carry, as before this setting ([Counterflow]({{< relref "/docs/model/counterflow" >}})) |
+| `routing_policy` | `"shortest_distance"` | Link cost of the fixed routes. `"shortest_distance"`: sum of link lengths in m. `"shortest_free_flow_time"`: sum of `length / speed(0, k)` in s, with `speed(0, k) = 0.856 k` the hydraulic speed of the node the link leaves at the density floor (0.54 m⁻²); a static reference time, not a prediction of travel time ([Networks]({{< relref "/docs/using/networks#routes" >}}), [Limitations]({{< relref "/docs/limitations#routes" >}})) |
 
 Routes are computed when the simulation is created, so a population
 without a route raises `ValueError` here, before any run.
