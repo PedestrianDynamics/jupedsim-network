@@ -54,7 +54,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from jupedsim_network import hydraulic
-from jupedsim_network.network import SAFE, STAIR, Network
+from jupedsim_network.network import (
+    SAFE,
+    STAIR,
+    Network,
+    check_routing_policy,
+)
 from jupedsim_network.sampling import Distribution, as_distribution
 
 # Smallest time step: the clock ``t = round(t + dt, 9)`` keeps its rounding
@@ -242,6 +247,12 @@ class NetworkSimulation:
         split_ties: split agents evenly between equally short routes;
             ``False`` sends all of them along the first route found and
             issues a ``UserWarning`` if a population can reach a tie
+        routing_policy: "shortest_distance" (m, default) or
+            "shortest_free_flow_time" (s), using length divided by the source
+            node's hydraulic speed at zero density. This static reference
+            time excludes personal speed limits, congestion and queues; it
+            does not predict actual travel time. Tables are shared across
+            populations with the same destination.
         counterflow: how the two links of a two-way connection share one
             door. ``"bounding"`` (low end of the walkway data; stairs:
             Tofiło et al.'s 75 %) and ``"estimate"`` (centre of the
@@ -265,6 +276,7 @@ class NetworkSimulation:
         supply_reduction: bool = True,
         split_ties: bool = True,
         counterflow: str = "bounding",
+        routing_policy: str = "shortest_distance",
     ) -> None:
         if not (0 < dt < math.inf and 0 < t_max < math.inf):
             raise ValueError(
@@ -290,6 +302,7 @@ class NetworkSimulation:
                 "counterflow must be one of 'bounding', 'estimate', "
                 f"'independent'; got {counterflow!r}."
             )
+        check_routing_policy(routing_policy)
         if not populations:
             raise ValueError("At least one population is required.")
         self.network = network
@@ -300,8 +313,12 @@ class NetworkSimulation:
         self.supply_reduction = supply_reduction
         self.split_ties = split_ties
         self.counterflow = counterflow
-        self._routes = _route_tables(network, self.populations)
-        self._choices = {t: network._route_choices(t) for t in self._routes}
+        self.routing_policy = routing_policy
+        self._routes = _route_tables(network, self.populations, routing_policy)
+        self._choices = {
+            t: network.route_choices(t, routing_policy=routing_policy)
+            for t in self._routes
+        }
         for pop in self.populations:
             _check_area_factor(self, pop)
         if not split_ties:
@@ -354,11 +371,15 @@ class NetworkSimulation:
         )
 
 
-def _route_tables(network, populations) -> dict:
+def _route_tables(
+    network, populations, routing_policy="shortest_distance"
+) -> dict:
     tables = {}
     for pop in populations:
         if pop.target not in tables:
-            tables[pop.target] = network.route_table(pop.target)
+            tables[pop.target] = network.route_table(
+                pop.target, routing_policy=routing_policy
+            )
         node = network.node(pop.node)
         if node.kind == SAFE:
             raise ValueError(f"Population starts in safe node '{pop.node}'.")

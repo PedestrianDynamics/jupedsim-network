@@ -2,8 +2,10 @@
 """Directed graph with resolved physical properties for the network model.
 
 The builder resolves hydraulic defaults into node speeds and link capacities.
-Routing uses distances only; flow sharing and agent movement belong to the
-simulation. Reverse links identify directions of one physical connection.
+Routing minimizes static link costs, either lengths or hydraulic
+reference travel times (the ``routing_policy``). Flow sharing and agent
+movement belong to the simulation. Reverse links identify directions of one
+physical connection.
 """
 
 import heapq
@@ -23,9 +25,11 @@ OPENING = "opening"
 
 _BOUNDARY_LAYERS = {DOOR: 0.15, OPENING: 0.0, STAIR: 0.15}
 
-# Route distances agreeing to this fraction of their length, or to this
-# many m if larger, are tied: equal up to floating-point rounding.
+# Route costs agreeing to this fraction, or this absolute amount if larger,
+# are tied: metres for distance routing, seconds for reference-time routing.
 TIE_TOLERANCE = 1e-9
+
+ROUTING_POLICIES = ("shortest_distance", "shortest_free_flow_time")
 
 
 @dataclass(frozen=True)
@@ -270,16 +274,25 @@ class Network:
     def _record(self, call: str, **arguments) -> None:
         self._inputs.append((call, arguments))
 
-    def route_table(self, target: str | None = None) -> list[int | None]:
-        """Next link per node on the shortest walking distance to safety.
+    def route_table(
+        self,
+        target: str | None = None,
+        *,
+        routing_policy: str = "shortest_distance",
+    ) -> list[int | None]:
+        """Next link per node on the minimum-cost route to safety.
 
-        Distances are sums of link lengths, not travel times; speeds,
-        capacities and congestion do not enter this routing policy.
-        Raises ``ValueError`` if a reachable node's shortest distance
+        Raises ``ValueError`` if a reachable node's minimum cost
         exceeds the floating-point range.
 
         Arguments:
-            target: name of one safe node; ``None`` uses the nearest one
+            target: name of one safe node; ``None`` minimizes cost to any safe node
+            routing_policy: "shortest_distance" sums link lengths in m;
+                "shortest_free_flow_time" sums length divided by the source
+                node's ``hydraulic.speed(0, k)`` in seconds. This hydraulic
+                reference time includes the density floor, but excludes
+                personal speed limits, congestion and queues. It does not
+                predict actual travel time.
 
         Of several equally short routes the first link found is kept if it
         makes progress (closer to safety, or as close over fewer links),
@@ -291,6 +304,7 @@ class Network:
             For each node index the index of the link to take, or ``None``
             for safe nodes and nodes without a route.
         """
+        costs = _routing_costs(self, routing_policy)
         distance = [math.inf] * len(self._nodes)
         next_link: list[int | None] = [None] * len(self._nodes)
         heap = [(0.0, n.index) for n in self._targets(target)]
@@ -302,14 +316,23 @@ class Network:
             if d > distance[index]:
                 continue
             for link in incoming[index]:
-                self._relax(link, d, distance, next_link, heap)
-        choices = self._route_choices(target)
+                self._relax(
+                    link, d, distance, next_link, heap, costs[link.index]
+                )
+        choices = self._route_choices(
+            target, routing_policy=routing_policy, costs=costs
+        )
         return [
             link if not tied or link in tied else tied[0]
             for link, tied in zip(next_link, choices)
         ]
 
-    def route_choices(self, target: str | None = None) -> list[tuple[int, ...]]:
+    def route_choices(
+        self,
+        target: str | None = None,
+        *,
+        routing_policy: str = "shortest_distance",
+    ) -> list[tuple[int, ...]]:
         """Tied next links per node: the first links of all shortest routes.
 
         Where several routes to safety are equally short, within
@@ -322,11 +345,17 @@ class Network:
         The tolerance handles numerical equality, not behavioral route
         equivalence; alternation is an algorithmic policy, not an empirical
         route-choice law.
-        Progress requires a strictly smaller computed distance, or fewer
-        links at exactly the same computed distance, without a tolerance.
+        Progress requires a strictly smaller computed cost, or fewer
+        links at exactly the same computed cost, without a tolerance.
 
         Arguments:
-            target: name of one safe node; ``None`` uses the nearest one
+            target: name of one safe node; ``None`` minimizes cost to any safe node
+            routing_policy: "shortest_distance" sums link lengths in m;
+                "shortest_free_flow_time" sums length divided by the source
+                node's ``hydraulic.speed(0, k)`` in seconds. This hydraulic
+                reference time includes the density floor, but excludes
+                personal speed limits, congestion and queues. It does not
+                predict actual travel time.
 
         Returns:
             For each node index the tied link indices in creation order;
@@ -334,15 +363,15 @@ class Network:
             and nodes without a route.
 
         Raises:
-            ValueError: a reachable node's shortest distance exceeds the
+            ValueError: a reachable node's minimum cost exceeds the
                 floating-point range
             RuntimeError: tied routes form a cycle, which the progress
                 rule excludes
         """
-        return self._route_choices(target)
+        return self._route_choices(target, routing_policy=routing_policy)
 
-    def _relax(self, link, d, distance, next_link, heap) -> None:
-        candidate = d + link.length
+    def _relax(self, link, d, distance, next_link, heap, cost) -> None:
+        candidate = d + cost
         if candidate >= distance[link.source]:
             return
         distance[link.source] = candidate
@@ -350,13 +379,17 @@ class Network:
         heapq.heappush(heap, (candidate, link.source))
 
     def _route_choices(
-        self, target: str | None = None
+        self,
+        target: str | None = None,
+        *,
+        routing_policy: str = "shortest_distance",
+        costs=None,
     ) -> list[tuple[int, ...]]:
         """Tied next links per node: the first links of all shortest routes.
 
-        A link u -> v is tied for u if d(v) + length equals d(u) within
+        A link u -> v is tied for u if d(v) + edge cost equals d(u) within
         ``TIE_TOLERANCE`` and the link makes progress: v is closer to
-        safety, or at exactly the same computed distance over fewer links.
+        safety, or at exactly the same computed cost over fewer links.
         This strict lexicographic ordering excludes cycles independently
         of the tolerance used to identify equal route lengths.
 
@@ -364,19 +397,30 @@ class Network:
             For each node index the tied link indices in creation order;
             empty for safe nodes and nodes without a route.
         """
-        distance, hops = self._distances(target)
+        costs = _routing_costs(self, routing_policy) if costs is None else costs
+        distance, hops = self._distances(
+            target, routing_policy=routing_policy, costs=costs
+        )
         choices: list[list[int]] = [[] for _ in self._nodes]
         for link in self._links:
-            if _is_tied(link, distance, hops):
+            if _is_tied(link, distance, hops, costs[link.index]):
                 choices[link.source].append(link.index)
         _check_acyclic(choices, self._links)
         return [tuple(c) for c in choices]
 
-    def _distances(self, target) -> tuple[list[float], list[float]]:
-        """Shortest distance to safety and the fewest links on such a route."""
+    def _distances(
+        self, target, *, routing_policy: str = "shortest_distance", costs=None
+    ) -> tuple[list[float], list[float]]:
+        """Minimum selected cost to safety and fewest links on such a route."""
+        costs = _routing_costs(self, routing_policy) if costs is None else costs
+        metric, unit = (
+            ("distance", "m")
+            if routing_policy == "shortest_distance"
+            else ("cost", "s")
+        )
         distance = [math.inf] * len(self._nodes)
         hops = [math.inf] * len(self._nodes)
-        overflows: list[tuple[Link, float]] = []
+        overflows: list[tuple[Link, float, float]] = []
         heap = [(0.0, 0, n.index) for n in self._targets(target)]
         for _, _, index in heap:
             distance[index], hops[index] = 0.0, 0
@@ -386,15 +430,23 @@ class Network:
             if (d, h) > (distance[index], hops[index]):
                 continue
             for link in incoming[index]:
-                _relax_hops(link, (d, h), distance, hops, heap, overflows)
+                _relax_hops(
+                    link,
+                    (d, h),
+                    distance,
+                    hops,
+                    heap,
+                    overflows,
+                    costs[link.index],
+                )
         # An overflowing candidate is harmless if a finite alternative exists.
-        for link, accumulated in overflows:
+        for link, accumulated, cost in overflows:
             if math.isinf(distance[link.source]):
                 raise ValueError(
-                    f"Shortest route distance from '{self._nodes[link.source].name}' "
+                    f"Shortest route {metric} from '{self._nodes[link.source].name}' "
                     f"exceeds the floating-point range at link '{link.name}' "
-                    f"(index {link.index}): accumulated distance {accumulated!r} m "
-                    f"+ link length {link.length!r} m is non-finite."
+                    f"(index {link.index}): accumulated {metric} {accumulated!r} {unit} "
+                    f"+ link {'length' if unit == 'm' else 'cost'} {cost!r} {unit} is non-finite."
                 )
         return distance, hops
 
@@ -434,11 +486,44 @@ class Network:
         return node
 
 
-def _relax_hops(link, key, distance, hops, heap, overflows) -> None:
-    total = key[0] + link.length
-    # Heap distances and validated link lengths are finite; check their sum.
+def check_routing_policy(routing_policy) -> None:
+    if routing_policy in ROUTING_POLICIES:
+        return
+    valid = ", ".join(repr(p) for p in ROUTING_POLICIES)
+    raise ValueError(
+        f"routing_policy must be one of {valid}; got {routing_policy!r}."
+    )
+
+
+def _routing_costs(network, routing_policy) -> list[float]:
+    check_routing_policy(routing_policy)
+    nodes = network.nodes
+    return [
+        _edge_cost(link, nodes[link.source], routing_policy)
+        for link in network.links
+    ]
+
+
+def _edge_cost(link: Link, source: Node, routing_policy: str) -> float:
+    """Distance (m) or hydraulic reference travel time (s), independent of routing.
+
+    Reference time uses the source node's density-floor hydraulic speed.
+    It excludes personal speed limits, congestion and queues and is not a
+    prediction of actual travel time.
+    """
+    if routing_policy == "shortest_distance":
+        return link.length
+    reference_speed = float(hydraulic.speed(0, source.speed_constant))
+    # Infinity records an unrepresentable cost; routing raises only when
+    # no finite route exists, after considering all alternatives.
+    return link.length / reference_speed
+
+
+def _relax_hops(link, key, distance, hops, heap, overflows, cost) -> None:
+    total = key[0] + cost
+    # Heap costs are finite; an edge cost or the sum may overflow.
     if not math.isfinite(total):
-        overflows.append((link, key[0]))
+        overflows.append((link, key[0], cost))
         return
     candidate = (total, key[1] + 1)
     if candidate >= (distance[link.source], hops[link.source]):
@@ -447,12 +532,12 @@ def _relax_hops(link, key, distance, hops, heap, overflows) -> None:
     heapq.heappush(heap, (*candidate, link.source))
 
 
-def _is_tied(link, distance, hops) -> bool:
+def _is_tied(link, distance, hops, cost) -> bool:
     here, there = distance[link.source], distance[link.target]
     if not math.isfinite(here):
         return False
     tol = TIE_TOLERANCE
-    if not math.isclose(there + link.length, here, rel_tol=tol, abs_tol=tol):
+    if not math.isclose(there + cost, here, rel_tol=tol, abs_tol=tol):
         return False
     return (there, hops[link.target]) < (here, hops[link.source])
 

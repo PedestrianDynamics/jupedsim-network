@@ -150,6 +150,7 @@ def _full_keys_python() -> NetworkSimulation:
             supply_reduction=False,
             split_ties=False,
             counterflow="estimate",
+            routing_policy="shortest_free_flow_time",
         )
 
 
@@ -172,6 +173,7 @@ def _same_simulation(a: NetworkSimulation, b: NetworkSimulation) -> None:
         "supply_reduction",
         "split_ties",
         "counterflow",
+        "routing_policy",
     ):
         assert getattr(a, name) == getattr(b, name), name
 
@@ -601,14 +603,21 @@ API = [
         lambda: NetworkSimulation(Network(), [], max_density=4),
     ),
     (
-        _set(["simulation", "counterflow"], "free"),
-        "simulation",
-        lambda: NetworkSimulation(Network(), [], counterflow="free"),
-    ),
-    (
         _set(["populations", 0, "node"], "street"),
         "populations[0]",
         lambda: _sim_from(Population("street", 1)),
+    ),
+]
+KEYED_API = [
+    (
+        _set(["simulation", "counterflow"], "free"),
+        "simulation.counterflow",
+        lambda: NetworkSimulation(Network(), [], counterflow="free"),
+    ),
+    (
+        _set(["simulation", "routing_policy"], "fastest"),
+        "simulation.routing_policy",
+        lambda: NetworkSimulation(Network(), [], routing_policy="fastest"),
     ),
 ]
 
@@ -620,12 +629,29 @@ def _sim_from(pop):
     return NetworkSimulation(net, [pop])
 
 
-@pytest.mark.parametrize("change, path, call", API)
+@pytest.mark.parametrize("change, path, call", API + KEYED_API)
 def test_api_errors_keep_the_api_message(change, path, call):
     with pytest.raises(ScenarioError) as info:
         scenario_from_dict(_edit(change))
     assert info.value.path == path
     assert info.value.message == _api_message(call)
+
+
+def test_unknown_routing_policy_names_the_valid_values():
+    with pytest.raises(ScenarioError) as info:
+        scenario_from_dict(
+            _edit(_set(["simulation", "routing_policy"], "fastest"))
+        )
+    assert info.value.message == (
+        "routing_policy must be one of 'shortest_distance', "
+        "'shortest_free_flow_time'; got 'fastest'."
+    )
+
+
+def test_scenario_without_routing_policy_uses_the_default():
+    data = _edit(lambda d: d["simulation"].pop("routing_policy", None))
+    sim = scenario_from_dict(data).simulation
+    assert sim.routing_policy == "shortest_distance"
 
 
 def test_population_errors_name_the_population():
@@ -1161,6 +1187,10 @@ def test_keys_name_the_rules_the_signature_cannot():
         "bounding",
         "estimate",
         "independent",
+    )
+    assert simulation["routing_policy"].choices == (
+        "shortest_distance",
+        "shortest_free_flow_time",
     )
     seed = {k.name: k for k in scenario_module.keys("run")}["seed"]
     assert seed.annotation == (int | None)

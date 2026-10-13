@@ -162,7 +162,8 @@
     "max_density": 3.0,
     "supply_reduction": false,
     "split_ties": false,
-    "counterflow": "estimate"
+    "counterflow": "estimate",
+    "routing_policy": "shortest_free_flow_time"
   },
   "run": {
     "seed": 7

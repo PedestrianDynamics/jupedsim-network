@@ -44,6 +44,7 @@ class Routes:
     links: tuple[Link, ...]
     trees: tuple[Tree, ...]
     off_route: tuple[int, ...]
+    routing_policy: str = "shortest_distance"
 
 
 def build(sim) -> Routes:
@@ -53,7 +54,8 @@ def build(sim) -> Routes:
     net = sim.network
     targets = tuple(dict.fromkeys(pop.target for pop in sim.populations))
     trees = tuple(
-        _tree(net, t, sim.split_ties, SAFE) for t in targets or (None,)
+        _tree(net, t, sim.split_ties, SAFE, sim.routing_policy)
+        for t in targets or (None,)
     )
     used = {link for tree in trees for link in _used(tree)}
     nodes = tuple(
@@ -65,16 +67,16 @@ def build(sim) -> Routes:
         for link in net.links
     )
     off = tuple(link.index for link in net.links if link.index not in used)
-    return Routes(nodes, links, trees, off)
+    return Routes(nodes, links, trees, off, sim.routing_policy)
 
 
 def _used(tree: Tree) -> set[int]:
     return set(tree.via.values()) | {i for t in tree.ties.values() for i in t}
 
 
-def _tree(net, target, split: bool, safe: str) -> Tree:
-    table = net.route_table(target)
-    choices = net.route_choices(target)
+def _tree(net, target, split: bool, safe: str, routing_policy: str) -> Tree:
+    table = net.route_table(target, routing_policy=routing_policy)
+    choices = net.route_choices(target, routing_policy=routing_policy)
     children: dict[int, list[int]] = {}
     via = {}
     for node, link in enumerate(table):
@@ -109,6 +111,8 @@ def lines(routes: Routes, labels: dict[str, str] | None = None) -> list[str]:
     """The tree as text; ``labels`` adds text after a node, by name."""
     labels = labels or {}
     out: list[str] = []
+    if routes.routing_policy != "shortest_distance":
+        out.append(f"Routing policy: {routes.routing_policy}")
     for tree in routes.trees:
         if len(routes.trees) > 1 or tree.target is not None:
             where = tree.target or "the nearest safe node"

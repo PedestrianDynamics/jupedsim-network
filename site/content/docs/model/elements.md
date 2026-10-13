@@ -100,6 +100,7 @@ A link also has:
 | Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `hydraulic.JAM_DENSITY` |
 | `max_density` | 2.75 m⁻² | EvacuatioNZ default {{< cite 3 "p. 3" >}} | `NetworkSimulation` |
 | `counterflow` | `"bounding"` | choice of this model ([Counterflow]({{< relref "/docs/model/counterflow" >}})) | `NetworkSimulation` |
+| `routing_policy` | `"shortest_distance"`; `"shortest_free_flow_time"` costs a link at `length / speed(0, k)` of the node it leaves | choice of this model, no source ([Networks]({{< relref "/docs/using/networks#routes" >}})) | `NetworkSimulation`, `network._edge_cost` |
 | Minimum pass share $y_0$ | 0.17 | adapted from {{< cite 21 "p. 36" >}} | `simulation._COUNTERFLOW` |
 | $g_0 \to g_{1/2}$, door and opening | 0.84 → 0.94 (`bounding`), 0.90 → 1.00 (`estimate`) | walkway data {{< cite 21 "Table III, p. 36" 22 "p. 4" 28 "Fig. 6" 31 "p. 11-7" 24 "p. 1613" 23 "p. 44" >}} | `simulation._COUNTERFLOW` |
 | $g_0 \to g_{1/2}$, stair | 0.75 → 0.94 (`bounding`), 0.80 → 1.00 (`estimate`) | {{< cite 29 "p. 520" 24 "Fig. 3, p. 1615" >}}; $g_{1/2}$ = 0.94 from walkways | `simulation._COUNTERFLOW` |
@@ -131,8 +132,10 @@ is not that method.
 
 ## Routes
 
-Each agent follows a fixed route to the nearest safe node, measured as
-the sum of link lengths. A population with a `target` heads for that
+Each agent follows a fixed route to the nearest safe node, measured by
+default as the sum of link lengths; `routing_policy="shortest_free_flow_time"`
+measures it as the sum of `length / speed(0, k)` of the node each link
+leaves. A population with a `target` heads for that
 safe node instead. One shortest-path table is computed per target before
 the run starts. Details and the handling of ties are in
 [Networks]({{< relref "/docs/using/networks#routes" >}}).
