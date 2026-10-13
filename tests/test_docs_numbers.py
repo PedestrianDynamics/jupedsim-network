@@ -475,6 +475,25 @@ def networks_warning():
     return f"{w.category.__name__}: {w.message}"
 
 
+def networks_slope_bounds():
+    """Largest slopes the validation and the default max_density allow."""
+    floor = 1 / (2 * hydraulic.MIN_DENSITY)
+    default_density = 2.75
+    low_flow = {"door_specific_flow": 0.3}  # k/(4a) is 0.378 at the bound
+    with pytest.raises(ValueError):
+        hydraulic.HydraulicParameters(
+            speed_density_slope=floor + 1e-3, **low_flow
+        )
+    hydraulic.HydraulicParameters(speed_density_slope=floor, **low_flow)
+    default = hydraulic.HydraulicParameters()
+    door_bound = default.level_speed_constant / (4 * default.door_specific_flow)
+    return (
+        f"$a \\le {floor:.3f}$ m²/person",
+        f"this bound is reached at a slope of {door_bound:.3f}, ",
+        f"for a slope of {1 / default_density:.3f} (1/2.75) or more.",
+    )
+
+
 def counterflow_two_agents():
     """One agent each way, B's after 0.5 s: the shared carry delays B."""
     net = Network()
@@ -1325,6 +1344,15 @@ REGISTRY = [
         "Handbook Table 67.2); the speed constant k = 51.8 sqrt(T/R) m/min is "
         "extrapolated.",
         networks_warning,
+    ),
+    Number(
+        "using/networks.md",
+        (
+            "$a \\le 0.926$ m²/person",
+            "this bound is reached at a slope of 0.269, ",
+            "for a slope of 0.364 (1/2.75) or more.",
+        ),
+        networks_slope_bounds,
     ),
     # Verification: the results of rows that test a tolerance only.
     Number(

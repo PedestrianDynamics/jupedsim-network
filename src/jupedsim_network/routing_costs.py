@@ -25,14 +25,29 @@ def check_routing_policy(routing_policy) -> None:
     )
 
 
-def edge_costs(nodes, links, routing_policy) -> list[float]:
+def edge_costs(
+    nodes,
+    links,
+    routing_policy,
+    *,
+    parameters=hydraulic.DEFAULT_HYDRAULIC_PARAMETERS,
+) -> list[float]:
     check_routing_policy(routing_policy)
     return [
-        edge_cost(link, nodes[link.source], routing_policy) for link in links
+        edge_cost(
+            link, nodes[link.source], routing_policy, parameters=parameters
+        )
+        for link in links
     ]
 
 
-def edge_cost(link: Link, source: Node, routing_policy: str) -> float:
+def edge_cost(
+    link: Link,
+    source: Node,
+    routing_policy: str,
+    *,
+    parameters=hydraulic.DEFAULT_HYDRAULIC_PARAMETERS,
+) -> float:
     """Distance (m) or hydraulic reference travel time (s), independent of routing.
 
     Reference time uses the source node's density-floor hydraulic speed.
@@ -41,7 +56,9 @@ def edge_cost(link: Link, source: Node, routing_policy: str) -> float:
     """
     if routing_policy == "shortest_distance":
         return link.length
-    reference_speed = float(hydraulic.speed(0, source.speed_constant))
+    reference_speed = float(
+        hydraulic.speed(0, source.speed_constant, parameters=parameters)
+    )
     # Infinity records an unrepresentable cost; routing raises only when
     # no finite route exists, after considering all alternatives.
     return link.length / reference_speed

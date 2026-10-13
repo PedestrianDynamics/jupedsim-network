@@ -1,5 +1,10 @@
 {
   "format_version": 1,
+  "software_version": "0.0.0",
+  "hydraulic_parameters": {
+    "door_specific_flow": 1.2,
+    "door_boundary_layer": 0.1
+  },
   "description": "Test fixture: every key of the file format set, most to a non-default value.",
   "nodes": [
     {

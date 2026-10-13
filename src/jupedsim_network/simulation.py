@@ -234,13 +234,14 @@ class NetworkSimulation:
     """Runs the network model for one scenario.
 
     Arguments:
-        network: the node-link graph
+        network: the resolved graph and its retained hydraulic configuration
         populations: agent groups
         dt: time step in s, at least 1e-6
         t_max: time in s after which a run stops; finite
         max_density: hard limit of agents (weighted by area factor) per
-            m² in a node, in (0, 3.76); at or below the peak-flow density
-            1.88 the supply reduction has no effect, which issues a
+            m² in a node, below the configured jam density (3.76 by default);
+            at or below the configured peak-flow density (1.88 by default),
+            supply reduction has no effect, which issues a
             ``UserWarning``
         supply_reduction: reduce link capacity when the target node is
             above the peak-flow density
@@ -285,14 +286,17 @@ class NetworkSimulation:
             )
         if dt < _MIN_DT:
             raise ValueError(f"dt must be at least 1e-6 s, got {dt}.")
-        if not 0 < max_density < hydraulic.JAM_DENSITY:
+        if not 0 < max_density < network.parameters.jam_density:
             raise ValueError(
-                f"max_density must be in (0, {hydraulic.JAM_DENSITY:.2f})."
+                f"max_density must be in (0, {network.parameters.jam_density:.2f})."
             )
-        if supply_reduction and max_density <= hydraulic.PEAK_FLOW_DENSITY:
+        if (
+            supply_reduction
+            and max_density <= network.parameters.peak_flow_density
+        ):
             warnings.warn(
                 f"max_density {max_density} is at or below the peak-flow "
-                f"density {hydraulic.PEAK_FLOW_DENSITY:.2f} m⁻²; supply "
+                f"density {network.parameters.peak_flow_density:.2f} m⁻²; supply "
                 "reduction has no effect.",
                 UserWarning,
                 stacklevel=2,
@@ -604,7 +608,9 @@ class _Run:
         a = self.agents
         walking = np.flatnonzero(a.state == _WALKING)
         congested = hydraulic.speed(
-            density[a.node[walking]], self.k[a.node[walking]]
+            density[a.node[walking]],
+            self.k[a.node[walking]],
+            parameters=self.sim.network.parameters,
         )
         step = np.minimum(a.speed[walking], congested) * self.sim.dt
         a.distance[walking] -= step
@@ -713,7 +719,10 @@ class _Run:
         ``max_density``.
         """
         allowance = np.full(len(self.area), np.inf)
-        peak, limit = hydraulic.PEAK_FLOW_DENSITY, self.sim.max_density
+        peak, limit = (
+            self.sim.network.parameters.peak_flow_density,
+            self.sim.max_density,
+        )
         if not self.sim.supply_reduction or limit <= peak:
             return allowance
         factor = np.clip((limit - density) / (limit - peak), 0.0, 1.0)

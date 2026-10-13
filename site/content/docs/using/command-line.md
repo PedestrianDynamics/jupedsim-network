@@ -227,6 +227,8 @@ Each section goes to one part of the API:
 | Key | Type | Goes to | Arguments on |
 |-----|------|---------|--------------|
 | `format_version` | integer, required | Must be `1` | |
+| `software_version` | string | Version of jupedsim-network that wrote the file; written by the export, ignored when reading | |
+| `hydraulic_parameters` | object | `HydraulicParameters` fields that differ from the defaults; absent means all defaults | [Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}}) |
 | `description` | string | Free text, not passed on | |
 | `nodes` | array, required | `add_room`, `add_stair` or `add_safe`, chosen by `kind` (`"room"`, `"stair"`, `"safe"`) | [Networks]({{< relref "/docs/using/networks#nodes" >}}) |
 | `connections` | array, required | `Network.connect` | [Networks]({{< relref "/docs/using/networks#links" >}}) |
@@ -470,7 +472,10 @@ with the results.
 - **A file means "these inputs under this version's defaults".**
   `format_version` versions the layout of the file, not the model
   defaults. A key left out takes the default of the installed version,
-  which can change between versions.
+  which can change between versions. This holds for `hydraulic_parameters`
+  too: a coefficient not listed there takes its default. An exported file
+  records the version that wrote it in `software_version`; the loader does
+  not use it.
 - **NumPy 1 and NumPy 2 differ slightly.** `summary.json`,
   `link_flow.csv`, `occupancy.csv` and `runs.csv` are the same.
   `agents.csv` differs in the last digits of a few sampled pre-movement
@@ -568,7 +573,8 @@ packaged file.
   `"connections[1].width"`) and `message`. `str()` gives
   `"<path>: <message>"`.
 
-An exported file is shorter than the packaged one. Exported from the
+An exported file is shorter than the packaged one, apart from the
+`software_version` line. Exported from the
 Getting started simulation, it has no `"speed": 1.2`, an empty
 `"simulation": {}` (0.5 s is the default `dt`) and the stair keys in
 the order of the signature. Both files build the same simulation, but

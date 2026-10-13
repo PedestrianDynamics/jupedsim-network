@@ -86,18 +86,24 @@ A link also has:
 
 ## Default values and sources
 
+The hydraulic coefficients below are the defaults of
+`HydraulicParameters`, which a study can change per network
+([Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}})).
+Changed values are study assumptions, not validated ranges. The lower
+density and the opening boundary layer are fixed.
+
 | Quantity | Value | Source | Code |
 |----------|-------|--------|------|
-| Slope $a$ | 0.266 m² per person | {{< cite 1 "Eq. 67.3, p. 2174" >}} | `hydraulic.SPEED_DENSITY_SLOPE` |
+| Slope $a$ | 0.266 m² per person | {{< cite 1 "Eq. 67.3, p. 2174" >}} | `HydraulicParameters.speed_density_slope` |
 | Lower density | 0.54 m⁻² | {{< cite 1 "p. 2174" >}} | `hydraulic.MIN_DENSITY` |
-| $k$, level | 84 m/min = 1.40 m/s | {{< cite 1 "Table 67.2, p. 2174" >}} | `hydraulic.LEVEL_SPEED_CONSTANT` |
+| $k$, level | 84 m/min = 1.40 m/s | {{< cite 1 "Table 67.2, p. 2174" >}} | `HydraulicParameters.level_speed_constant` |
 | $k$, stair | $51.8\sqrt{T/R}$ m/min | EvacuatioNZ {{< cite 2 "§2.1.3" 3 "p. 17" >}} | `hydraulic.stair_speed_constant` |
-| $F_s$, `door` and `opening` | 1.3 persons/s/m | {{< cite 1 "Table 67.5, p. 2176" >}} | `hydraulic.DOOR_SPECIFIC_FLOW` |
+| $F_s$, `door` and `opening` | 1.3 persons/s/m | {{< cite 1 "Table 67.5, p. 2176" >}} | `HydraulicParameters.door_specific_flow` |
 | $F_s$, `stair` | $k/(4a)$; 1.01 for 18/28 cm | derived, see below | `hydraulic.max_specific_flow` |
-| $b$, `door` and `stair` | 0.15 m | {{< cite 1 "Table 67.1, p. 2174" >}} | `network._BOUNDARY_LAYERS` |
-| $b$, `opening` | 0 m | as EvacuatioNZ `enz_opening` {{< cite 3 "p. 14" >}} | `network._BOUNDARY_LAYERS` |
-| Peak-flow density | $1/(2a) = 1.88$ m⁻² | SFPE gives 1.9 {{< cite 1 "pp. 2175–2176" >}} | `hydraulic.PEAK_FLOW_DENSITY` |
-| Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `hydraulic.JAM_DENSITY` |
+| $b$, `door` and `stair` | 0.15 m | {{< cite 1 "Table 67.1, p. 2174" >}} | `HydraulicParameters.door_boundary_layer`, `stair_boundary_layer` |
+| $b$, `opening` | 0 m | as EvacuatioNZ `enz_opening` {{< cite 3 "p. 14" >}} | `hydraulic.OPENING_BOUNDARY_LAYER` |
+| Peak-flow density | $1/(2a) = 1.88$ m⁻² | SFPE gives 1.9 {{< cite 1 "pp. 2175–2176" >}} | `HydraulicParameters.peak_flow_density` |
+| Jam density | $1/a = 3.76$ m⁻² | {{< cite 1 "p. 2175" >}} | `HydraulicParameters.jam_density` |
 | `max_density` | 2.75 m⁻² | EvacuatioNZ default {{< cite 3 "p. 3" >}} | `NetworkSimulation` |
 | `counterflow` | `"bounding"` | choice of this model ([Counterflow]({{< relref "/docs/model/counterflow" >}})) | `NetworkSimulation` |
 | `routing_policy` | `"shortest_distance"`; `"shortest_free_flow_time"` costs a link at `length / speed(0, k)` of the node it leaves | choice of this model, no source ([Networks]({{< relref "/docs/using/networks#routes" >}})) | `NetworkSimulation`, `network._edge_cost` |

@@ -8,6 +8,65 @@ between them as directed links. This page shows how to build one and
 which defaults you get. The values behind the defaults and their
 sources are in [Model elements]({{< relref "/docs/model/elements" >}}).
 
+## Hydraulic configuration
+
+```python
+from jupedsim_network import HydraulicParameters, Network
+
+parameters = HydraulicParameters(
+    speed_density_slope=0.25, door_specific_flow=1.2
+)
+net = Network(parameters=parameters)
+```
+
+`Network()` uses the defaults. The coefficients are immutable scalars;
+separate networks can use different ones in the same process. Node speeds
+and link capacities are resolved when you build the network, and the
+simulation and the `"shortest_free_flow_time"` routing cost read
+`net.parameters`. Rebuild the network to change a coefficient. A local
+`specific_flow` or `boundary_layer` on `connect` takes precedence, and an
+explicit zero boundary layer is kept.
+
+| Field | Meaning | Unit | Default | Source |
+|---|---|---|---|---|
+| `speed_density_slope` | Slope $a$ of the speed–density relation | m²/person | 0.266 | SFPE Eq. 67.3 |
+| `level_speed_constant` | Level-walking constant $k$ | m/s | `84 / 60` | SFPE Table 67.2 |
+| `door_specific_flow` | Specific flow of doors and openings | persons/(m·s) | 1.3 | SFPE Table 67.5 |
+| `stair_speed_coefficient` | Coefficient of $\sqrt{T/R}$ in the stair $k$ | m/min | 51.8 | EvacuatioNZ |
+| `door_boundary_layer` | Excluded width per side of a door | m | 0.15 | SFPE Table 67.1 |
+| `stair_boundary_layer` | Excluded width per side of a stair link | m | 0.15 | SFPE Table 67.1 |
+
+The coefficients and boundary layers are finite; the four coefficients
+are positive and the boundary layers nonnegative. Three quantities are
+derived and cannot be set: jam density $1/a$, peak-flow density
+$1/(2a)$ and maximum specific flow $k/(4a)$. The slope must keep the
+peak-flow density at or above the density floor of 0.54 m⁻², that is
+$a \le 0.926$ m²/person. `door_specific_flow` must not exceed $k/(4a)$ of
+the level constant, because a door cannot pass more than the
+speed–density relation allows; the error names both values. With the
+default `door_specific_flow` of 1.3 this bound is reached at a slope
+of 0.269, so to raise the slope further lower `door_specific_flow` in
+the same step. `NetworkSimulation` (and `check`) requires `max_density`
+below the jam density, so the default 2.75 fails for a slope of 0.364
+(1/2.75) or more.
+
+The opening boundary layer (0 m) and the density floor 0.54 m⁻² are not
+coefficients and cannot be changed. The floor is an applicability bound
+of the relation, not a minimum physical density; the speed at zero
+density is a hydraulic reference speed, not a free-walking speed.
+
+The defaults come from the sources in the table; see
+[Model elements]({{< relref "/docs/model/elements#default-values-and-sources" >}}).
+Changed values are study assumptions, not validated ranges, and the
+package does not check them against data. Stair riser and tread ranges stay
+reference limits, independent of the coefficients.
+
+In a scenario file, give the coefficients that differ from the defaults
+under `hydraulic_parameters`; an absent block means all defaults
+([Command line]({{< relref "/docs/using/command-line#the-scenario-file" >}})).
+Retain the package version and seeds with results; an exported file
+records the version in `software_version`.
+
 ## Nodes
 
 ```python
@@ -102,7 +161,10 @@ net.connect(
   archway {{< cite 1 "Table 67.1" >}}.
 - **`stair`**: the exit of a stair flight. At least one of the two nodes
   must be a stair. The default specific flow comes from that stair node;
-  if both nodes are stairs, it comes from the source node.
+  if both nodes are stairs, it comes from the source node. Both directions
+  share that resolved capacity. A stair–level connection uses the stair's flow
+  in either construction direction. Door and opening kinds retain prescribed
+  doorway flow even when adjacent to stairs; explicit `specific_flow` wins.
 
 A connection without capacity, for example a width no larger than
 $2b$, raises a `ValueError`, and so does a `specific_flow` of 0, a negative

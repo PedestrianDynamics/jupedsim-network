@@ -26,7 +26,12 @@ SAFE = "safe"
 DOOR = "door"
 OPENING = "opening"
 
-_BOUNDARY_LAYERS = {DOOR: 0.15, OPENING: 0.0, STAIR: 0.15}
+# Defaults for schema help; construction uses the retained parameters.
+_BOUNDARY_LAYERS = {
+    DOOR: hydraulic.DEFAULT_HYDRAULIC_PARAMETERS.door_boundary_layer,
+    OPENING: hydraulic.OPENING_BOUNDARY_LAYER,
+    STAIR: hydraulic.DEFAULT_HYDRAULIC_PARAMETERS.stair_boundary_layer,
+}
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,12 @@ class Link:
 
 
 class Network:
-    """Builder for the node-link graph.
+    """Builder and holder of a resolved hydraulic graph.
+
+    ``parameters`` supplies immutable model coefficients and defaults. Local
+    connection overrides take precedence. Geometry stays local to the network;
+    resolved speeds and capacities are retained alongside construction inputs.
+    Rebuild the network to use a different configuration.
 
     Example:
         .. code:: python
@@ -81,7 +91,14 @@ class Network:
             net.connect("flight", "street", width=1.2, kind="stair", length=8.0)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self, *, parameters: hydraulic.HydraulicParameters | None = None
+    ) -> None:
+        if parameters is None:
+            parameters = hydraulic.DEFAULT_HYDRAULIC_PARAMETERS
+        if not isinstance(parameters, hydraulic.HydraulicParameters):
+            raise TypeError("parameters must be HydraulicParameters.")
+        self._parameters = parameters
         self._nodes: list[Node] = []
         self._links: list[Link] = []
         self._by_name: dict[str, Node] = {}
@@ -90,6 +107,11 @@ class Network:
         # Arguments of each add_* and connect call as given, in call
         # order, so that a scenario file can be written without loss.
         self._inputs: list[tuple[str, dict]] = []
+
+    @property
+    def parameters(self) -> hydraulic.HydraulicParameters:
+        """Immutable model configuration; changing it requires reconstruction."""
+        return self._parameters
 
     @property
     def nodes(self) -> tuple[Node, ...]:
@@ -155,8 +177,10 @@ class Network:
                 ``length * width``
             width: width of the flight in m; see ``length``
         """
-        k = hydraulic.stair_speed_constant(riser, tread)
-        _warn_outside_sfpe_range(name, riser, tread)
+        k = hydraulic.stair_speed_constant(
+            riser, tread, parameters=self.parameters
+        )
+        _warn_outside_sfpe_range(name, riser, tread, self.parameters)
         node = self._add(name, STAIR, _area(area, length, width), k)
         self._record(
             "stair",
@@ -179,7 +203,9 @@ class Network:
         Arguments:
             name: unique name of the node
         """
-        node = self._add(name, SAFE, math.inf, hydraulic.LEVEL_SPEED_CONSTANT)
+        node = self._add(
+            name, SAFE, math.inf, self.parameters.level_speed_constant
+        )
         self._record("safe", name=name)
         return node
 
@@ -209,12 +235,13 @@ class Network:
                 link, the distance along the incline (line of travel),
                 including landings, not the horizontal run.
             specific_flow: persons/s/m effective width, must be positive.
-                Defaults to 1.3 for doors and openings, and to the maximum
-                flow of the adjacent stair node for stairs. If both nodes
-                are stairs, the source node sets the capacity in both
-                directions; give an explicit value to override this rule.
+                Uses configured doorway flow for doors and openings (1.3 by
+                default). Stair links use the maximum flow of the first stair
+                in source-target order. Both directions use that same capacity;
+                with two stairs, the source sets it. An explicit value overrides
+                this rule.
             boundary_layer: per side in m, at least 0. Defaults to 0.15
-                for doors and stairs and 0 for openings.
+                for doors and stairs and 0 for openings in the default configuration.
             merge_weight: relative share when several links feed a full node
             bidirectional: also create the link from target to source;
                 the two links share one door (``counterflow`` of
@@ -230,7 +257,13 @@ class Network:
         src, dst = self.node(source), self.node(target)
         _validate_connection(src, dst, width, kind, length, merge_weight)
         capacity = _connection_capacity(
-            src, dst, width, kind, specific_flow, boundary_layer
+            src,
+            dst,
+            width,
+            kind,
+            specific_flow,
+            boundary_layer,
+            self.parameters,
         )
         label = name or f"{source}->{target}"
         pairs = [(src, dst)] + ([(dst, src)] if bidirectional else [])
@@ -302,7 +335,9 @@ class Network:
             for safe nodes and nodes without a route.
         """
         nodes, links = self.nodes, self.links
-        costs = routing_costs.edge_costs(nodes, links, routing_policy)
+        costs = routing_costs.edge_costs(
+            nodes, links, routing_policy, parameters=self.parameters
+        )
         targets = [node.index for node in self._targets(target)]
         try:
             return routing.route_table(nodes, links, targets, costs)
@@ -351,7 +386,9 @@ class Network:
                 rule excludes
         """
         nodes, links = self.nodes, self.links
-        costs = routing_costs.edge_costs(nodes, links, routing_policy)
+        costs = routing_costs.edge_costs(
+            nodes, links, routing_policy, parameters=self.parameters
+        )
         targets = [node.index for node in self._targets(target)]
         try:
             return routing.route_choices(nodes, links, targets, costs)
@@ -373,7 +410,7 @@ class Network:
         if name in self._by_name:
             raise ValueError(f"Node '{name}' already exists.")
         if speed_constant is None:
-            speed_constant = hydraulic.LEVEL_SPEED_CONSTANT
+            speed_constant = self.parameters.level_speed_constant
         if not 0 < speed_constant < math.inf:
             raise ValueError("speed_constant must be finite and positive.")
         node = Node(
@@ -429,15 +466,17 @@ def _validate_connection(src, dst, width, kind, length, merge_weight) -> None:
 
 
 def _connection_capacity(
-    src, dst, width, kind, specific_flow, boundary_layer
+    src, dst, width, kind, specific_flow, boundary_layer, parameters
 ) -> float:
     """Resolve hydraulic assumptions into unidirectional capacity (persons/s)."""
     fs = specific_flow
     if fs is None:
-        fs = _default_specific_flow(kind, src, dst)
+        fs = _default_specific_flow(kind, src, dst, parameters)
     if not 0 < fs < math.inf:
         raise ValueError(f"specific_flow must be positive, got {fs}.")
-    layer = _BOUNDARY_LAYERS[kind] if boundary_layer is None else boundary_layer
+    layer = _default_boundary_layer(kind, parameters)
+    if boundary_layer is not None:
+        layer = boundary_layer
     if not 0 <= layer < math.inf:
         raise ValueError(f"boundary_layer: must be >= 0 m, got {layer}.")
     capacity = fs * hydraulic.effective_width(width, layer)
@@ -448,16 +487,24 @@ def _connection_capacity(
     return capacity
 
 
-def _default_specific_flow(kind, src, dst) -> float:
+def _default_boundary_layer(kind, parameters) -> float:
+    if kind == OPENING:
+        return hydraulic.OPENING_BOUNDARY_LAYER
+    return getattr(parameters, f"{kind}_boundary_layer")
+
+
+def _default_specific_flow(kind, src, dst, parameters) -> float:
     if kind != STAIR:
-        return hydraulic.DOOR_SPECIFIC_FLOW
+        return parameters.door_specific_flow
     stairs = [n for n in (src, dst) if n.kind == STAIR]
     if not stairs:
         raise ValueError("A stair connection needs an adjacent stair node.")
-    return hydraulic.max_specific_flow(stairs[0].speed_constant)
+    return hydraulic.max_specific_flow(
+        stairs[0].speed_constant, parameters=parameters
+    )
 
 
-def _warn_outside_sfpe_range(name, riser, tread) -> None:
+def _warn_outside_sfpe_range(name, riser, tread, parameters) -> None:
     risers, treads = hydraulic.STAIR_RISER_RANGE, hydraulic.STAIR_TREAD_RANGE
     if _within(riser, risers) and _within(tread, treads):
         return
@@ -465,7 +512,7 @@ def _warn_outside_sfpe_range(name, riser, tread) -> None:
         f"Stair '{name}': riser {riser * 1000:.1f} mm and tread "
         f"{tread * 1000:.1f} mm lie outside the SFPE range (risers 165-191 mm, "
         "treads 254-330 mm, SFPE Handbook Table 67.2); the speed constant "
-        "k = 51.8 sqrt(T/R) m/min is extrapolated.",
+        f"k = {parameters.stair_speed_coefficient:g} sqrt(T/R) m/min is extrapolated.",
         UserWarning,
         stacklevel=3,
     )

@@ -52,11 +52,12 @@ import types
 import typing
 import warnings
 from dataclasses import dataclass
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
 
-from jupedsim_network import sampling
+from jupedsim_network import hydraulic, sampling
 from jupedsim_network.network import Network
 from jupedsim_network.simulation import NetworkSimulation, Population
 
@@ -89,6 +90,8 @@ FILE_ONLY = {"monte_carlo": {"quantiles": list[float]}}
 
 _TOP = {
     "format_version": int,
+    "software_version": str,
+    "hydraulic_parameters": dict,
     "description": str,
     "nodes": list,
     "connections": list,
@@ -310,6 +313,14 @@ def _check_document(data) -> None:
     _check_values(data, "")
     _check_format_version(data)
     _check_object(data, "", _TOP, _TOP_REQUIRED)
+    if "hydraulic_parameters" in data:
+        fields = {
+            f.name: float
+            for f in dataclasses.fields(hydraulic.HydraulicParameters)
+        }
+        _check_object(
+            data["hydraulic_parameters"], "hydraulic_parameters", fields, set()
+        )
     for i, node in enumerate(data["nodes"]):
         _check_node(node, f"nodes[{i}]")
     connect = _spec(Network.connect)
@@ -614,6 +625,14 @@ ELEMENTS = (
 FILE_ONLY_HELP: dict[tuple[str, str], str] = {
     ("document", "format_version"): "version of the file format; this "
     f"version of jupedsim-network reads {FORMAT_VERSION}",
+    (
+        "document",
+        "software_version",
+    ): "version of jupedsim-network that wrote the file; not read back",
+    (
+        "document",
+        "hydraulic_parameters",
+    ): "HydraulicParameters fields that differ from the SFPE defaults",
     ("document", "description"): "free text; not used by the model",
     ("document", "nodes"): "rooms, stairs and safe places, created in "
     "file order",
@@ -830,6 +849,8 @@ def _none_means() -> dict[str, str]:
         "upper": "no upper bound",
         "seed": "the command line draws a seed and records it in "
         "summary.json (seed_drawn: true)",
+        "software_version": "no version recorded",
+        "hydraulic_parameters": "every coefficient takes its default",
         "description": "no description",
         "simulation": "every setting takes the API default",
         "run": "run.seed absent: the command line draws a seed",
@@ -954,10 +975,22 @@ def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     """Build the simulation, attributing each error to its element."""
     warned: list[str] = []
     settings = data.get("simulation", {})
-    attempt("simulation", functools.partial(_probe_settings, settings), warned)
+    parameters = attempt(
+        "hydraulic_parameters",
+        functools.partial(
+            hydraulic.HydraulicParameters,
+            **data.get("hydraulic_parameters", {}),
+        ),
+        warned,
+    )
+    attempt(
+        "simulation",
+        functools.partial(_probe_settings, settings, parameters),
+        warned,
+    )
     # The settings alone warned these; every population build repeats them.
     from_settings = {w.removeprefix("simulation: ") for w in warned}
-    net = Network()
+    net = Network(parameters=parameters)
     for i, node in enumerate(data["nodes"]):
         attempt(f"nodes[{i}]", functools.partial(_add_node, net, node), warned)
     for i, link in enumerate(data["connections"]):
@@ -984,12 +1017,16 @@ def _build(data: dict) -> tuple[NetworkSimulation, tuple[str, ...]]:
     return attempt("populations", full, None), tuple(warned)
 
 
-def _probe_settings(settings: dict) -> None:
+def _probe_settings(
+    settings: dict, parameters: hydraulic.HydraulicParameters
+) -> None:
     """Let the API check the ``simulation`` settings on their own."""
-    net = Network()
+    net = Network(parameters=parameters)
     net.add_room("room", area=100.0)
     net.add_safe("safe")
-    net.connect("room", "safe", width=1.0)
+    net.connect(
+        "room", "safe", width=1.0, boundary_layer=0.0, specific_flow=1.0
+    )
     NetworkSimulation(net, [Population("room", 1)], **settings)
 
 
@@ -1038,8 +1075,25 @@ def _value(value):
 # Writing a simulation built in Python
 
 
+def software_version() -> str:
+    """The installed version of jupedsim-network, or ``"unknown"``."""
+    try:
+        return metadata.version("jupedsim-network")
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
+
 def _export(sim, seed, monte_carlo, description) -> dict:
-    data: dict = {"format_version": FORMAT_VERSION}
+    data: dict = {
+        "format_version": FORMAT_VERSION,
+        "software_version": software_version(),
+    }
+    changed = _non_default(
+        dataclasses.asdict(sim.network.parameters),
+        hydraulic.HydraulicParameters,
+    )
+    if changed:
+        data["hydraulic_parameters"] = changed
     if description is not None:
         data["description"] = description
     data["nodes"], data["connections"] = [], []

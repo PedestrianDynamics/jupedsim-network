@@ -7,6 +7,7 @@ from the SFPE hydraulic relations. A run takes milliseconds, so scenarios can
 be sampled many times with :meth:`NetworkSimulation.run_many`.
 """
 
+from jupedsim_network.hydraulic import HydraulicParameters
 from jupedsim_network.network import Link, Network, Node
 from jupedsim_network.sampling import (
     Distribution,
@@ -34,6 +35,7 @@ from jupedsim_network.simulation import (
 __all__ = [
     "Distribution",
     "Fixed",
+    "HydraulicParameters",
     "Link",
     "LogNormal",
     "MonteCarloResult",

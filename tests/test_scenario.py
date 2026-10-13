@@ -23,6 +23,7 @@ import pytest
 
 from jupedsim_network import (
     Fixed,
+    HydraulicParameters,
     LogNormal,
     Network,
     NetworkSimulation,
@@ -74,7 +75,11 @@ def _office_wing_module():
 
 
 def _full_keys_python() -> NetworkSimulation:
-    net = Network()
+    net = Network(
+        parameters=HydraulicParameters(
+            door_specific_flow=1.2, door_boundary_layer=0.1
+        )
+    )
     net.add_room("west", area=60.0)
     net.add_room("east", length=10.0, width=6.0)
     net.add_room("hall", area=40.0)
