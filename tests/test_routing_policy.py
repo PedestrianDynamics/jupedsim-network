@@ -11,9 +11,11 @@ from jupedsim_network import (
     Population,
     cli,
     load_scenario,
+    routing,
+    routing_costs,
     save_scenario,
 )
-from jupedsim_network.network import _edge_cost
+from jupedsim_network.routing_costs import edge_cost
 from jupedsim_network.tui import netview
 
 TIME = "shortest_free_flow_time"
@@ -39,7 +41,12 @@ def alternatives(stair_length=30, level_length=35):
 
 def test_analytical_level_and_stair_costs():
     net = alternatives()
-    distance, _ = net._distances(None, routing_policy=TIME)
+    distance, _ = routing.distances(
+        net.nodes,
+        net.links,
+        [net.node("exit").index],
+        routing_costs.edge_costs(net.nodes, net.links, TIME),
+    )
     assert distance[1] == pytest.approx(30 / STAIR_SPEED)
     assert distance[2] == pytest.approx(35 / LEVEL_SPEED)
     assert distance[0] == pytest.approx(35 / LEVEL_SPEED)
@@ -52,7 +59,7 @@ def test_cost_uses_source_node_even_for_stair_entry():
     entry = net.connect(
         "start", "stair", width=1, length=12, kind="stair", bidirectional=False
     )[0]
-    assert _edge_cost(entry, net.node("start"), TIME) == pytest.approx(
+    assert edge_cost(entry, net.node("start"), TIME) == pytest.approx(
         12 / LEVEL_SPEED
     )
 
@@ -61,7 +68,12 @@ def test_cost_uses_source_node_even_for_stair_entry():
 def test_equal_time_alternatives_with_different_lengths(seconds):
     net = alternatives(seconds * STAIR_SPEED, seconds * LEVEL_SPEED)
     assert net.route_choices(routing_policy=TIME)[0] == (0, 1)
-    costs, hops = net._distances(None, routing_policy=TIME)
+    costs, hops = routing.distances(
+        net.nodes,
+        net.links,
+        [net.node("exit").index],
+        routing_costs.edge_costs(net.nodes, net.links, TIME),
+    )
     assert costs[0] == pytest.approx(seconds)
     for link in net.links:
         if link.index in net.route_choices(routing_policy=TIME)[link.source]:

@@ -50,6 +50,8 @@ from jupedsim_network import (
     Uniform,
     Weibull,
     hydraulic,
+    routing,
+    routing_costs,
 )
 
 sys.path.insert(0, str(docpages.ROOT / "scripts" / "figures"))
@@ -591,7 +593,12 @@ def stair_k_row():
 
 def routing_cost_row():
     net = trp.alternatives()
-    costs, _ = net._distances(None, routing_policy=trp.TIME)
+    costs, _ = routing.distances(
+        net.nodes,
+        net.links,
+        [net.node("exit").index],
+        routing_costs.edge_costs(net.nodes, net.links, trp.TIME),
+    )
     k = net.node("stair").speed_constant
     floor = hydraulic.speed(0, 1.0)
     return (

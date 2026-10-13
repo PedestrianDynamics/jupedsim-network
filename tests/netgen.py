@@ -28,7 +28,7 @@ from jupedsim_network import (
     Uniform,
 )
 from jupedsim_network import simulation as simulation_module
-from jupedsim_network.network import TIE_TOLERANCE
+from jupedsim_network.routing import TIE_TOLERANCE
 
 COUNTERFLOW = ("independent", "estimate", "bounding")
 AREAS = (4.0, 10.0, 20.0, 40.0, 100.0)
@@ -517,7 +517,7 @@ def oracle_distances(net, target):
     """Shortest distance and fewest links to safety, computed afresh.
 
     Distances by Bellman-Ford; hops by a Dijkstra on (distance, hops) with
-    exact float comparison, as ``Network._distances`` defines them.
+    exact float comparison, as ``routing.distances`` defines them.
     """
     n = len(net.nodes)
     goals = [
@@ -549,7 +549,7 @@ def _fewest_hops(link, dist, hops):
 
 
 def tied(link, dist, hops) -> bool:
-    """The tie rule of ``Network._route_choices``, as documented."""
+    """The tie rule of ``routing.route_choices``, as documented."""
     here, there = dist[link.source], dist[link.target]
     if not math.isfinite(here):
         return False
