@@ -152,8 +152,8 @@ class Network:
             tread: tread depth in m, below 1 m
             area: area of the flight in m², which holds the agents on
                 it; give it, or both ``length`` and ``width``, not both.
-                No projection or adjustment for landings is performed.
-            length: length of the flight in m; with ``width``, the area is
+            length: length of the flight in m along the incline, like the
+                stair link, without landings; with ``width``, the area is
                 ``length * width``
             width: width of the flight in m; see ``length``
         """
