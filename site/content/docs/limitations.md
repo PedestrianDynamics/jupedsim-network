@@ -53,7 +53,7 @@ simulation.
 |---------|-----------|--------------|-----------------------------------|
 | Pre-evacuation time | Optimistic | `pre_movement=0.0` s for every agent | 1800 s, all agents at once {{< cite 11 "p. 345" >}} |
 | Travel speed | Design value | `speed=1.2` m/s; level speed capped at 1.199 m/s | 0.3 m/s {{< cite 11 "p. 346" >}} |
-| Route availability and usage | Optimistic (availability); not established (usage) | Every safe node can be used; shortest distance to the nearest one | All agents to the narrowest, most remote final exit {{< cite 11 "pp. 346–347; Table II, p. 349" >}} |
+| Route availability and usage | Optimistic (availability); not established (usage) | Every safe node can be used; shortest distance to the nearest one by default (`routing_policy="shortest_distance"`), or shortest free-flow reference time with `"shortest_free_flow_time"` | All agents to the narrowest, most remote final exit {{< cite 11 "pp. 346–347; Table II, p. 349" >}} |
 | Ties between routes | Not established (see Ties below) | `split_ties=True`: agents alternate between tied links | "all agents are randomly assigned to one of those final exits" {{< cite 11 "p. 347" >}} |
 | Door flow | Design value; disputed | $F_s = 1.3$ persons/s/m of effective width, $b = 0.15$ m per side | 0.67 persons/s per single-leaf door of regulated minimum width, not scaled with width {{< cite 11 "p. 348" >}} |
 | Counterflow at two-way connections | Low end of the walkway data; stairs: Tofiło et al.'s 75 %; while both directions queue | `counterflow="bounding"`: total 0.84–0.94 $C$ (doors, openings), 0.75–0.94 $C$ (stairs) | None proposed. The paper mentions counterflow only as a side effect of longest-route assignment {{< cite 11 "p. 347" >}} |
@@ -123,9 +123,20 @@ simulation.
   building with a single stair (725.5 s); splitting the tie cuts the
   time by 44 %.
 
-- **Routes are static and use distance only.** They are computed once
-  from link lengths. Agents don't react to queues, blocked exits, signs
-  or smoke, and walking speed (level or stair) plays no part.
+- **Routes are static.** They are computed once before the run. Agents
+  don't react to queues, blocked exits, signs or smoke. By default
+  (`routing_policy="shortest_distance"`) routes use link lengths only,
+  and walking speed (level or stair) plays no part.
+- **The free-flow-time policy is not a travel-time prediction.**
+  `routing_policy="shortest_free_flow_time"` costs each link at
+  `length / speed(0, k)`, the hydraulic speed at the density floor of
+  the node the link leaves. This reference time has no congestion, no
+  queues and no individual speeds. Because `speed(0, k) = 0.856 k` for
+  every node, the cost is proportional to $k$, and the policy differs
+  from shortest distance only through the node speed constants, today
+  level (1.4 m/s) against stairs ($51.8\sqrt{T/R}/60$ m/s). A route
+  changes only where a longer level path competes with a shorter
+  stair-heavy one ([Networks]({{< relref "/docs/using/networks#routes" >}})).
 
 ## Movement and capacity
 

@@ -908,6 +908,7 @@ def _recorder(caught: list[str], previous):
 
 _POPULATION = re.compile(r"population (\d+): (.*)", re.S)
 _KEYED = re.compile(r"(\w+): (.*)", re.S)
+_CHOICE = re.compile(r"(\w+) must be one of .*", re.S)
 _ELEMENT_PATH = re.compile(r"(nodes|connections|populations)\[\d+\]|simulation")
 
 
@@ -915,13 +916,18 @@ def _located(path: str, message: str) -> tuple[str, str]:
     """The path and the rest of an API message that names its element.
 
     ``population i: ...`` locates at ``populations[i]``; ``key: ...`` with
-    a key of the element at ``path`` locates at ``path.key``. API messages
-    that must land at a key therefore start with ``key: ``; any other
-    message starting with a key name and ``: `` would be relocated too.
+    a key of the element at ``path`` locates at ``path.key``, as does
+    ``key must be one of ...``, which keeps its text. API messages that must
+    land at a key therefore start with ``key: `` or ``key must be one of``;
+    any other message starting with a key name and ``: `` would be
+    relocated too.
     """
     match = _POPULATION.fullmatch(message)
     if match is not None:
         return f"populations[{match.group(1)}]", match.group(2)
+    match = _CHOICE.fullmatch(message)
+    if match is not None and match.group(1) in _keys_of(path):
+        return _join(path, match.group(1)), message
     match = _KEYED.fullmatch(message)
     if match is None or match.group(1) not in _keys_of(path):
         return path, message

@@ -2,7 +2,8 @@
 """Directed graph with resolved physical properties for the network model.
 
 The builder resolves hydraulic defaults into node speeds and link capacities.
-Routing uses static distance or reference-time costs. Flow sharing and agent
+Routing minimizes static link costs, either lengths or hydraulic
+reference travel times (the ``routing_policy``). Flow sharing and agent
 movement belong to the simulation. Reverse links identify directions of one
 physical connection.
 """
@@ -485,9 +486,17 @@ class Network:
         return node
 
 
+def check_routing_policy(routing_policy) -> None:
+    if routing_policy in ROUTING_POLICIES:
+        return
+    valid = ", ".join(repr(p) for p in ROUTING_POLICIES)
+    raise ValueError(
+        f"routing_policy must be one of {valid}; got {routing_policy!r}."
+    )
+
+
 def _routing_costs(network, routing_policy) -> list[float]:
-    if routing_policy not in ROUTING_POLICIES:
-        raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
+    check_routing_policy(routing_policy)
     nodes = network.nodes
     return [
         _edge_cost(link, nodes[link.source], routing_policy)
@@ -504,13 +513,7 @@ def _edge_cost(link: Link, source: Node, routing_policy: str) -> float:
     """
     if routing_policy == "shortest_distance":
         return link.length
-    if routing_policy != "shortest_free_flow_time":
-        raise ValueError(f"Unknown routing policy: {routing_policy!r}.")
     reference_speed = float(hydraulic.speed(0, source.speed_constant))
-    if not math.isfinite(reference_speed) or reference_speed <= 0:
-        raise ValueError(
-            f"Node '{source.name}' must have a finite positive reference speed."
-        )
     # Infinity records an unrepresentable cost; routing raises only when
     # no finite route exists, after considering all alternatives.
     return link.length / reference_speed

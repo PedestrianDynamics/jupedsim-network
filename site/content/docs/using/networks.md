@@ -152,17 +152,25 @@ the run starts and is never updated.
 
 - `routing_policy="shortest_distance"` is the default and sums link lengths
   in metres. Speeds and queues play no part.
-- `routing_policy="shortest_free_flow_time"` minimizes **hydraulic reference
-  travel time**, not predicted actual travel time. Each link costs
-  `link.length / hydraulic.speed(0, source.speed_constant)` seconds because
-  its length is walked in the source node. The reference speed is
-  `k * (1 - 0.266 * 0.54)` m/s, including the hydraulic density floor;
-  it is not the coefficient `k` itself. Individual speed limits, congestion,
-  and queueing delays are excluded. This does not minimize total evacuation
-  time. Pass the policy to `NetworkSimulation`, `route_table`, or
+- `routing_policy="shortest_free_flow_time"` sums a reference time per
+  link, `link.length / hydraulic.speed(0, source.speed_constant)` in
+  seconds, where `source` is the node the link leaves, because a link's
+  length is walked in that node. `speed(0, k)` is the SFPE speed at the
+  density floor, $k\,(1 - 0.266 \cdot 0.54) = 0.856\,k$ m/s, so the floor
+  only fixes the unit of the cost; the policy differs from
+  `"shortest_distance"` only through the speed constants $k$ of the
+  nodes, 1.4 m/s for rooms and $51.8\sqrt{T/R}/60$ m/s for stairs
+  (1.077 m/s for 18/28 cm steps). Stair length is thereby weighted by
+  about 1.3 relative to level length, and nothing else changes. A
+  `kind="stair"` link that leaves a room is costed at the room's speed;
+  only links leaving a stair node use the stair speed. This stair-entry
+  rule and the policy itself are engineering choices of this model, not
+  taken from SFPE, EvacuatioNZ or Tsai. The reference time excludes
+  individual speeds, congestion and queues and is not a prediction of
+  travel time ([Limitations]({{< relref "/docs/limitations#routes" >}})).
+  Pass the policy to `NetworkSimulation`, `route_table` or
   `route_choices`; scenario files store it under `simulation.routing_policy`.
-  One static table per destination is shared across populations. Explicit
-  population targets still select the destination; speeds do not select tables.
+  One static table per destination is shared across populations.
 - Equally short routes are split. A node where several links start a
   minimum-cost route is a tie; selected costs count as equal if they agree
   to within 10⁻⁹ of their cost (at least 10⁻⁹ m or 10⁻⁹ s), that is, up to

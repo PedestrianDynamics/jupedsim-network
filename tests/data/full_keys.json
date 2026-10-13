@@ -163,7 +163,7 @@
     "supply_reduction": false,
     "split_ties": false,
     "counterflow": "estimate",
-    "routing_policy": "shortest_distance"
+    "routing_policy": "shortest_free_flow_time"
   },
   "run": {
     "seed": 7

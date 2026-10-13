@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+import json
 import math
 
 import numpy as np
@@ -8,6 +9,7 @@ from jupedsim_network import (
     Network,
     NetworkSimulation,
     Population,
+    cli,
     load_scenario,
     save_scenario,
 )
@@ -124,10 +126,48 @@ def test_default_distance_policy_preserves_results_and_export(tmp_path):
     assert "routing_policy" not in load_scenario(path).data["simulation"]
 
 
+UNKNOWN = (
+    "routing_policy must be one of 'shortest_distance', "
+    "'shortest_free_flow_time'; got 'fastest'."
+)
+
+
 @pytest.mark.parametrize("method", ["route_table", "route_choices"])
 def test_unknown_routing_policy_is_rejected(method):
-    with pytest.raises(ValueError, match="Unknown routing policy"):
+    with pytest.raises(ValueError) as info:
         getattr(alternatives(), method)(routing_policy="fastest")
+    assert str(info.value) == UNKNOWN
+
+
+def test_simulation_rejects_unknown_routing_policy():
+    with pytest.raises(ValueError) as info:
+        NetworkSimulation(
+            alternatives(), [Population("start", 1)], routing_policy="fastest"
+        )
+    assert str(info.value) == UNKNOWN
+
+
+def test_check_rejects_unknown_routing_policy(tmp_path, capsys):
+    path = tmp_path / "scenario.json"
+    save_scenario(
+        NetworkSimulation(alternatives(), [Population("start", 1)]), path
+    )
+    data = json.loads(path.read_text())
+    data["simulation"] = {"routing_policy": "fastest"}
+    path.write_text(json.dumps(data))
+    assert cli.main(["check", str(path)]) == cli.EXIT_ERROR
+    err = capsys.readouterr().err
+    assert f"{path}: simulation.routing_policy: {UNKNOWN}" in err
+
+
+def test_route_view_names_a_non_default_policy():
+    pops = [Population("start", 1)]
+    timed = NetworkSimulation(alternatives(), pops, routing_policy=TIME)
+    default = NetworkSimulation(alternatives(), pops)
+    assert netview.lines(netview.build(timed))[0] == f"Routing policy: {TIME}"
+    assert "Routing policy" not in "\n".join(
+        netview.lines(netview.build(default))
+    )
 
 
 def test_overflowing_time_detour_preserves_finite_route():

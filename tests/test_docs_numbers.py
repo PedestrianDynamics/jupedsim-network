@@ -37,6 +37,7 @@ import numpy as np
 import pytest
 import test_evacuationz_verification as enz
 import test_network as tn
+import test_routing_policy as trp
 
 from jupedsim_network import (
     Fixed,
@@ -586,6 +587,19 @@ def merge_stall():
 def stair_k_row():
     k = hydraulic.stair_speed_constant(0.178, 0.279)
     return f"| {k:.3f}, {hydraulic.max_specific_flow(k):.3f} | 0.01 |"
+
+
+def routing_cost_row():
+    net = trp.alternatives()
+    costs, _ = net._distances(None, routing_policy=trp.TIME)
+    k = net.node("stair").speed_constant
+    floor = hydraulic.speed(0, 1.0)
+    return (
+        f"$k_\\text{{stair}} = 51.8\\sqrt{{28/18}}/60 = {k:.4f}$ m/s; costs "
+        f"$30/({floor:.5f} \\cdot {k:.4f}) = {costs[1]:.2f}$ s (stair) and "
+        f"$35/({floor:.5f} \\cdot 1.4) = {costs[2]:.2f}$ s (level), with "
+        f"${floor:.5f} = 1 - 0.266 \\cdot 0.54$ the density floor factor"
+    )
 
 
 def steady_density_row():
@@ -1325,6 +1339,14 @@ REGISTRY = [
         V, "| Merge weights 1 : 3 over 150 s | flow ratio 3 | 3.0 |", merge_row
     ),
     Number(V, "| 1.081, 1.016 | 0.01 |", stair_k_row),
+    Number(
+        V,
+        "$k_\\text{stair} = 51.8\\sqrt{28/18}/60 = 1.0768$ m/s; costs "
+        "$30/(0.85636 \\cdot 1.0768) = 32.53$ s (stair) and "
+        "$35/(0.85636 \\cdot 1.4) = 29.19$ s (level), with "
+        "$0.85636 = 1 - 0.266 \\cdot 0.54$ the density floor factor",
+        routing_cost_row,
+    ),
     Number(V, "mean 90.11 and 80.16, maximum 91 and 81", steady_density_row),
     # Verification: rows and prose of exact tests, and their repeats.
     Number(
@@ -1828,6 +1850,7 @@ ERROR_FILES = {
     "typo.json": lambda d: d["simulation"].update(max_densty=3.0),
     "speed0.json": lambda d: d["populations"][0].update(speed=0),
     "ln0.json": lambda d: d["populations"][0]["pre_movement"].update(mean=0),
+    "policy.json": lambda d: d["simulation"].update(routing_policy="fastest"),
 }
 
 
@@ -1879,7 +1902,9 @@ CLI_REGISTRY = [
         "populations[0]: Agent speeds must be positive. jupedsim-network "
         "check: error: ln0.json: populations[0].pre_movement: cannot sample "
         "LogNormal(lower=0.0, upper=None, mean=0, std=60.0): float division "
-        "by zero",
+        "by zero jupedsim-network check: error: policy.json: "
+        "simulation.routing_policy: routing_policy must be one of "
+        "'shortest_distance', 'shortest_free_flow_time'; got 'fastest'.",
         error_lines,
     ),
     Number(

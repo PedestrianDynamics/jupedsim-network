@@ -584,6 +584,7 @@ the JSON path of the entry and the message.
 jupedsim-network check: error: typo.json: simulation: unknown key 'max_densty'; valid keys: counterflow, dt, max_density, routing_policy, split_ties, supply_reduction, t_max
 jupedsim-network check: error: speed0.json: populations[0]: Agent speeds must be positive.
 jupedsim-network check: error: ln0.json: populations[0].pre_movement: cannot sample LogNormal(lower=0.0, upper=None, mean=0, std=60.0): float division by zero
+jupedsim-network check: error: policy.json: simulation.routing_policy: routing_policy must be one of 'shortest_distance', 'shortest_free_flow_time'; got 'fastest'.
 ```
 
 The first and the last are found while the file is loaded. The second
