@@ -8,9 +8,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     strategy:
       matrix:
         python-version: ["3.10", "3.13"]
@@ -34,7 +31,7 @@ jobs:
         with:
           files: coverage.xml
           disable_search: true
-          use_oidc: true
+          token: ${{ secrets.CODECOV }}
           fail_ci_if_error: true
       - if: matrix.python-version != '3.13'
         run: uv run --extra cli pytest
