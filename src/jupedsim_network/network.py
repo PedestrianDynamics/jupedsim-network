@@ -174,7 +174,9 @@ class Network:
                 it; give it, or both ``length`` and ``width``, not both.
             length: length of the flight in m along the incline, like the
                 stair link, without landings; with ``width``, the area is
-                ``length * width``
+                ``length * width``. Taking the area along the incline is
+                a choice of this model: SFPE never derives a stair
+                density from an area.
             width: width of the flight in m; see ``length``
         """
         k = hydraulic.stair_speed_constant(

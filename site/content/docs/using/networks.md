@@ -106,9 +106,13 @@ Names must be unique and areas positive.
 
 Model each flight as one stair node, with an area of about its width
 times the length of the flight. Connect the flight to the space below
-with a `kind="stair"` link. SFPE applies stair speed to landings as well
-{{< cite 1 "p. 2175" >}}. EvacuatioNZ models landings as separate nodes
-{{< cite 3 "p. 20" >}}.
+with a `kind="stair"` link. The area of a flight is a choice of this
+model: SFPE never derives a stair density from an area. SFPE applies
+stair speed to landings as well {{< cite 1 "p. 2175" >}}. EvacuatioNZ
+models landings as separate nodes {{< cite 3 "p. 20" >}}. Here a
+landing modelled as its own node is a room, so agents cross it at level
+speed; to follow SFPE instead, add the landing to the stair link's
+`length` ([Limitations]({{< relref "/docs/limitations#movement-and-capacity" >}})).
 
 The stair speed grows with $\sqrt{T/R}$ (tread over riser). SFPE
 supports this only for risers of 165–191 mm and treads of 254–330 mm
