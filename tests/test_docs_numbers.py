@@ -407,24 +407,13 @@ def lobby_numbers():
     )
 
 
-def full_node_threshold():
-    """1/(2a) + 1/(2A) for the lobby of the full-node example."""
-    area = LOBBY["lobby"]
-    density = hydraulic.PEAK_FLOW_DENSITY + 1 / (2 * area)
-    return (
-        f"plus half an agent per node area: {density:.1f} m⁻² for a "
-        f"{area:g} m² node"
-    )
-
-
 def lobby_halving():
-    """ "Halving dt roughly halves the error", for (3.5, supply off)."""
+    """Factor by which halving dt divides the error, for (3.5, supply off)."""
     fine = lobby_time(FINE_DT, 3.5, False)
     ratio = (lobby_time(0.5, 3.5, False) - fine) / (
         lobby_time(0.25, 3.5, False) - fine
     )
-    word = "roughly halves" if 1.8 < ratio < 2.3 else f"divides by {ratio:.2f}"
-    return f"In the first case, halving $\\Delta t$ {word} the error."
+    return f"In the first case, halving $\\Delta t$ divides the error by {ratio:.1f}."
 
 
 def ci_docs_numbers():
@@ -1354,7 +1343,7 @@ REGISTRY = [
     ),
     Number(
         "using/running.md",
-        "with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s",
+        "with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 3102 s",
         sweep_slowest,
         slow=True,
     ),
@@ -1615,8 +1604,8 @@ REGISTRY = [
             "`start_distance=0`) leave a 100 m² room through a one-way 2 m "
             "door of length 0.3 m into a 4 m² lobby, which leads through a "
             "one-way 4 m opening of length 10 m to a safe node.",
-            "the evacuation time is 1372.0 s at $\\Delta t = 0.5$ s against "
-            "1442.8 s at $\\Delta t = 1/64$ s, 4.9 % short. With the defaults "
+            "the evacuation time is 1451.5 s at $\\Delta t = 0.5$ s against "
+            "1445.3 s at $\\Delta t = 1/64$ s, 0.4 % on the long side. With the defaults "
             "(2.75 m⁻², supply reduction on) the same network gives 453.5 s "
             "against 446.9 s, 1.5 % on the long side.",
         ),
@@ -1625,12 +1614,7 @@ REGISTRY = [
     ),
     Number(
         L,
-        "plus half an agent per node area: 2.0 m⁻² for a 4 m² node",
-        full_node_threshold,
-    ),
-    Number(
-        L,
-        "In the first case, halving $\\Delta t$ roughly halves the error.",
+        "In the first case, halving $\\Delta t$ divides the error by 1.8.",
         lobby_halving,
         slow=True,
     ),

@@ -1917,3 +1917,106 @@ def test_shared_capacity_survives_flow_reversal(counterflow):
     exited = np.cumsum(result.link_flow[:, 2:].sum(axis=1))
     assert np.all(result.node_occupancy.sum(axis=1) + exited == 3)
     assert np.all(result.node_occupancy[:, :2] <= sim.max_density * 10.0)
+
+
+OPENING = dict(width=2.0, kind="opening", length=0.0)
+
+
+def corridor_chain(count, chain):
+    # Room R (100 m2) feeds `chain` corridors of 1 m2 in series. With
+    # max_density 1.5 a corridor holds one agent; C = 2.6/s gives C dt = 1.3.
+    net = Network()
+    net.add_room("R", area=100.0)
+    net.add_safe("exit")
+    previous = "R"
+    for i in range(chain):
+        net.add_room(f"C{i}", area=1.0)
+        net.connect(previous, f"C{i}", bidirectional=False, **OPENING)
+        previous = f"C{i}"
+    net.connect(previous, "exit", bidirectional=False, **OPENING)
+    sim = NetworkSimulation(
+        net,
+        [Population("R", count)],
+        dt=0.5,
+        max_density=1.5,
+        supply_reduction=False,
+    )
+    return sim.run(seed=1)
+
+
+@pytest.mark.parametrize(
+    "chain, exits",
+    [(1, [1.0, 1.5, 2.0, 2.5]), (3, [2.0, 2.5, 3.0, 3.5])],
+)
+def test_freed_space_is_reused_in_the_same_step(chain, exits):
+    # The agent leaving a one-agent corridor frees its place for the next
+    # one in the same step, also through a chain of corridors (one credit
+    # per corridor, so the chain needs several passes within the step).
+    result = corridor_chain(4, chain)
+    np.testing.assert_allclose(np.sort(result.exit_times), exits)
+    if chain == 1:
+        occupancy = result.node_occupancy[:, result.node_names.index("C0")]
+        window = (result.times >= 0.5) & (result.times <= 2.0)
+        assert (occupancy[window] == 1).all()
+
+
+@pytest.mark.parametrize("dt", [0.5, 0.125])
+def test_full_node_keeps_walking_headway(dt):
+    # A lobby held at max_density 3.5 (14 agents) stays full, so every agent
+    # walks at S(3.5) and needs ceil(L / (S dt)) whole steps for the 10 m
+    # link: 14 agents leave in every span of that many steps.
+    net = Network()
+    net.add_room("room", area=100.0)
+    net.add_room("lobby", area=4.0)
+    net.add_safe("exit")
+    net.connect("room", "lobby", width=2.0, length=0.3, bidirectional=False)
+    net.connect(
+        "lobby",
+        "exit",
+        width=4.0,
+        kind="opening",
+        length=10.0,
+        bidirectional=False,
+    )
+    sim = NetworkSimulation(
+        net,
+        [Population("room", 200, speed=1.2)],
+        dt=dt,
+        max_density=3.5,
+        supply_reduction=False,
+    )
+    result = sim.run(seed=1)
+    k = net.parameters.level_speed_constant
+    speed = hydraulic.speed(3.5, k, parameters=net.parameters)
+    span = dt * math.ceil(10.0 / (speed * dt) - 1e-9)
+    exits = np.sort(result.exit_times)
+    np.testing.assert_allclose(exits[54:160] - exits[40:146], span)
+    occupancy = result.node_occupancy[:, result.node_names.index("lobby")]
+    steady = (result.times > 200) & (result.times < 1000)
+    assert (occupancy[steady] == 14).all()
+
+
+def test_freed_space_through_counterflow_waits_a_step():
+    # Corridor C (1 m2, one agent) between room R and room X. R agents cross
+    # the two-way link C-X towards X; X agents enter C and leave by their own
+    # one-way link. An R agent leaving C through the two-way link in
+    # counterflow frees its place only in the next step, so C is empty for a
+    # step after each such passage. Hand trace of the first six steps (beta,
+    # floor(beta), pair key, credit): jpsnet-handoff/c56/t3_trace.md.
+    net = Network()
+    net.add_room("R", area=100.0)
+    net.add_room("C", area=1.0)
+    net.add_room("X", area=100.0)
+    net.add_safe("eX")
+    net.add_safe("eC")
+    net.connect("R", "C", bidirectional=False, **OPENING)
+    net.connect("C", "X", **OPENING)
+    net.connect("X", "eX", bidirectional=False, **OPENING)
+    net.connect("C", "eC", bidirectional=False, **OPENING)
+    pops = [Population("R", 4, target="eX"), Population("X", 4, target="eC")]
+    sim = NetworkSimulation(
+        net, pops, dt=0.5, max_density=1.5, supply_reduction=False
+    )
+    exits = sim.run(seed=1).exit_times
+    np.testing.assert_allclose(exits[:4], [2.0, 3.5, 5.0, 6.5])
+    np.testing.assert_allclose(exits[4:], [1.0, 2.5, 4.0, 5.5])
