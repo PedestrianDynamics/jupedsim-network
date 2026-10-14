@@ -159,6 +159,10 @@ table, for example [1, Eq. 67.3, p. 2174].
 36. <a id="ref-36"></a>Thunderhead Engineering, *Pathfinder Technical
     Reference*, section "SFPE", version 2026.1.
     [thunderheadeng.com/docs/2026-1/pathfinder/appendices/technical-reference/sfpe](https://www.thunderheadeng.com/docs/2026-1/pathfinder/appendices/technical-reference/sfpe)
+37. <a id="ref-37"></a>L. G. Chalmet, R. L. Francis and P. B. Saunders,
+    "Network models for building evacuation", *Management Science*,
+    vol. 28, no. 1, pp. 86–105, 1982.
+    [doi:10.1287/mnsc.28.1.86](https://doi.org/10.1287/mnsc.28.1.86)
 
 ## SFPE Handbook editions
 

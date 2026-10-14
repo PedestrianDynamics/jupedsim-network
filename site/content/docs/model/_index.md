@@ -54,7 +54,8 @@ the maximum number of people in a location. Arcs have flow capacities
 in people per time period and travel times
 {{< cite 14 "p. 13" >}}. A linear program over a time-expanded network
 finds the routing that minimises the evacuation time, with perfect
-knowledge of all time periods {{< cite 14 "pp. 3, 15, 93–94, 97" >}}. In optimisation models such as
+knowledge of all time periods {{< cite 14 "pp. 3, 15, 93–94, 97" >}};
+the journal version of the model is {{< cite 37 "pp. 89–92" >}}. In optimisation models such as
 EVACNET4, occupants therefore do not necessarily take their shortest
 route {{< cite 17 "p. 78" >}}. The model counts people and does not identify
 individuals {{< cite 14 "p. 20" >}}. Capacities and travel times do not
