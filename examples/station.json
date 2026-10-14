@@ -1,0 +1,259 @@
+{
+  "format_version": 1,
+  "description": "The Station nightclub, NIST Scenario #1 as a coarse network, case S0 (examples/station.py).",
+  "nodes": [
+    {
+      "name": "dart",
+      "kind": "room",
+      "length": 7.2,
+      "width": 5.4
+    },
+    {
+      "name": "kitchen",
+      "kind": "room",
+      "length": 7.2,
+      "width": 2.2
+    },
+    {
+      "name": "bar",
+      "kind": "room",
+      "length": 8.5,
+      "width": 7.6
+    },
+    {
+      "name": "dance",
+      "kind": "room",
+      "length": 13.2,
+      "width": 7.8
+    },
+    {
+      "name": "entrance",
+      "kind": "room",
+      "length": 2.0,
+      "width": 4.6
+    },
+    {
+      "name": "sunroom",
+      "kind": "room",
+      "length": 10.9,
+      "width": 4.6
+    },
+    {
+      "name": "hallway",
+      "kind": "room",
+      "length": 4.8,
+      "width": 8.2
+    },
+    {
+      "name": "platform",
+      "kind": "room",
+      "length": 12.2,
+      "width": 2.2
+    },
+    {
+      "name": "stage",
+      "kind": "room",
+      "length": 5.2,
+      "width": 3.6
+    },
+    {
+      "name": "stageside",
+      "kind": "room",
+      "length": 2.4,
+      "width": 3.6
+    },
+    {
+      "name": "front",
+      "kind": "safe"
+    },
+    {
+      "name": "side",
+      "kind": "safe"
+    },
+    {
+      "name": "kitchen_exit",
+      "kind": "safe"
+    },
+    {
+      "name": "platform_exit",
+      "kind": "safe"
+    }
+  ],
+  "connections": [
+    {
+      "source": "dart",
+      "target": "kitchen",
+      "width": 0.6,
+      "length": 3.7,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "dart",
+      "target": "dance",
+      "width": 2.5,
+      "length": 10.4,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "kitchen",
+      "target": "dance",
+      "width": 0.91,
+      "length": 10.4,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "kitchen",
+      "target": "kitchen_exit",
+      "width": 0.91,
+      "length": 3.6,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "bar",
+      "target": "side",
+      "width": 0.91,
+      "length": 3.8,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "bar",
+      "target": "dance",
+      "width": 1.2,
+      "length": 11.6,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "bar",
+      "target": "entrance",
+      "width": 0.91,
+      "length": 5.2,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "dance",
+      "target": "entrance",
+      "width": 0.91,
+      "length": 9.6,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "sunroom",
+      "target": "dance",
+      "width": 9.2,
+      "length": 6.1,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "entrance",
+      "target": "front",
+      "width": 1.83,
+      "length": 2.3,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "hallway",
+      "target": "dance",
+      "width": 1.6,
+      "length": 8.0,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "platform",
+      "target": "dance",
+      "width": 1.4,
+      "length": 10.0,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "stage",
+      "target": "stageside",
+      "width": 1.4,
+      "length": 3.8,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "dance",
+      "target": "stageside",
+      "width": 2.4,
+      "length": 8.9,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    },
+    {
+      "source": "stageside",
+      "target": "platform_exit",
+      "width": 0.91,
+      "length": 1.8,
+      "specific_flow": 1.33,
+      "boundary_layer": 0.15,
+      "bidirectional": false
+    }
+  ],
+  "populations": [
+    {
+      "node": "dart",
+      "count": 39
+    },
+    {
+      "node": "kitchen",
+      "count": 3
+    },
+    {
+      "node": "bar",
+      "count": 31
+    },
+    {
+      "node": "dance",
+      "count": 237
+    },
+    {
+      "node": "sunroom",
+      "count": 76
+    },
+    {
+      "node": "hallway",
+      "count": 12
+    },
+    {
+      "node": "platform",
+      "count": 18
+    },
+    {
+      "node": "stage",
+      "count": 4
+    }
+  ],
+  "simulation": {
+    "t_max": 1800.0
+  },
+  "run": {
+    "seed": 1
+  }
+}

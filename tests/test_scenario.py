@@ -44,6 +44,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGED = ROOT / "src" / "jupedsim_network" / "scenarios"
 GETTING_STARTED = PACKAGED / "getting_started.json"
 OFFICE_WING = PACKAGED / "office_wing.json"
+STATION = ROOT / "examples" / "station.json"
 FULL_KEYS = ROOT / "tests" / "data" / "full_keys.json"
 
 RESULT_ARRAYS = (
@@ -68,6 +69,15 @@ def _getting_started_python() -> NetworkSimulation:
 def _office_wing_module():
     spec = importlib.util.spec_from_file_location(
         "office_wing", ROOT / "examples" / "office_wing.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _station_module():
+    spec = importlib.util.spec_from_file_location(
+        "station", ROOT / "examples" / "station.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -162,6 +172,7 @@ def _full_keys_python() -> NetworkSimulation:
 CASES = {
     "getting_started": (GETTING_STARTED, _getting_started_python),
     "office_wing": (OFFICE_WING, lambda: _office_wing_module().simulation()),
+    "station": (STATION, lambda: _station_module().simulation()),
     "full_keys": (FULL_KEYS, _full_keys_python),
 }
 
@@ -221,7 +232,9 @@ def test_office_wing_stair_literals_are_the_script_values():
     assert link["length"] == ow.STAIR_LENGTH
 
 
-@pytest.mark.parametrize("path", [GETTING_STARTED, OFFICE_WING, FULL_KEYS])
+@pytest.mark.parametrize(
+    "path", [GETTING_STARTED, OFFICE_WING, STATION, FULL_KEYS]
+)
 def test_save_reproduces_the_file(path, tmp_path):
     scenario = load_scenario(path)
     out = tmp_path / "saved.json"

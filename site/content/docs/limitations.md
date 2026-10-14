@@ -15,7 +15,9 @@ validation {{< cite 1 "p. 2171" >}}.
   and adapted IMO component tests
   ([Verification]({{< relref "/docs/verification" >}})). It has not been
   compared with evacuation drills, experiments, EvacuatioNZ runs or
-  JuPedSim's microscopic models. It is not intended for regulatory or
+  JuPedSim's microscopic models; it is compared with EvacuatioNZ results
+  published for one real building
+  ([The Station nightclub]({{< relref "/docs/examples/station" >}})). It is not intended for regulatory or
   design use.
 - **Optimistic by construction.** SFPE notes that the hydraulic model
   tends to give an optimistic estimate {{< cite 1 "p. 2165" >}}.
