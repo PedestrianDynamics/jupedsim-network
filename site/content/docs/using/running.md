@@ -124,9 +124,11 @@ stair-speed test needs $\Delta t = 0.1$ s to match the hand
 calculation within 0.25 s
 ([Verification]({{< relref "/docs/verification" >}})). The second is a
 node held at `max_density` whose agents walk out on a link longer than
-the node. There a coarse step gives too *short* an evacuation time
-([Limitations]({{< relref "/docs/limitations#numerics" >}})). When
-$\Delta t$ is halved, the result can therefore move either way.
+the node. There a coarse step is slightly slow, by about one step for
+each walk through the node. Counterflow and supply reduction at a high
+`max_density` can still give a result that is too short
+([Limitations]({{< relref "/docs/limitations#numerics" >}})). When $\Delta t$ is halved, the result can
+therefore move either way.
 
 The rule this model recommends: choose $\Delta t$ small compared with
 the shortest walk through a node, and halve it once to check. If the
@@ -200,7 +202,7 @@ percentile needs some of the 59 unfinished runs, so it is `inf`. Raise
 
 Runs close to the default `t_max` are realistic: in the
 [max_density sweep]({{< relref "/docs/verification#sensitivity-to-max_density" >}})
-with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 2948 s.
+with a hard limit of 3.7 m⁻², the slowest of 30 runs takes 3102 s.
 
 ## Errors
 

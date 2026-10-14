@@ -43,7 +43,10 @@ creation order: at the start in population order, later in order of
 arrival at the link they passed. Which agent takes which link therefore
 also depends on population order.
 
-Space freed by agents leaving a node becomes available in the next step.
+A node can reuse, in the same step, the space of agents who leave it, except
+agents who leave through a two-way connection in counterflow. The result is
+the same as serving the nodes downstream first. This is a property of the
+update scheme, not an empirical relation.
 """
 
 import math
@@ -637,8 +640,7 @@ class _Run:
         offered = self._offered(supply_links, rate)
         allowance = self._allowance(density, offered)
         free = self.sim.max_density * self.area - load
-        passed = self._admit(wanted, np.minimum(free, allowance))
-        passed = self._trim_pairs(passed, budget, active, share)
+        passed = self._admit(wanted, free, allowance, budget, active, share)
         flow = np.bincount(a.link[passed], minlength=len(budget))
         self._update_carry(budget, flow, queuing)
         self._update_pair_time(flow, active, share)
@@ -764,7 +766,22 @@ class _Run:
             wanted.append(members[: int(budget[link] + 1e-9)])
         return wanted
 
-    def _admit(self, wanted: list[np.ndarray], free: np.ndarray) -> np.ndarray:
+    def _admit(
+        self,
+        wanted: list[np.ndarray],
+        free: np.ndarray,
+        allowance: np.ndarray,
+        budget: np.ndarray,
+        active: np.ndarray,
+        share: np.ndarray,
+    ) -> np.ndarray:
+        """Agents that pass this step, after the space and pair limits.
+
+        A node can reuse the space of agents who leave it through a link
+        outside an active pair; such passages are never trimmed. The credit
+        therefore only grows, and the loop runs until no refused candidate
+        targets a node whose credit grew.
+        """
         if not wanted:
             return np.empty(0, dtype=int)
         candidates = np.concatenate(wanted)
@@ -773,12 +790,25 @@ class _Run:
         a = self.agents
         target = self.link_target[a.link[candidates]]
         rank = np.concatenate([np.arange(len(w)) for w in wanted])
-        # Interleave queues in proportion to merge weight; random tie-break.
+        # Interleave queues in proportion to merge weight; random tie-break,
+        # drawn once per step.
         links = a.link[candidates]
         key = self.virtual_time[links] + (rank + 1.0) / self.link_weight[links]
         order = np.lexsort((self.rng.random(candidates.size), key, target))
         candidates, target = candidates[order], target[order]
-        return candidates[self._fits(candidates, target, free)]
+        credit = np.zeros(len(self.area))
+        for _ in range(candidates.size + 1):
+            fit = self._fits(
+                candidates, target, np.minimum(free + credit, allowance)
+            )
+            passed = self._trim_pairs(candidates[fit], budget, active, share)
+            leaving = passed[~active[a.link[passed]]]
+            new = self._load(self.link_source[a.link[leaving]], a.area[leaving])
+            grew = new > credit + 1e-12
+            credit = new
+            if not grew[target[~fit]].any():
+                return passed
+        raise AssertionError("same-step space credit did not settle")
 
     def _fits(self, candidates, target, free) -> np.ndarray:
         weights = self.agents.area[candidates]
