@@ -29,8 +29,11 @@ menu:
       weight: 2
       params:
         type: search
-    - name: GitHub
+    - name: v0.5.0
       weight: 3
+      url: "https://pypi.org/project/jupedsim-network/"
+    - name: GitHub
+      weight: 4
       url: "https://github.com/PedestrianDynamics/jupedsim-network"
       params:
         icon: github
@@ -42,7 +45,11 @@ params:
 
   navbar:
     displayTitle: true
-    displayLogo: false
+    displayLogo: true
+    logo:
+      path: images/jupedsim-network-logo.png
+      width: 66
+      height: 44
 
   page:
     width: wide
