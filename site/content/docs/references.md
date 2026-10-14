@@ -167,7 +167,8 @@ table, for example [1, Eq. 67.3, p. 2174].
     K. Kuntz, *Report of the Technical Investigation of The Station
     Nightclub Fire*, NIST NCSTAR 2, Vol. I, National Institute of
     Standards and Technology, Gaithersburg, MD, June 2005. Printed page
-    numbers; Table 6-2 lists the results of the evacuation models.
+    numbers; §6.6 (egress simulations), p. 6-25; Table 6-2 lists the
+    results of the evacuation models.
 39. <a id="ref-39"></a>W. Grosshandler, N. Bryner, D. Madrzykowski and
     K. Kuntz, *Report of the Technical Investigation of The Station
     Nightclub Fire: Appendices*, NIST NCSTAR 2, Vol. II, National

@@ -6,8 +6,10 @@ weight: 4
 The model is verified: tests check that its components reproduce hand
 calculations and adapted IMO test cases. It is also compared with the
 results published in the EvacuatioNZ verification report; no
-EvacuatioNZ runs were made. It is not validated: it has not been
-compared with evacuation drills, experiments or JuPedSim's microscopic
+EvacuatioNZ runs were made. A published network of a real building is
+compared with its EvacuatioNZ results in
+[The Station nightclub]({{< relref "/docs/examples/station" >}}). It is
+not validated: it has not been compared with evacuation drills, experiments or JuPedSim's microscopic
 models.
 
 ## Tests

@@ -2584,6 +2584,7 @@ def station_s1():
         f"347/{cap:.3f} = {347 / cap:.0f} s (the model is "
         f"{_st_minus(f'{(r.evacuation_time / (347 / cap) - 1) * 100:+.0f} %')}"
         " above)",
+        "the paper gives no hand value for this case",
         f"takes {_st_time('S1s')} s, and S1 at `dt=0.1` takes "
         f"{_st_time('S1 dt 0.1')} s",
     )
@@ -2607,8 +2608,17 @@ def station_s2():
     n = _st_door_agents("table5")
     rows = []
     for label, layer, published in (
-        ("S2", 0.0, "195; NIST 188 and 202; hand 177"),
-        ("S2b", 0.15, "272 ± 2; hand 261"),
+        (
+            "S2",
+            0.0,
+            '195 {{< cite 8 "p. 170" >}}; NIST 188 and 202; '
+            'hand 177 {{< cite 8 "p. 169" >}}',
+        ),
+        (
+            "S2b",
+            0.15,
+            '272 ± 2 {{< cite 8 "p. 170" >}}; hand 261 {{< cite 8 "p. 170" >}}',
+        ),
     ):
         cap = station.SPECIFIC_FLOW * (0.91 - 2 * layer)
         t5 = _st_t5(label, "dance->entrance")
@@ -2637,7 +2647,8 @@ def station_s2():
         f"S2 is {_st_percent('S2')} from the published {PUBLISHED['S2']} s "
         f"and S2b {_st_percent('S2b')}, "
         f"{PUBLISHED['S2b'] - 2 - _st_run('S2b').evacuation_time:.0f} s below "
-        "the spread",
+        "the published mean minus one standard deviation (272 ± 2 s",
+        f"S2 has {station.agents_inside(_st_run('S2'), 90.0)}.",
     )
 
 
@@ -2662,8 +2673,9 @@ def station_s3():
         f"{station.agents_inside(_st_run('S3n'), 90.0)} | 201 ± 8 s, about "
         "163 inside at 90 s |",
         f"S3n is {_st_percent('S3n')} above the published "
-        f"{PUBLISHED['S3n']} s and {t - (PUBLISHED['S3n'] + 8):.0f} s above "
-        "the upper end of its spread",
+        f"{PUBLISHED['S3n']} s: {t - PUBLISHED['S3n']:.0f} s above the mean "
+        f"and {t - (PUBLISHED['S3n'] + 8):.0f} s above the mean plus one "
+        "standard deviation",
         f"S3n has {station.agents_inside(_st_run('S3n'), 90.0)} agents "
         "inside at 90 s",
     )
@@ -2707,7 +2719,7 @@ def station_s4a():
         f"{front[low] - front[tie] + 4} to the platform door",
         f"the shortest time of the sweep, {times[0, tie]:.1f} s",
         f"the same time in all {factors.size} values",
-        f"the flip is at {0.875 * length:.1f} m",
+        f"In this study the flip is at {0.875 * length:.1f} m",
     )
 
 
@@ -2753,9 +2765,12 @@ def station_s4c():
     )
 
 
-UNEXPLAINED = "not explained in the paper"
+UNEXPLAINED = (
+    "the paper does not explain the excess of v2.3 over its own hand value"
+)
 ATTRIBUTED = {
-    "S3n": "attributed to the inferred boundary layer and the fixed 60/40 split"
+    "S3n": "boundary layer of the case inferred, and the fixed 60 % split "
+    "cannot give the published 67 % front share"
 }
 
 
@@ -2764,22 +2779,22 @@ def _st_band(run, published, attributed):
     difference = abs(run / published - 1) * 100
     if difference <= 5:
         return "agrees"
-    return f"differs, {attributed}" if difference <= 15 else "differs"
+    return f"differs; {attributed}" if difference <= 15 else "differs"
 
 
 def station_comparison():
     inside = station.agents_inside(_st_run("S0"), 90.0)
     rows = [
-        f"| S0, inside at 90 s | {inside} | 291 | "
+        f'| S0, inside at 90 s | {inside} | 291 {{{{< cite 8 "p. 166" >}}}} | '
         f"{(inside / 291 - 1) * 100:.0f} % | {_st_band(inside, 291, '')} |"
     ]
     for label, published, text in (
-        ("S0", 493, "493 s"),
-        ("S1", 345, "345 s"),
-        ("S2", 195, "195 s"),
-        ("S2b", 272, "272 ± 2 s"),
-        ("S3n", 201, "201 ± 8 s"),
-        ("S3", 201, "201 ± 8 s"),
+        ("S0", 493, '493 s {{< cite 8 "p. 166" >}}'),
+        ("S1", 345, '345 s {{< cite 8 "p. 169" >}}'),
+        ("S2", 195, '195 s {{< cite 8 "p. 170" >}}'),
+        ("S2b", 272, '272 ± 2 s {{< cite 8 "p. 170" >}}'),
+        ("S3n", 201, '201 ± 8 s {{< cite 8 "p. 171" >}}'),
+        ("S3", 201, '201 ± 8 s {{< cite 8 "p. 171" >}}'),
     ):
         run = _st_run(label).evacuation_time
         rows.append(
@@ -2979,6 +2994,7 @@ STATION_REGISTRY = [
             "gives 345 s",
             "(the model is −12 % below)",
             "347/1.210 = 287 s (the model is +6 % above)",
+            "the paper gives no hand value for this case",
             "takes 304.5 s, and S1 at `dt=0.1` takes 302.4 s",
         ),
         station_s1,
@@ -2991,10 +3007,11 @@ STATION_REGISTRY = [
             "which 201 agents of the dance floor",
             "the 11 of the main bar",
             "$t_5 + (201 - 5)/C$ + walk (s)",
-            "| S2 | 187.5 | 23.5 | 187.4 | 195; NIST 188 and 202; hand 177 |",
-            "| S2b | 269.0 | 25.0 | 268.5 | 272 ± 2; hand 261 |",
+            '| S2 | 187.5 | 23.5 | 187.4 | 195 {{< cite 8 "p. 170" >}}; NIST 188 and 202; hand 177 {{< cite 8 "p. 169" >}} |',
+            '| S2b | 269.0 | 25.0 | 268.5 | 272 ± 2 {{< cite 8 "p. 170" >}}; hand 261 {{< cite 8 "p. 170" >}} |',
             "The walk is 2.3 m from the entrance to the front door at 1.2 m/s, 1.9 s",
-            "S2 is −4 % from the published 195 s and S2b −1 %, 1 s below the spread",
+            "S2 is −4 % from the published 195 s and S2b −1 %, 1 s below the published mean minus one standard deviation (272 ± 2 s",
+            "S2 has 214.",
         ),
         station_s2,
     ),
@@ -3005,7 +3022,7 @@ STATION_REGISTRY = [
             "which 233 agents pass",
             "| S3 | 308.0 | 257 | – |",
             "| S3n | 214.0 | 202 | 201 ± 8 s, about 163 inside at 90 s |",
-            "S3n is +6 % above the published 201 s and 5 s above the upper end of its spread",
+            "S3n is +6 % above the published 201 s: 13 s above the mean and 5 s above the mean plus one standard deviation",
             "S3n has 202 agents inside at 90 s",
         ),
         station_s3,
@@ -3024,7 +3041,7 @@ STATION_REGISTRY = [
             "172 go to the front door and 175 to the platform door",
             "the shortest time of the sweep, 230.0 s",
             "the same time in all 42 values",
-            "the flip is at 8.4 m",
+            "In this study the flip is at 8.4 m",
         ),
         station_s4a,
         slow=True,
@@ -3059,13 +3076,13 @@ STATION_REGISTRY = [
     Number(
         STATION_PAGE,
         (
-            "| S0, inside at 90 s | 291 | 291 | 0 % | agrees |",
-            "| S0 | 442.0 s | 493 s | −10 % | differs, not explained in the paper |",
-            "| S1 | 303.0 s | 345 s | −12 % | differs, not explained in the paper |",
-            "| S2 | 187.5 s | 195 s | −4 % | agrees |",
-            "| S2b | 269.0 s | 272 ± 2 s | −1 % | agrees |",
-            "| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, attributed to the inferred boundary layer and the fixed 60/40 split |",
-            "| S3 | 308.0 s | 201 ± 8 s | +53 % | differs |",
+            '| S0, inside at 90 s | 291 | 291 {{< cite 8 "p. 166" >}} | 0 % | agrees |',
+            '| S0 | 442.0 s | 493 s {{< cite 8 "p. 166" >}} | −10 % | differs; the paper does not explain the excess of v2.3 over its own hand value |',
+            '| S1 | 303.0 s | 345 s {{< cite 8 "p. 169" >}} | −12 % | differs; the paper does not explain the excess of v2.3 over its own hand value |',
+            '| S2 | 187.5 s | 195 s {{< cite 8 "p. 170" >}} | −4 % | agrees |',
+            '| S2b | 269.0 s | 272 ± 2 s {{< cite 8 "p. 170" >}} | −1 % | agrees |',
+            '| S3n | 214.0 s | 201 ± 8 s {{< cite 8 "p. 171" >}} | +6 % | differs; boundary layer of the case inferred, and the fixed 60 % split cannot give the published 67 % front share |',
+            '| S3 | 308.0 s | 201 ± 8 s {{< cite 8 "p. 171" >}} | +53 % | differs |',
         ),
         station_comparison,
     ),
