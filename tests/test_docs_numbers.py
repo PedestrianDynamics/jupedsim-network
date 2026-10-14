@@ -1234,6 +1234,42 @@ def sweep_claims():
     return claim, f"{'No' if incomplete == 0 else 'A'} run was incomplete."
 
 
+@functools.cache
+def hydraulic_sweep():
+    return {
+        (name, v): scenarios.hydraulic_sweep_runs(name, v)
+        for name, values in scenarios.HYDRAULIC_SWEEP.items()
+        for v in values
+    }
+
+
+def hydraulic_sweep_claims():
+    runs = hydraulic_sweep()
+    median = {k: np.median(v) for k, v in runs.items()}
+    bound = {k: scenarios.stair_capacity_bound(*k) for k in runs}
+    stair = scenarios.HYDRAULIC_SWEEP["stair_speed_coefficient"]
+    slope = scenarios.HYDRAULIC_SWEEP["speed_density_slope"]
+    door = scenarios.HYDRAULIC_SWEEP["door_specific_flow"]
+    stair_times = [median["stair_speed_coefficient", v] for v in stair]
+    slope_times = [median["speed_density_slope", v] for v in slope]
+    door_times = [median["door_specific_flow", v] for v in door]
+    assert np.all(np.diff(stair_times) < 0) and np.all(np.diff(slope_times) > 0)
+    offset = np.array([median[k] - bound[k] for k in runs])
+    incomplete = sum(np.isnan(v).sum() for v in runs.values())
+    door_spread = max(door_times) - min(door_times)
+    return (
+        f"from {stair_times[0]:.0f} s at {stair[0]:.0f} m/min to "
+        f"{stair_times[-1]:.0f} s at {stair[-1]:.0f} m/min.",
+        f"from {slope_times[0]:.0f} s at {slope[0]} to "
+        f"{slope_times[-1]:.0f} s at {slope[-1]}.",
+        f"The median moves by {door_spread:.0f} s "
+        f"between {door[0]} and {door[-1]}.",
+        f"the median lies {math.floor(offset.min())} to "
+        f"{math.ceil(offset.max())} s above the bound",
+        f"{'No' if incomplete == 0 else 'A'} run of the sweep was incomplete.",
+    )
+
+
 def sweep_slowest():
     slowest = np.nanmax(sweep()[3.7, False])
     return f"with a hard limit of 3.7 m⁻², the slowest of 30 runs takes {slowest:.0f} s"
@@ -1535,6 +1571,18 @@ REGISTRY = [
             "No run was incomplete.",
         ),
         sweep_claims,
+        slow=True,
+    ),
+    Number(
+        V,
+        (
+            "from 924 s at 40 m/min to 590 s at 65 m/min.",
+            "from 540 s at 0.19 to 726 s at 0.266.",
+            "The median moves by 2 s between 0.7 and 1.3.",
+            "the median lies 35 to 41 s above the bound",
+            "No run of the sweep was incomplete.",
+        ),
+        hydraulic_sweep_claims,
         slow=True,
     ),
     # Limitations.

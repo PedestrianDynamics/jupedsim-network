@@ -41,7 +41,7 @@ uv run pytest -m fuzz --hypothesis-profile=fuzz
 ```
 
 The first runs the documented numbers of long runs: the 300-run case
-study, the `max_density` sweep, the time-step example in
+study, the `max_density` and hydraulic-coefficient sweeps, the time-step example in
 [Limitations]({{< relref "/docs/limitations#numerics" >}}) and the
 snippets that call `run_many(500)`. CI runs it as its own job, `docs-numbers`, and the site
 deploys only when it passes. The second runs the long property runs and
@@ -524,6 +524,39 @@ Ten floors of 60 agents each (400 m² per floor, pre-movement
 U(30, 120) s) and one stair of 1.2 m with 0.9 m doors, all connected one
 way. The line is the median of 30 runs and the band covers 5–95 %. No
 run was incomplete.
+
+## Sensitivity to the hydraulic coefficients
+
+`HydraulicParameters` lets a study change the SFPE coefficients
+([Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}})).
+The figure changes one coefficient at a time in the one-stair building
+of the `max_density` sweep, with the default `max_density`. The stair is
+the bottleneck, so the evacuation time should follow its capacity: 600
+agents pass its effective width of 0.9 m at the maximum specific flow
+$k_\text{stair}/(4a)$, after the earliest pre-movement time of 30 s.
+This bound is the dashed line.
+
+![Evacuation time against the stair coefficient, the slope a and the door specific flow](/images/network/hydraulic_sweep.png)
+
+- The stair coefficient sets $k_\text{stair}$, so the time falls as
+  $1/k$: from 924 s at 40 m/min to 590 s at 65 m/min.
+- The slope $a$ scales the maximum flow as $1/a$, so the time grows in
+  proportion to $a$: from 540 s at 0.19 to 726 s at 0.266. With the
+  default `door_specific_flow` of 1.3, $a$ is at most 0.269
+  ([Networks]({{< relref "/docs/using/networks#hydraulic-configuration" >}})),
+  so the sweep ends at the default. Below 0.182 the peak-flow density
+  $1/(2a)$ exceeds the default `max_density` and supply reduction
+  switches off, so the sweep starts at 0.19.
+- `door_specific_flow` changes nothing here: the ten doors together
+  pass far more than the stair even at 0.7 persons/s/m. The median
+  moves by 2 s between 0.7 and 1.3.
+
+In every case the median lies 35 to 41 s above the bound: the start-up
+of the stream and the last agent's walk down the stair. The line is the
+median of 30 runs and the band covers 5–95 %. No run of the sweep was
+incomplete. The sweep shows which coefficient this building responds
+to; it says nothing about which values are right. Changed coefficients
+are study assumptions, not validated ranges.
 
 ## Reproducing the figures
 
