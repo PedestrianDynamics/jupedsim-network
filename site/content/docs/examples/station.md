@@ -7,7 +7,7 @@ A published network model of a real building, rebuilt here and run
 against the results that its author reports for EvacuatioNZ. The
 building is the Station nightclub, the case is NIST's Scenario #1 (the
 design-load evacuation, not the night of the fire), and the network
-comes from Spearpoint's study {{< cite 8 "Fig. 1(b), Table 1" >}}. The
+comes from Spearpoint's study {{< cite 8 "Fig. 1(b), p. 167; Table 1, p. 160" >}}. The
 script is
 [`examples/station.py`](https://github.com/PedestrianDynamics/jupedsim-network/blob/main/examples/station.py);
 read [Getting started]({{< relref "/docs/getting-started" >}}) and the
@@ -27,10 +27,11 @@ The dimensions are read from a figure of the paper
 
 The nightclub has ten spaces and four exits: the front, platform, side
 and kitchen exit doors. At the design load of Table 1 it holds 420
-people {{< cite 8 "Table 1" >}}. EvacuatioNZ v2.3 evacuates them in 493 s
-when every occupant takes the nearest exit {{< cite 8 "p. 169" >}}.
-NIST's Simulex and buildingEXODUS models give 188 s and 202 s when the
-occupants use the exits that NIST assigned {{< cite 38 "Table 6-2" >}}.
+people {{< cite 8 "Table 1, p. 160" >}}. EvacuatioNZ v2.3 evacuates them
+in 493 s when every occupant takes the nearest exit
+{{< cite 8 "p. 166" >}}. NIST's Simulex and buildingEXODUS models give
+188 s and 202 s when the occupants use the exits that NIST assigned
+{{< cite 38 "§6.6, Table 6-2" >}}, {{< cite 8 "Table 3, p. 162" >}}.
 This page builds the network of Spearpoint's study, runs the cases of
 that study and compares each result with its published value or with a
 hand calculation. The page names every difference.
@@ -48,10 +49,12 @@ in the direction of egress.
 ### Nodes
 
 Every space is a room node with its length and width from the figure of
-the paper. The occupants are those of Spearpoint's Table 1
-{{< cite 8 "Table 1" >}}. NIST gives no list per room; its simulations
-place the same 420 people by density {{< cite 39 "p. L-1" >}}, and
-Spearpoint's counts of each space are the only per-room listing.
+the paper (Fig. 1(b), p. 167). The occupants are those of Spearpoint's
+Table 1 {{< cite 8 "Table 1, p. 160" >}}. NIST gives no list per room;
+its simulations place the same 420 people by density
+{{< cite 39 "pp. L-1–L-2, L-5" >}} {{< cite 38 "§6.6, p. 6-25" >}}, and
+Spearpoint's counts of each space are the only per-room listing. The area
+and the initial density are derived from these inputs.
 
 | Node | Size (m) | Area (m²) | Occupants | Initial density (m⁻²) |
 |------|----------|-----------|-----------|-----------------------|
@@ -69,14 +72,22 @@ Spearpoint's counts of each space are the only per-room listing.
 The dance floor starts at 2.30 m⁻², above the 1.88 m⁻² where the supply
 reduction begins and below the default `max_density` of 2.75 m⁻². The
 model refuses a limit below 2.302 m⁻² for this start.
+Both values come from the model, not from the paper: 1.88 m⁻² is
+$1/(2a)$ with $a$ = 0.266 m², and 2.302 m⁻² is the `max_density` check of
+`NetworkSimulation`
+([Limitations]({{< relref "/docs/limitations" >}})).
 
 ### Links
 
 Every link is a one-way door (`kind="door"`) in the direction that the
-route tables use, with `specific_flow=1.33` and a boundary layer of
-0.15 m on every link, including the 9.2 m opening to the sunroom and the
-2.5 m opening of the dart room. The length is Spearpoint's connection
-length, walked inside the source node.
+route tables use, with `specific_flow=1.33`. Widths and lengths are
+inputs read from Fig. 1(b) {{< cite 8 "p. 167" >}}. Spearpoint applies
+the boundary layer of 0.15 m to all constrictions
+{{< cite 8 "p. 169" >}}; here it is applied to every link by reading that
+statement, including the 9.2 m opening to the sunroom and the 2.5 m
+opening of the dart room. Spearpoint's lengths run from centre to centre
+{{< cite 8 "p. 166" >}}; this model walks the length inside the source
+node.
 
 | From → to | Width (m) | Length (m) | Capacity (persons/s) |
 |-----------|-----------|------------|----------------------|
@@ -96,8 +107,10 @@ length, walked inside the source node.
 | dance → stageside | 2.4 | 8.9 | 2.793 |
 | stageside → platform_exit | 0.91 | 1.8 | 0.811 |
 
-The capacity is $C = F_s\,(w - 2b)$ with $F_s = 1.33$ and $b = 0.15$ m.
-A 0.91 m door passes 0.811 persons/s. The links into the exits are
+The capacity is $C = F_s\,(w - 2b)$ with $F_s = 1.33$ persons/s/m and
+$b = 0.15$ m on each side {{< cite 8 "p. 169" >}}; the 0.30 m of
+Spearpoint is both sides. The model computes the capacities in the table
+(`Link.capacity`). A 0.91 m door passes 0.811 persons/s. The links into the exits are
 dart → kitchen → kitchen_exit, bar → side, entrance → front and
 stageside → platform_exit.
 
@@ -238,13 +251,16 @@ the kitchen door (3.7 + 3.6 = 7.3 m against 21.1 m by the dance floor),
 the main bar to its side door (3.8 m against 7.5 m through the entrance),
 the kitchen to the kitchen door, and every other space to the platform
 door. From the dance floor the platform door is 8.9 + 1.8 = 10.7 m away
-and the front door 9.6 + 2.3 = 11.9 m. The split is 347 through the
+and the front door 9.6 + 2.3 = 11.9 m {{< cite 8 "p. 168" >}}. The split is 347 through the
 platform door, 31 through the side door, 42 through the kitchen door and
 none through the front door, the split that EvacuatioNZ v2.3 reports
 {{< cite 8 "p. 166" >}}. The model's route table gives the same
 ([Run it](#run-it)).
 
 ## Settings mapped from Spearpoint
+
+Spearpoint's settings are on pp. 164–166 {{< cite 8 "pp. 164–166" >}}, and
+his door flow of 1.33 persons/s/m is on p. 169.
 
 | Spearpoint (EvacuatioNZ v2.3) | This model | Kind of decision |
 |-------------------------------|------------|------------------|
@@ -265,8 +281,12 @@ none through the front door, the split that EvacuatioNZ v2.3 reports
 that the model allows for a door. The flow is therefore set on each link,
 which skips that check
 ([issue #83](https://github.com/PedestrianDynamics/jupedsim-network/issues/83)).
-NIST's own models use 1.22 persons/s for a 36 in door and no boundary
-layer {{< cite 39 "p. L-1" >}}, which is 1.33 × 0.91 to within rounding.
+For buildingEXODUS, NIST sets a flow of 1.22 persons/s/m on two 0.5 m
+nodes for every 36 in door, "in order to equate to the default of 1.33
+occ/m/s" on 0.91 m, and no boundary layer; the main door is 2 m wide at
+1.2 persons/s/m {{< cite 39 "p. L-1" >}}. That is 1.22 persons/s per
+door, which is 1.33 × 0.91 to within rounding. For Simulex, NIST gives
+the widths and no flow {{< cite 39 "p. L-5" >}}.
 
 ## Occupants and settings
 
@@ -341,7 +361,7 @@ def simulation(
   at 1.2 m/s (Spearpoint's first phase). The start distance is 0, so the
   walk to a door is the link length.
 - **`t_max=1800.0`** is far above every result below.
-- **`max_density=2.75`** is the default and the limit of EvacuatioNZ.
+- **`max_density=2.75`** is the default and the limit of EvacuatioNZ {{< cite 8 "pp. 164–166" >}}.
 
 ## Run it
 
@@ -502,7 +522,7 @@ supply reduction on, at `dt=0.5`. The model evacuates the 420 people in
 through the kitchen door and none through the front door. 291 are still
 inside at 90 s.
 
-![Agents safe over time for S0, S0s, S1 and S3, with the published EvacuatioNZ end points and 90 s counts](/images/network/station_exits.png)
+![Agents safe over time for S0, S0s, S1 and S3n, with the published EvacuatioNZ end points of S0, S1 and S3n and the 90 s counts of S0 and S3n](/images/network/station_exits.png)
 
 ### How the result arises
 
@@ -532,12 +552,12 @@ controlling door is the platform door, with $C$ = 0.8113 persons/s.
   0.399 persons/s from 14.0 s (the kitchen door follows 3 s later, the
   walk of 3.6 m), and the side door all 31. That leaves 290.5 inside, to
   within 8 agents (one per door, and a spread of 4 s in the arrival).
-  The model has 291 and EvacuatioNZ 291 {{< cite 8 "p. 169" >}}.
+  The model has 291 and EvacuatioNZ 291 {{< cite 8 "p. 166" >}}.
 
 ### The gap to EvacuatioNZ
 
 EvacuatioNZ v2.3 gives 493 s, 51 s more than the model (−10 % for the
-model). Spearpoint's own hand value is 428 s, so v2.3 lies 65 s above its
+model). Spearpoint's own hand value is 428 s {{< cite 8 "p. 169" >}}, so v2.3 lies 65 s above its
 hand value and this model 14 s. The difference to EvacuatioNZ v2.3
 (493 s against 442 s) is a difference between the two models; its cause
 in v2.3 is not published.
@@ -568,13 +588,14 @@ while the dance floor is above 1.88 m⁻² and delays the first arrival. The
 split is 347, 31, 42 and 0 at every time step.
 
 **S0r: random start distances.** Spearpoint starts each agent at a random
-distance from the door. S0r draws the start distance from
+distance from the door {{< cite 8 "p. 166" >}}. S0r draws the start distance from
 $U(0, R)$, with $R$ the diagonal of the start node, in 100 runs with
 seeds from `SeedSequence(1).spawn`. The one-sided range is a choice of
 this study: the limits $L \pm R$ of the paper, with $L$ the connection
 length, have a negative lower end for all eight occupied nodes. All 100 runs give the split 347, 31, 42 and 0, and
 times from 441.5 s to 442.5 s: a start spread of up to 15 m is absorbed
-in the queue at the door.
+in the queue at the door. The paper lists the random start as a
+sensitivity that it did not test {{< cite 8 "p. 178" >}}.
 
 ## Without boundary layer: S1
 
@@ -585,11 +606,12 @@ $C$ = 1.33 × 0.91 = 1.210 persons/s. The model evacuates in 303.0 s with
 the same split, and 258 inside at 90 s.
 
 By hand, $t_5 + 342/C$ = 20.5 + 282.6 = 303.1 s. EvacuatioNZ v2.3 gives
-345 s {{< cite 8 "p. 169" >}} (the model is −12 % below) and the same
-hand formula gives 347/1.210 = 287 s (the model is +6 % above). The difference of
-the models is of the same kind as in S0: this model equals the hand bound
-plus $t_5$, and the excess of EvacuatioNZ v2.3 over its own hand value is
-not explained in the paper. S1s, without supply reduction,
+345 s {{< cite 8 "p. 169" >}} (the model is −12 % below). By the same
+formula, 347/1.210 = 287 s (the model is +6 % above); this is arithmetic
+of this study, because the paper gives no hand value for this case. The
+difference is of the same kind as in S0: this model equals the hand bound
+plus $t_5$; the paper does not explain the excess of EvacuatioNZ v2.3 over
+its own hand value. S1s, without supply reduction,
 takes 304.5 s, and S1 at `dt=0.1` takes 302.4 s.
 
 ## Prescribed exits: S2 and S2b
@@ -599,8 +621,8 @@ S2 sends each space to the exits of Spearpoint's Table 5
 20 to the side door and 3 to the kitchen door. Spearpoint chose the
 assignment of the dance floor and the sunroom (half and half) and set
 the main bar and the back platform so that the totals match NIST's, and
-says that the assignment "has required some judgment". S2 has no boundary layer, S2b has
-the boundary layer of 0.15 m.
+says that the assignment "has required some judgment". S2 has no boundary
+layer, S2b has the boundary layer of 0.15 m.
 
 At the front door the controlling link is dance → entrance (0.91 m),
 which 201 agents of the dance floor, the sunroom, the dart room and the
@@ -608,34 +630,39 @@ back platform pass; the 11 of the main bar use bar → entrance.
 
 | Case | Time (s) | $t_5$ (s) | $t_5 + (201 - 5)/C$ + walk (s) | Published (s) |
 |------|----------|-----------|--------------------------------|---------------|
-| S2 | 187.5 | 23.5 | 187.4 | 195; NIST 188 and 202; hand 177 |
-| S2b | 269.0 | 25.0 | 268.5 | 272 ± 2; hand 261 |
+| S2 | 187.5 | 23.5 | 187.4 | 195 {{< cite 8 "p. 170" >}}; NIST 188 and 202; hand 177 {{< cite 8 "p. 169" >}} |
+| S2b | 269.0 | 25.0 | 268.5 | 272 ± 2 {{< cite 8 "p. 170" >}}; hand 261 {{< cite 8 "p. 170" >}} |
 
 The walk is 2.3 m from the entrance to the front door at 1.2 m/s, 1.9 s.
-S2 is −4 % from the published 195 s and S2b −1 %, 1 s below the spread of
-±2 s of the paper {{< cite 8 "p. 170" >}}. NIST's 188 s and 202 s are
-from {{< cite 38 "Table 6-2" >}}.
+S2 is −4 % from the published 195 s and S2b −1 %, 1 s below the published
+mean minus one standard deviation (272 ± 2 s, mean and standard deviation
+{{< cite 8 "p. 170" >}}). NIST's 188 s and 202 s are from
+{{< cite 38 "§6.6, Table 6-2" >}}. At 90 s NIST has 166 (Simulex) and 208
+(buildingEXODUS) agents inside {{< cite 8 "Table 3, p. 162" >}}; S2 has
+214.
 
 ## Preferred exit: S3
 
 S3 is the 60/40 case of Spearpoint {{< cite 8 "p. 171" >}} as an
 approximation: a fixed count per space, 60 % to the front door and the
 rest to the nearest exit. The paper does not state whether the
-boundary layer was on. It follows the runs without boundary layer, and
-the paper applies the boundary layer reduction to the incident scenario
-"so as to match Proulx", the SFPE Handbook chapter {{< cite 8 "p. 174" >}},
-which implies that it was off before.
-This reading is an inference, so the comparison is the run without
+boundary layer was on. The paper applies the boundary layer reduction to
+the incident scenario "so as to match Proulx", the SFPE Handbook chapter
+{{< cite 8 "p. 174" >}}, and its conclusions credit "door flows without a
+boundary layer" {{< cite 8 "p. 179" >}}. The boundary layer of the 60/40
+case is therefore inferred to be off. The comparison is the run without
 boundary layer, S3n, and S3 has the boundary layer on.
 
 The split is 252 through the front door, 139 through the platform door,
 17 through the kitchen door and 12 through the side door: 60.0 %,
-33.1 %, 4.0 % and 2.9 %. EvacuatioNZ reports 67 % through the front door, 23 % through the
-platform door, 6 % through the kitchen door and 3 % through the side door
-{{< cite 8 "p. 171" >}}. The model cannot reach 67 % for the front door
-with a fixed split of 60 %, because for every occupied space the nearest
-exit is the platform, the side or the kitchen door. How v2.3 draws the
-preferred route is not described.
+33.1 %, 4.0 % and 2.9 %. In 428 runs EvacuatioNZ reports 67 ± 3 %
+through the front door, 23 ± 3 % through the platform door, 6 ± 2 %
+through the kitchen door and 3 ± 2 % through the side door
+{{< cite 8 "p. 171" >}}. A fixed split of 60 % per space cannot give a
+front-door share above 60 %, because for every occupied space the
+nearest exit is the platform, the side or the kitchen door. The preferred
+route of EvacuatioNZ therefore acts differently from a per-room split of
+the destinations. How v2.3 draws the preferred route is not described.
 
 The controlling link is dance → entrance, which 233 agents pass.
 
@@ -644,9 +671,11 @@ The controlling link is dance → entrance, which 233 agents pass.
 | S3 | 308.0 | 257 | – |
 | S3n | 214.0 | 202 | 201 ± 8 s, about 163 inside at 90 s |
 
-S3n is +6 % above the published 201 s and 5 s above the upper end of
-its spread, so the results differ. S3n has 202 agents inside at 90 s
-where the paper has about 163.
+The published 201 ± 8 s is the mean and one standard deviation of 428
+runs {{< cite 8 "p. 171" >}}. S3n is +6 % above the published 201 s: 13 s
+above the mean and 5 s above the mean plus one standard deviation, so the
+results differ. S3n has 202 agents inside at 90 s where the paper has
+about 163.
 
 ## Sensitivity
 
@@ -658,8 +687,9 @@ values: 0.80 to 1.20 in steps of 0.01 and the tie at 0.875. The dance
 floor takes the front door if $9.6 f + 2.3 < 8.9 + 1.8$, that is for
 $f < 0.875$, and the platform door above. Spearpoint notes that slightly
 different distances between nodes would give a shorter path to the front
-entrance and change the outcome significantly {{< cite 8 "p. 168" >}}. Here
-the flip is at 8.4 m, which is $0.875 \times 9.6$.
+entrance and change the outcome significantly {{< cite 8 "p. 168" >}}. In
+this study the flip is at 8.4 m, which is $0.875 \times 9.6$ m; the paper
+gives no such value.
 
 - **Below the tie.** 343 agents leave through the front door (those of
   the dance floor, the sunroom, the back hallway and the back platform)
@@ -718,20 +748,20 @@ longer than without it, and the two differ by 8.0 s at most.
 
 ## Comparison with the published values
 
-Differences are reported in bands: up to 5 % the result agrees, from 5 %
-to 15 % it differs and is attributed where a cause is known, and above
-15 % it differs. The published values are quoted
-from {{< cite 8 "pp. 169–171" >}}; they are not asserted in the tests.
+Differences are reported in bands, a convention of this study: up to 5 %
+the result agrees, from 5 % to 15 % it differs and gives the reason where
+one is known, and above 15 % it differs. The tests do not assert the
+published values.
 
 | Case | This model | Published | Difference | Band |
 |------|------------|-----------|------------|------|
-| S0 | 442.0 s | 493 s | −10 % | differs, not explained in the paper |
-| S0, inside at 90 s | 291 | 291 | 0 % | agrees |
-| S1 | 303.0 s | 345 s | −12 % | differs, not explained in the paper |
-| S2 | 187.5 s | 195 s | −4 % | agrees |
-| S2b | 269.0 s | 272 ± 2 s | −1 % | agrees |
-| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, attributed to the inferred boundary layer and the fixed 60/40 split |
-| S3 | 308.0 s | 201 ± 8 s | +53 % | differs |
+| S0 | 442.0 s | 493 s {{< cite 8 "p. 166" >}} | −10 % | differs; the paper does not explain the excess of v2.3 over its own hand value |
+| S0, inside at 90 s | 291 | 291 {{< cite 8 "p. 166" >}} | 0 % | agrees |
+| S1 | 303.0 s | 345 s {{< cite 8 "p. 169" >}} | −12 % | differs; the paper does not explain the excess of v2.3 over its own hand value |
+| S2 | 187.5 s | 195 s {{< cite 8 "p. 170" >}} | −4 % | agrees |
+| S2b | 269.0 s | 272 ± 2 s {{< cite 8 "p. 170" >}} | −1 % | agrees |
+| S3n | 214.0 s | 201 ± 8 s {{< cite 8 "p. 171" >}} | +6 % | differs; boundary layer of the case inferred, and the fixed 60 % split cannot give the published 67 % front share |
+| S3 | 308.0 s | 201 ± 8 s {{< cite 8 "p. 171" >}} | +53 % | differs |
 
 The split of S0 and the split of S2 are exact. The 67 % of the paper
 for the front door of S3 is not reproduced.
@@ -765,7 +795,10 @@ for the front door of S3 is not reproduced.
   reverse movement.
 - **Exit assignment.** Table 5 is a matter of judgement of the author,
   and the 60/40 case is a fixed split, not a draw per agent. The boundary
-  layer of the 60/40 case is inferred.
+  layer of the 60/40 case is inferred
+  {{< cite 8 "pp. 174, 179" >}}.
+- **Static exit choice.** The 40 % take the nearest exit, as in the paper
+  {{< cite 8 "p. 171" >}}, and no agent re-chooses.
 - **Agreement not claimed.** Agreement with the published 60/40 result
   is not claimed, nor correctness of the exit choice, nor
   generalisation.
@@ -774,12 +807,18 @@ for the front door of S3 is not reproduced.
 
 - **Scenario #2\*.** Spearpoint lets 5.5 % of the 397 agents of the front
   door and platform group opt for the platform door, 22 agents
-  {{< cite 8 "p. 172" >}}. The paper does not state which spaces supply them,
-  so the case is not built.
+  {{< cite 8 "p. 172" >}}, and reports 326 ± 4 s over 81 runs
+  {{< cite 8 "p. 172" >}}. The paper does not state which spaces supply
+  them, so the case is not built. NIST's own rule moves the 39 occupants
+  who would have left by the platform door within 30 s
+  {{< cite 39 "p. L-5" >}} {{< cite 38 "p. 6-25" >}}.
 - **The incident.** The scenario of the night of the fire has other
   occupants and a different exit use; it is a separate study.
-- **Kitchen door.** NIST allows only the kitchen's own occupants through
-  the kitchen door {{< cite 39 "p. L-1" >}}, and Spearpoint sends 42. A
-  variant without the link dart → kitchen would isolate that difference.
+- **Kitchen door.** NIST closes the kitchen door to occupants who are not
+  in the kitchen: in buildingEXODUS after 5 s {{< cite 39 "p. L-1" >}}, in
+  Simulex only the kitchen starters use it {{< cite 39 "p. L-5" >}}.
+  Spearpoint sends 42. A variant without the link dart → kitchen would
+  isolate that difference; the dart room would then walk 21.1 m to the
+  platform door.
 - **Per-agent exit choice.** A random exit per agent would be a feature
   request; the model has none.

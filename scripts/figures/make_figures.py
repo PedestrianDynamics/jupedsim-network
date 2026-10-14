@@ -906,6 +906,7 @@ STATION_LABEL = {
     "bar": (0.42, 0.0, "left", "center"),
     "kitchen": (-0.42, 0.0, "right", "center"),
     "dance": (0.0, 0.5, "center", "bottom"),
+    "dart": (0.0, 0.5, "center", "bottom"),
 }
 
 # Published results of EvacuatioNZ v2.3 [Spearpoint 2012, ref. 8], drawn
@@ -913,7 +914,7 @@ STATION_LABEL = {
 STATION_PUBLISHED = {
     "S0": (493.0, 291),
     "S1": (345.0, None),
-    "S3": (201.0, 163),
+    "S3n": (201.0, 163),
 }
 
 
@@ -963,11 +964,11 @@ def station_network(out):
         count = station.OCCUPANTS.get(name)
         label = name if count is None else f"{name}\n{count}"
         dx, dy, ha, va = STATION_LABEL.get(name, (0.0, -0.5, "center", "top"))
-        ax.text(x + dx, y + dy, label, ha=ha, va=va, fontsize=8)
+        ax.text(x + dx, y + dy, label, ha=ha, va=va, fontsize=9)
     ax.plot([], [], color=PAL[3], lw=2.4, label="S0 routes")
     ax.plot([], [], color=ORANGE, lw=1.8, label="S3 routes to the front door")
     ax.plot([], [], color="lightgrey", ls="--", label="other links")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.legend(loc="upper right", fontsize=9)
     ax.set(xlim=(-1, 11), ylim=(-0.8, 8.2), aspect="equal")
     ax.axis("off")
     fig.savefig(out / "station_network.png")
@@ -981,7 +982,7 @@ def station_exits(out):
         ("S0", PAL[4], "-"),
         ("S0s", PAL[1], ":"),
         ("S1", RED, "--"),
-        ("S3", ORANGE, "-."),
+        ("S3n", ORANGE, "-."),
     ]:
         r = runs[label]
         names = station.exit_links(r)
@@ -999,18 +1000,27 @@ def station_exits(out):
         if published is None:
             continue
         end, inside = published
-        ax.plot(end, 420, marker="x", color=color, ms=8, mew=2)
+        ax.plot(end, 420, marker="x", color=color, ms=9, mew=2)
         if inside is not None:
-            ax.plot(90, 420 - inside, marker="x", color=color, ms=8, mew=2)
-    ax.plot([], [], "x", color=GREY, label="EvacuatioNZ v2.3, published")
+            ax.plot(90, 420 - inside, marker="x", color=color, ms=9, mew=2)
+    ax.plot(
+        [],
+        [],
+        "x",
+        color=GREY,
+        ms=9,
+        mew=2,
+        label="EvacuatioNZ v2.3, published",
+    )
+    ax.axvline(90, color=GREY, lw=0.8, ls=":")
+    ax.text(92, 12, "90 s", color=GREY, fontsize=9)
     ax.set(
         xlabel="time (s)",
-        ylabel="agents safe",
-        title="The Station, agents safe over time, seed 1",
+        ylabel="agents safe (persons)",
         xlim=(0, None),
         ylim=(0, 430),
     )
-    ax.legend(loc="lower right", fontsize=8)
+    ax.legend(loc="lower right", fontsize=9)
     frame(ax)
     fig.savefig(out / "station_exits.png")
     plt.close(fig)
@@ -1025,7 +1035,7 @@ def station_length(out):
     for ax in (top, bottom):
         ax.axvline(0.875, color=GREY, ls="--", lw=1.0)
         frame(ax)
-    top.set(ylabel="evacuation time (s)", title="Length of dance->entrance")
+    top.set(ylabel="evacuation time (s)")
     top.annotate(
         "tie at 0.875:\nthe agents alternate",
         (0.875, times[0].min()),
@@ -1035,7 +1045,8 @@ def station_length(out):
         arrowprops=dict(arrowstyle="-", color=GREY, lw=0.8),
     )
     bottom.set(
-        xlabel="factor on the length 9.6 m", ylabel="agents via the front door"
+        xlabel="factor on the length of dance->entrance (9.6 m)",
+        ylabel="agents via the front door (persons)",
     )
     fig.savefig(out / "station_length.png")
     plt.close(fig)
@@ -1043,29 +1054,60 @@ def station_length(out):
 
 def station_doors(out):
     times, capacity, fifth = station_door_sweep()
-    fig, ax = plt.subplots(figsize=(7, 4.4))
     layers = scenarios.STATION_LAYERS
+    fig, (top, bottom) = plt.subplots(
+        2,
+        1,
+        figsize=(7, 5.6),
+        sharex=True,
+        gridspec_kw={"height_ratios": [3, 1.3]},
+    )
+    markers = "osD^"
+    gaps = []
     for i, flow in enumerate(scenarios.STATION_FLOWS):
-        color = PAL[i + 1]
-        ax.plot(
+        color = PAL[i + 1] if i < 3 else PAL[5]
+        bound = fifth[i] + 342 / capacity[i]
+        gaps.append(times[i] - bound)
+        top.plot(
+            layers, bound, color=color, lw=7, alpha=0.3, solid_capstyle="round"
+        )
+        top.plot(
             layers,
             times[i],
             color=color,
-            marker="o",
-            lw=2,
+            marker=markers[i],
+            ms=4,
+            lw=1,
             label=f"Fs = {flow} persons/s/m",
         )
-        ax.plot(
-            layers, fifth[i] + 342 / capacity[i], color=color, ls="--", lw=1
-        )
-    ax.plot([], [], color=GREY, ls="--", lw=1, label="t₅ + 342/C")
-    ax.set(
-        xlabel="boundary layer b (m)",
-        ylabel="evacuation time (s)",
-        title="The 0.91 m platform door sets the time",
+        bottom.plot(layers, gaps[i], color=color, marker=markers[i], ms=4, lw=1)
+    top.plot([], [], color=GREY, lw=7, alpha=0.3, label="bound t₅ + 342/C")
+    top.annotate(
+        "S0",
+        (layers[-1], times[-1][-1]),
+        (layers[-1] - 0.02, times[-1][-1] - 40),
+        fontsize=9,
+        color=GREY,
+        arrowprops=dict(arrowstyle="-", color=GREY, lw=0.8),
     )
-    ax.legend(loc="upper left", fontsize=8)
-    frame(ax)
+    gaps = np.array(gaps)
+    bottom.axhline(0, color=GREY, lw=1.0)
+    bottom.annotate(
+        f"T lies {-gaps.max():.2f} to {-gaps.min():.2f} s below the bound",
+        (0.0, gaps.min()),
+        (0.0, gaps.min() - 0.35),
+        fontsize=9,
+        color=GREY,
+    )
+    top.set(ylabel="evacuation time T (s)", xticks=layers)
+    bottom.set(
+        xlabel="boundary layer b (m)",
+        ylabel="T − bound (s)",
+        ylim=(gaps.min() - 0.6, 0.3),
+    )
+    top.legend(loc="upper left", fontsize=9)
+    frame(top, bottom)
+    fig.align_ylabels()
     fig.savefig(out / "station_doors.png")
     plt.close(fig)
 
@@ -1074,19 +1116,34 @@ def station_density(out):
     times, _ = station_density_sweep()
     fig, ax = plt.subplots(figsize=(6.4, 4.2))
     limits = scenarios.STATION_DENSITIES
-    for row, color, marker, label in [
-        (0, PAL[3], "o", "supply reduction on"),
-        (1, RED, "s", "hard limit only"),
+    for row, color, marker, ls, label in [
+        (0, PAL[3], "o", "-", "S0, supply reduction on"),
+        (1, RED, "s", "--", "S0s, hard limit only"),
     ]:
         ax.plot(
-            limits, times[row], color=color, marker=marker, lw=2, label=label
+            limits,
+            times[row],
+            color=color,
+            marker=marker,
+            ls=ls,
+            lw=2,
+            label=label,
         )
+    gap = times[1] - times[0]
+    j = gap.argmax()
+    ax.annotate(
+        f"{gap[j]:.1f} s at most",
+        (limits[j], times[0, j] + gap[j] / 2),
+        (limits[j] - 0.25, times[0, j] + gap[j] / 2 - 2.5),
+        fontsize=9,
+        color=GREY,
+        arrowprops=dict(arrowstyle="-", color=GREY, lw=0.8),
+    )
     ax.set(
         xlabel="max_density (1/m²)",
         ylabel="evacuation time (s)",
-        title="The Station, seed 1",
     )
-    ax.legend(loc="upper left", fontsize=8)
+    ax.legend(loc="upper left", fontsize=9)
     frame(ax)
     fig.savefig(out / "station_density.png")
     plt.close(fig)
