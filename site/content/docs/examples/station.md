@@ -524,6 +524,12 @@ inside at 90 s.
 
 ![Agents safe over time for S0, S0s, S1 and S3n, with the published EvacuatioNZ end points of S0, S1 and S3n and the 90 s counts of S0 and S3n](/images/network/station_exits.png)
 
+![Occupancy of each space of the Station club in case S0 as the people leave through the four exits, with the cumulative count at each exit; the clock stops at 442.0 s](/images/network/station.gif)
+
+The animation replays the S0 run on the schematic plan: each disc shrinks
+with the occupants of its space, and each exit counts the people who have
+left through it.
+
 ### How the result arises
 
 The evacuation time is a door-flow calculation: in every case it is the

@@ -1,6 +1,6 @@
-"""Animations of the network model: agent mechanics and a building.
+"""Animations of the network model: mechanics, a building, the Station club.
 
-Writes ``mechanics.gif`` and ``building.gif`` to
+Writes ``mechanics.gif``, ``building.gif`` and ``station.gif`` to
 ``site/static/images/network`` or to the directory given as the first
 argument. ``jupedsim_network`` must be importable.
 """
@@ -13,13 +13,24 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from make_figures import DEFAULT_OUT, GREY, ORANGE, PAL, RED, style
+from make_figures import (
+    DEFAULT_OUT,
+    GREY,
+    ORANGE,
+    PAL,
+    RED,
+    STATION_XY,
+    station_route_links,
+    style,
+)
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Circle, FancyArrowPatch, Rectangle
 from scenarios import (
     building_run,
     mechanics_simulation,
+    station,
+    station_runs,
     trace,
 )
 
@@ -306,12 +317,125 @@ def building_gif(out, floors=10, every=5):
     plt.close(fig)
 
 
+def station_frames(r, every=8, hold=12):
+    """Step indices to draw: every ``every``-th step, then the last one held."""
+    steps = list(range(0, len(r.times) - 1, every))
+    return steps + [len(r.times) - 1] * (hold + 1)
+
+
+def station_gif(out):
+    """Node occupancy of the Station baseline S0 on the schematic plan."""
+    r = station_runs()["S0"]
+    names = list(r.node_names)
+    s0, _ = station_route_links()
+    exit_links = station.exit_links(r)
+    exit_idx = [r.link_names.index(n) for n in exit_links]
+    left = np.cumsum(r.link_flow[:, exit_idx], axis=0)
+    leave = {n.split("->")[1]: left[:, j] for j, n in enumerate(exit_links)}
+    start = r.node_occupancy[0]
+
+    def radius(n):
+        return 0.9 * np.sqrt(n / start.max())
+
+    fig = plt.figure(figsize=(8, 5.4))
+    ax = fig.add_axes([0.0, 0.0, 1.0, 0.9])
+    for name in (f"{s}->{t}" for s, t, _, _ in station.LINKS):
+        source, target = name.split("->")
+        on = name in s0
+        ax.add_patch(
+            FancyArrowPatch(
+                STATION_XY[source],
+                STATION_XY[target],
+                arrowstyle="-|>",
+                mutation_scale=10,
+                color=PAL[3] if on else "lightgrey",
+                ls="-" if on else "--",
+                lw=1.8 if on else 1.0,
+                shrinkA=10,
+                shrinkB=10,
+                zorder=1,
+            )
+        )
+    discs, labels = {}, {}
+    for name, (x, y) in STATION_XY.items():
+        safe = name in station.SAFE
+        r0 = 0.32 if safe else max(radius(start[names.index(name)]), 0.12)
+        ax.add_patch(
+            Circle(
+                (x, y),
+                r0,
+                fc="white" if safe else "none",
+                ec=PAL[4] if safe else "lightgrey",
+                ls="-" if safe else ":",
+                zorder=2,
+            )
+        )
+        if not safe:
+            discs[name] = Circle((x, y), 0, fc=PAL[3], ec=PAL[5], zorder=3)
+            ax.add_patch(discs[name])
+        dx, dy, ha, va = (0.0, -r0 - 0.1, "center", "top")
+        if name in ("side", "kitchen_exit"):
+            dx, dy, ha, va = 0.42, 0.0, "left", "center"
+        if name == "stageside":
+            dx, dy, ha, va = -0.25, -0.45, "right", "top"
+        labels[name] = (
+            ax.text(
+                x + dx,
+                y + dy,
+                "",
+                ha=ha,
+                va=va,
+                fontsize=9,
+                color=GREY,
+                zorder=4,
+                bbox=dict(fc="white", ec="none", pad=1, alpha=0.8),
+            ),
+            name,
+        )
+    ax.text(
+        0.0,
+        -0.55,
+        "dotted ring: occupants at t = 0   ·   disc area: occupants now",
+        fontsize=9,
+        color=GREY,
+    )
+    ax.set(xlim=(-1, 11.5), ylim=(-0.8, 8.2), aspect="equal")
+    ax.axis("off")
+    title = fig.text(0.02, 0.95, "", fontsize=12, weight="semibold")
+
+    def update(i):
+        for name, disc in discs.items():
+            disc.set_radius(radius(r.node_occupancy[i, names.index(name)]))
+        for name, (text, label) in labels.items():
+            if name in leave:
+                text.set_text(f"{label}\n{leave[name][i]} out")
+                text.set_weight("bold" if leave[name][i] else "normal")
+            else:
+                text.set_text(
+                    f"{label}\n{r.node_occupancy[i, names.index(name)]}"
+                )
+        inside = int(r.node_occupancy[i].sum())
+        title.set_text(
+            f"t = {r.times[i]:5.1f} s   ·   {inside} inside   ·   "
+            f"S0: everyone to the nearest exit"
+        )
+        return list(discs.values())
+
+    steps = station_frames(r)
+    anim = FuncAnimation(
+        fig, lambda k: update(steps[k]), frames=len(steps), blit=False
+    )
+    anim.save(out / "station.gif", writer=PillowWriter(fps=10), dpi=100)
+    plt.close(fig)
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     out.mkdir(parents=True, exist_ok=True)
     style()
     mechanics(out)
     building_gif(out)
+    station_gif(out)
 
 
 if __name__ == "__main__":
