@@ -329,10 +329,18 @@ def station_door_sweep():
 
 @functools.cache
 def station_density_sweep():
-    """Evacuation times of S0 per ``max_density``; rows: supply on, off."""
-    times = np.empty((2, len(STATION_DENSITIES)))
+    """Evacuation times and fifth platform passages per ``max_density``.
+
+    Rows: supply reduction on, off.
+    """
+    shape = (2, len(STATION_DENSITIES))
+    times, fifth = np.empty(shape), np.empty(shape)
     for i, supply in enumerate((True, False)):
         for j, limit in enumerate(STATION_DENSITIES):
             sim = station.simulation(max_density=limit, supply_reduction=supply)
-            times[i, j] = sim.run(seed=1).evacuation_time
-    return times
+            result = sim.run(seed=1)
+            times[i, j] = result.evacuation_time
+            fifth[i, j] = station.passage_time(
+                result, "stageside->platform_exit", 5
+            )
+    return times, fifth

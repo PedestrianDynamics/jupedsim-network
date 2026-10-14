@@ -587,7 +587,9 @@ the same split, and 258 inside at 90 s.
 By hand, $t_5 + 342/C$ = 20.5 + 282.6 = 303.1 s. EvacuatioNZ v2.3 gives
 345 s {{< cite 8 "p. 169" >}} (the model is −12 % below) and the same
 hand formula gives 347/1.210 = 287 s (the model is +6 % above). The difference of
-the models is of the same kind as in S0. S1s, without supply reduction,
+the models is of the same kind as in S0: this model equals the hand bound
+plus $t_5$, and the excess of EvacuatioNZ v2.3 over its own hand value is
+not explained in the paper. S1s, without supply reduction,
 takes 304.5 s, and S1 at `dt=0.1` takes 302.4 s.
 
 ## Prescribed exits: S2 and S2b
@@ -661,11 +663,10 @@ the flip is at 8.4 m, which is $0.875 \times 9.6$.
 
 - **Below the tie.** 343 agents leave through the front door (those of
   the dance floor, the sunroom, the back hallway and the back platform)
-  and the time rises from 439.0 s at $f$ = 0.80 to 440.5 s at
-  $f$ = 0.87.
+  and the time does not decrease as $f$ grows.
 - **Above the tie.** None leaves through the front door, and the
   time is 442.0 s from $f$ = 0.88.
-- **At the tie.** $0.875 \times 9.6 + 2.3 = 8.9 + 1.8$ exactly, so the
+- **At the tie.** The flip is at the exact tie $f$ = 0.875. $0.875 \times 9.6 + 2.3 = 8.9 + 1.8$ exactly, so the
   agents alternate: 172 go to the front door and 175 to the platform door.
   Static shortest-distance routing is discontinuous in one link length; at
   the tie the alternation rule gives the shortest time of the sweep,
@@ -718,18 +719,18 @@ longer than without it, and the two differ by 8.0 s at most.
 ## Comparison with the published values
 
 Differences are reported in bands: up to 5 % the result agrees, from 5 %
-to 15 % it differs, and the difference is attributed to the model
-difference, and above 15 % it differs. The published values are quoted
+to 15 % it differs and is attributed where a cause is known, and above
+15 % it differs. The published values are quoted
 from {{< cite 8 "pp. 169–171" >}}; they are not asserted in the tests.
 
 | Case | This model | Published | Difference | Band |
 |------|------------|-----------|------------|------|
-| S0 | 442.0 s | 493 s | −10 % | differs, model difference |
+| S0 | 442.0 s | 493 s | −10 % | differs, not explained in the paper |
 | S0, inside at 90 s | 291 | 291 | 0 % | agrees |
-| S1 | 303.0 s | 345 s | −12 % | differs, model difference |
+| S1 | 303.0 s | 345 s | −12 % | differs, not explained in the paper |
 | S2 | 187.5 s | 195 s | −4 % | agrees |
 | S2b | 269.0 s | 272 ± 2 s | −1 % | agrees |
-| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, model difference |
+| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, attributed to the inferred boundary layer and the fixed 60/40 split |
 | S3 | 308.0 s | 201 ± 8 s | +53 % | differs |
 
 The split of S0 and the split of S2 are exact. The 67 % of the paper

@@ -2675,7 +2675,6 @@ def station_s4a():
     assert np.array_equal(times[0], times[1])
     tie = int(np.flatnonzero(np.isclose(factors, 0.875))[0])
     low = int(np.flatnonzero(np.isclose(factors, 0.80))[0])
-    high = int(np.flatnonzero(np.isclose(factors, 0.87))[0])
     above = int(np.flatnonzero(np.isclose(factors, 0.88))[0])
     length = _st_length("dance", "entrance")
     assert math.isclose(
@@ -2685,6 +2684,7 @@ def station_s4a():
         abs_tol=1e-9,
     )
     assert np.all(times[0, above:] == times[0, above])
+    assert np.all(np.diff(times[0, :tie]) >= 0)
     entrance = _st_length("entrance", "front")
     platform = _st_length("dance", "stageside") + _st_length(
         "stageside", "platform_exit"
@@ -2700,8 +2700,8 @@ def station_s4a():
         f"{_st_length('stageside', 'platform_exit')}$ exactly",
         f"which is $0.875 \\times {length}$",
         f"{front[low]} agents leave through the front door",
-        f"the time rises from {times[0, low]:.1f} s at $f$ = 0.80 to "
-        f"{times[0, high]:.1f} s at $f$ = 0.87",
+        "the time does not decrease as $f$ grows",
+        f"The flip is at the exact tie $f$ = {factors[tie]}",
         f"the time is {times[0, above]:.1f} s from $f$ = 0.88",
         f"{front[tie]} go to the front door and "
         f"{front[low] - front[tie] + 4} to the platform door",
@@ -2729,7 +2729,7 @@ def station_s4b():
 
 
 def station_s4c():
-    times = scenarios.station_density_sweep()
+    times, _ = scenarios.station_density_sweep()
     rows = [
         f"| {limit} | {times[0, j]:.1f} | {times[1, j]:.1f} |"
         for j, limit in enumerate(scenarios.STATION_DENSITIES)
@@ -2753,19 +2753,25 @@ def station_s4c():
     )
 
 
-def _st_band(run, published):
+UNEXPLAINED = "not explained in the paper"
+ATTRIBUTED = {
+    "S3n": "attributed to the inferred boundary layer and the fixed 60/40 split"
+}
+
+
+def _st_band(run, published, attributed):
     """Reporting band of a difference: up to 5 %, up to 15 %, above."""
     difference = abs(run / published - 1) * 100
     if difference <= 5:
         return "agrees"
-    return "differs, model difference" if difference <= 15 else "differs"
+    return f"differs, {attributed}" if difference <= 15 else "differs"
 
 
 def station_comparison():
     inside = station.agents_inside(_st_run("S0"), 90.0)
     rows = [
         f"| S0, inside at 90 s | {inside} | 291 | "
-        f"{(inside / 291 - 1) * 100:.0f} % | {_st_band(inside, 291)} |"
+        f"{(inside / 291 - 1) * 100:.0f} % | {_st_band(inside, 291, '')} |"
     ]
     for label, published, text in (
         ("S0", 493, "493 s"),
@@ -2779,7 +2785,7 @@ def station_comparison():
         rows.append(
             f"| {label} | {_st_time(label)} s | {text} | "
             f"{_st_minus(f'{(run / published - 1) * 100:+.0f} %')} | "
-            f"{_st_band(run, published)} |"
+            f"{_st_band(run, published, ATTRIBUTED.get(label, UNEXPLAINED))} |"
         )
     return tuple(rows)
 
@@ -3012,7 +3018,8 @@ STATION_REGISTRY = [
             "$0.875 \\times 9.6 + 2.3 = 8.9 + 1.8$ exactly",
             "which is $0.875 \\times 9.6$",
             "343 agents leave through the front door",
-            "the time rises from 439.0 s at $f$ = 0.80 to 440.5 s at $f$ = 0.87",
+            "the time does not decrease as $f$ grows",
+            "The flip is at the exact tie $f$ = 0.875",
             "the time is 442.0 s from $f$ = 0.88",
             "172 go to the front door and 175 to the platform door",
             "the shortest time of the sweep, 230.0 s",
@@ -3053,11 +3060,11 @@ STATION_REGISTRY = [
         STATION_PAGE,
         (
             "| S0, inside at 90 s | 291 | 291 | 0 % | agrees |",
-            "| S0 | 442.0 s | 493 s | −10 % | differs, model difference |",
-            "| S1 | 303.0 s | 345 s | −12 % | differs, model difference |",
+            "| S0 | 442.0 s | 493 s | −10 % | differs, not explained in the paper |",
+            "| S1 | 303.0 s | 345 s | −12 % | differs, not explained in the paper |",
             "| S2 | 187.5 s | 195 s | −4 % | agrees |",
             "| S2b | 269.0 s | 272 ± 2 s | −1 % | agrees |",
-            "| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, model difference |",
+            "| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, attributed to the inferred boundary layer and the fixed 60/40 split |",
             "| S3 | 308.0 s | 201 ± 8 s | +53 % | differs |",
         ),
         station_comparison,

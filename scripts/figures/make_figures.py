@@ -1071,7 +1071,7 @@ def station_doors(out):
 
 
 def station_density(out):
-    times = station_density_sweep()
+    times, _ = station_density_sweep()
     fig, ax = plt.subplots(figsize=(6.4, 4.2))
     limits = scenarios.STATION_DENSITIES
     for row, color, marker, label in [

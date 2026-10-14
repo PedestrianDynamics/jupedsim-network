@@ -603,13 +603,16 @@ def test_required_connection_is_not_modelled():
 # for the exit and the carry. The k-th passage is the fifth, after the
 # four occupants of the stage that pass before the dance floor arrives.
 #
-# The contract of the study declared the band [t_5 + (n - 5)/C, that + 2 dt].
-# The measured times fall up to 0.46 s below its lower end (S0 by 0.05 s,
-# the 16 cells of the door grid by 0.02 to 0.46 s), because t_5 is rounded up
-# to the time grid. The lower end here is the 1 + C t bound of the carry, one
-# headway 1/C lower; [bound - dt, bound + 2 dt] would also hold in every case.
-# Where a 0.91 m door is followed by the 2.3 m walk to the front door (S2,
-# S2b, S3, S3n), that walk at the walking speed is added to both ends.
+# Band for the last of n passages after the fifth, at t_5 on the time grid:
+# [t_5 + (n - 5)/C - dt, t_5 + (n - 5)/C + 2 dt]. The door idles for more
+# than 1/C before t_5 (the stage's four agents pass by 9.5 s, the dance floor
+# arrives at about 20 s), so its carry is 1 when the fifth agent arrives and
+# C dt after it passes. The m-th later passage is then at
+# t_5 + dt ceil(m/(C dt) - 1) >= t_5 + m/C - dt, which is the lower end; the
+# upper end adds the step of the exit and the step of the carry. Where a 0.91 m
+# door is followed by the 2.3 m walk to the front door (S2, S2b, S3, S3n),
+# that walk at the walking speed is added to both ends: the entrance never
+# queues and speeds are at most 1.2 m/s.
 
 FRONT_WALK = 2.3 / 1.2  # entrance->front: 2.3 m at the walking speed
 STATION_SPLIT = [347, 31, 42, 0]  # platform, side, kitchen, front
@@ -634,7 +637,7 @@ def drain_bounds(result, link, capacity, n, dt, walk=0.0):
     assert flow == n
     t5 = station.passage_time(result, link, 5)
     return (
-        t5 + (n - 5 - 1) / capacity + walk,
+        t5 + (n - 5) / capacity - dt + walk,
         t5 + (n - 5) / capacity + walk + 2 * dt,
     )
 
@@ -843,17 +846,17 @@ def test_station_door_flow_in_the_grid_of_flows_and_layers():
     # T = t5 + 342 / C for every specific flow and boundary layer, with
     # C = Fs (0.91 - 2b) and the fifth passage t5 of the run.
     times, capacity, fifth = scenarios.station_door_sweep()
-    assert np.all(times >= fifth + (342 - 1) / capacity)
+    assert np.all(times >= fifth + 342 / capacity - DT)
     assert np.all(times <= fifth + 342 / capacity + 2 * DT)
 
 
 def test_station_density_limit_sweep():
-    # A higher limit lets the dance floor fill beyond 2.75 per m2 and
-    # walk slower to the platform door: later first arrival, same door
-    # flow. With the supply reduction the dance floor cannot be pressed
-    # above 1.88 as easily, so it is never slower than without.
-    times = scenarios.station_density_sweep()
-    t0 = station_run("S0").evacuation_time
+    # A higher limit lets the dance floor fill beyond 2.75 per m2 and walk
+    # slower to the platform door: later t_5, the same door flow, so the
+    # door band holds in every cell with that cell's own t_5. With the
+    # supply reduction the dance floor is never slower than without.
+    times, fifth = scenarios.station_density_sweep()
+    capacity = 1.33 * (0.91 - 0.3)
+    assert np.all(times >= fifth + 342 / capacity - DT)
+    assert np.all(times <= fifth + 342 / capacity + 2 * DT)
     assert np.all(times[0] <= times[1])
-    assert np.all(times >= t0 - 2 * DT)
-    assert np.all(times <= t0 + 12.0)
