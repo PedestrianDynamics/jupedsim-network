@@ -283,7 +283,7 @@ simulation.
   ([Movement and capacity](#movement-and-capacity)). An agent walks the
   link length $L$ in $\lceil L/(S\,\Delta t)\rceil$ whole steps, so the
   node passes slightly fewer agents than with a fine step: the error is
-  at most about $\Delta t$ for each walk through the node, and the
+  of the order of $\Delta t$ for each walk through the node, and the
   evacuation time converges from above as $\Delta t$ falls.
 
   In this example, 200 agents (`speed=1.2`, no pre-movement,
@@ -299,13 +299,14 @@ simulation.
   limit shows in `node_occupancy`
   ([Results]({{< relref "/docs/using/results" >}})).
 
-  A coarse step can still give too short a time in two cases. Agents who
-  leave a node through a two-way connection in counterflow free their
-  space only in the next step. With supply reduction and a
-  `max_density` of 3.5 m⁻², 2 of 38 searched networks finished up to
-  4 % early at $\Delta t = 0.5$ s. Space is reused in the same step
-  since v0.5.0; the earlier behaviour is described in
-  [issue #55](https://github.com/PedestrianDynamics/jupedsim-network/issues/55).
+  A coarse step can still give too short a time in two cases. Agents
+  who leave a node through a two-way connection in counterflow free
+  their space only in the next step. In a search of 38 random networks,
+  2 finished 1–4 % early at $\Delta t = 0.5$ s with supply reduction at
+  a `max_density` of 3.5 m⁻²
+  ([issue #79](https://github.com/PedestrianDynamics/jupedsim-network/issues/79)).
+  Versions before 0.5.0 freed the space in the next step
+  ([issue #55](https://github.com/PedestrianDynamics/jupedsim-network/issues/55)).
 - **Passage time is one headway shorter than SFPE.** A link idle for at
   least $1/C_\ell$ lets the first agent through at once, so $N$ agents need $(N-1)/C$ instead
   of the SFPE $N/C$ {{< cite 1 "Eq. 67.9, p. 2177" >}}

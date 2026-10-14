@@ -192,9 +192,7 @@ next step, so every link on a route costs at least one step. A node
 can use, in the same step, the space of agents who leave it, unless they
 leave through a two-way connection that has counterflow in that step.
 The result is the same as serving the nodes downstream first, so it
-does not depend on the order in which nodes are processed. Agents who
-leave through a two-way connection in counterflow free their space in
-the next step. A node held at `max_density` stays full. If its
+does not depend on the order in which nodes are processed. A node held at `max_density` stays full. If its
 agents walk out on a link of length $L$ longer than the node, each of
 them needs $\lceil L/(S\,\Delta t)\rceil$ whole steps to walk out, and
 a coarse step is slightly slow

@@ -124,11 +124,10 @@ stair-speed test needs $\Delta t = 0.1$ s to match the hand
 calculation within 0.25 s
 ([Verification]({{< relref "/docs/verification" >}})). The second is a
 node held at `max_density` whose agents walk out on a link longer than
-the node. There a coarse step is slightly slow, by up to about one step
-for each walk through the node
-([Limitations]({{< relref "/docs/limitations#numerics" >}})). Counterflow,
-and supply reduction at a `max_density` of 3.5 m⁻², can still give a
-result that is too short. When $\Delta t$ is halved, the result can
+the node. There a coarse step is slightly slow, by about one step for
+each walk through the node. Counterflow and supply reduction at a high
+`max_density` can still give a result that is too short
+([Limitations]({{< relref "/docs/limitations#numerics" >}})). When $\Delta t$ is halved, the result can
 therefore move either way.
 
 The rule this model recommends: choose $\Delta t$ small compared with
