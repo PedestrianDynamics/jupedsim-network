@@ -24,11 +24,14 @@ from matplotlib.patches import (
 )
 from scenarios import (
     DENSITY_LIMITS,
+    HYDRAULIC_SWEEP,
     door_run,
+    hydraulic_sweep_runs,
     merge_run,
     monte_carlo_runs,
     route_tie_runs,
     rset_quantiles,
+    stair_capacity_bound,
 )
 
 from jupedsim_network import hydraulic
@@ -354,6 +357,47 @@ def density_sweep(out, runs=30):
     ax.legend(loc="upper left", fontsize=8)
     frame(ax)
     fig.savefig(out / "max_density_sweep.png")
+    plt.close(fig)
+
+
+HYDRAULIC_LABELS = {
+    "stair_speed_coefficient": "stair_speed_coefficient (m/min)",
+    "speed_density_slope": "speed_density_slope (m²/person)",
+    "door_specific_flow": "door_specific_flow (persons/s/m)",
+}
+
+
+def hydraulic_sweep(out, runs=30):
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.8), sharey=True)
+    for ax, (name, values) in zip(axes, HYDRAULIC_SWEEP.items()):
+        q = np.array(
+            [
+                np.quantile(
+                    hydraulic_sweep_runs(name, v, runs), [0.05, 0.5, 0.95]
+                )
+                for v in values
+            ]
+        )
+        bound = [stair_capacity_bound(name, v) for v in values]
+        ax.fill_between(values, q[:, 0], q[:, 2], color=PAL[3], alpha=0.15)
+        ax.plot(values, q[:, 1], color=PAL[3], marker="o", lw=2, label="median")
+        ax.plot(
+            values,
+            bound,
+            color=GREY,
+            ls="--",
+            lw=1.2,
+            label="stair capacity bound",
+        )
+        ax.set_xlabel(HYDRAULIC_LABELS[name])
+        frame(ax)
+    axes[0].set_ylabel("evacuation time (s), median and 5–95 %")
+    axes[0].legend(loc="upper right", fontsize=8)
+    fig.suptitle(
+        "10 floors × 60 agents, one stair, one coefficient changed", fontsize=10
+    )
+    fig.tight_layout()
+    fig.savefig(out / "hydraulic_sweep.png")
     plt.close(fig)
 
 
@@ -838,6 +882,7 @@ def main():
     fundamental(out)
     door_and_merge(out)
     density_sweep(out)
+    hydraulic_sweep(out)
     route_tie(out)
     monte_carlo(out)
     office_plan(out)

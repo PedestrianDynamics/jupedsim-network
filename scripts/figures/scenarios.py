@@ -10,26 +10,39 @@ import warnings
 import numpy as np
 
 from jupedsim_network import (
+    HydraulicParameters,
     LogNormal,
     Network,
     NetworkSimulation,
     Population,
     Uniform,
 )
+from jupedsim_network.hydraulic import stair_speed_constant
 from jupedsim_network.simulation import _SAFE, _Run
 
 #: max_density values of the density sweep, in 1/m².
 DENSITY_LIMITS = np.array([2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.7])
 
+#: Values of the hydraulic sweep, one coefficient changed at a time. The
+#: slope stays at or below the bound 0.269 set by door_specific_flow = 1.3
+#: and above 0.182, where 1/(2a) would exceed max_density = 2.75.
+HYDRAULIC_SWEEP = {
+    "stair_speed_coefficient": np.array([40.0, 45.0, 51.8, 55.0, 60.0, 65.0]),
+    "speed_density_slope": np.array([0.19, 0.21, 0.23, 0.25, 0.266]),
+    "door_specific_flow": np.array([0.7, 0.9, 1.1, 1.3]),
+}
 
-def building(floors=10, stairs=("A", "B"), lengths=None, area=400.0):
+
+def building(
+    floors=10, stairs=("A", "B"), lengths=None, area=400.0, parameters=None
+):
     """Floors stacked above ground, each with a door to every stair.
 
     The flight node ``A3`` holds agents walking from floor 3 down to
     floor 2; ``A1`` discharges to the safe node ``exitA``.
     """
     lengths = lengths or {s: 25.0 for s in stairs}
-    net = Network()
+    net = Network(parameters=parameters)
     for s in stairs:
         net.add_safe(f"exit{s}")
     for f in range(1, floors + 1):
@@ -115,6 +128,27 @@ def density_sweep_runs(max_density, supply_reduction, runs=30):
 def rset_quantiles(max_density, supply_reduction, runs):
     times = density_sweep_runs(max_density, supply_reduction, runs)
     return np.quantile(times, [0.05, 0.5, 0.95])
+
+
+def hydraulic_sweep_runs(name, value, runs=30):
+    """Evacuation times of the one-stair building with one coefficient changed."""
+    parameters = HydraulicParameters(**{name: float(value)})
+    sim = NetworkSimulation(
+        building(stairs=("A",), parameters=parameters), building_populations()
+    )
+    return sim.run_many(runs, seed=1).evacuation_times
+
+
+def stair_capacity_bound(name, value):
+    """Lower bound on the evacuation time set by the stair flow, in s.
+
+    600 agents pass the 1.2 m stair (0.9 m effective) at its maximum specific
+    flow k/(4a) after the earliest pre-movement time of 30 s.
+    """
+    p = HydraulicParameters(**{name: float(value)})
+    k = stair_speed_constant(0.18, 0.28, parameters=p)
+    width = 1.2 - 2 * p.stair_boundary_layer
+    return 30.0 + 600.0 / (width * k / (4 * p.speed_density_slope))
 
 
 def route_tie_runs():
