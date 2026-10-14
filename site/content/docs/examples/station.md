@@ -16,7 +16,7 @@ read [Getting started]({{< relref "/docs/getting-started" >}}) and the
 {{< callout type="info" >}}
 This is model-to-model agreement on a published network. It is not
 validation against the incident, a drill or an experiment; Spearpoint
-states the same for EvacuatioNZ (p. 180) {{< cite 8 "p. 180" >}}.
+states the same for EvacuatioNZ {{< cite 8 "p. 180" >}}.
 Every number on this page comes from running the script and the
 sweeps in `scripts/figures/scenarios.py` with the current version.
 The dimensions are read from a figure of the paper
@@ -45,6 +45,15 @@ occupants, the empty circles are the exits, and every arrow is one link
 in the direction of egress.
 
 ## The network
+
+![EvacuatioNZ network of The Station nightclub on the NIST floor plan, with the occupants of each node and the S0 and S3 routes](/images/network/station_network.png)
+
+The network on the floor plan of The Station nightclub {{< cite 38 "p. xviii" >}}.
+The positions of the doors, the kitchen, the main bar, the dance floor and the
+sunroom are read from the labelled plan. The dart room, the back hallway, the
+back platform, the stage, the stage side and the entrance are placed from the
+room sizes of Fig. 1(b) {{< cite 8 "p. 167" >}} and are approximate. The numbers
+are the occupants of each node. Link lengths are not to scale.
 
 ### Nodes
 
@@ -808,6 +817,28 @@ for the front door of S3 is not reproduced.
 - **Agreement not claimed.** Agreement with the published 60/40 result
   is not claimed, nor correctness of the exit choice, nor
   generalisation.
+
+## Conclusion
+
+- **Routes and occupancy agree.** The network reproduces the exit split
+  of EvacuatioNZ in S0 and S2, and the 291 people still inside at 90 s.
+  The S0 time of 442.0 s is a door-flow bound, 14 s above Spearpoint's
+  hand value of 428 s.
+- **EvacuatioNZ v2.3 is slower.** It gives 493 s for S0 and 345 s for
+  S1, against 442.0 s and 303.0 s here. The settings checked on this
+  page move the result by 1.5 s at most, so the gap is between the two
+  models. Its cause is not published.
+- **The preferred-route case is not reproduced.** A fixed 60 % split per
+  space cannot give the 67 % front-door share of the paper, and the
+  paper does not describe how EvacuatioNZ draws its preferred route.
+- **The result depends on the geometry.** The front-door share of S0
+  flips at a 12.5 % change in one link length, and at a fixed flow the
+  boundary layer alone moves the time from 303 s to 442 s. A misread
+  dimension from Fig. 1(b) would change the answer, and no test would
+  catch it.
+
+This is model-to-model agreement on one published network. The study does
+not validate the model against the incident, a drill or an experiment.
 
 ## Next steps
 

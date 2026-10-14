@@ -907,6 +907,9 @@ STATION_LABEL = {
     "kitchen": (-0.42, 0.0, "right", "center"),
     "dance": (0.0, 0.5, "center", "bottom"),
     "dart": (0.0, 0.5, "center", "bottom"),
+    "entrance": (0.8, 0.0, "left", "center"),
+    "front": (0.8, 0.0, "left", "center"),
+    "stage": (0.8, 0.0, "left", "center"),
 }
 
 # Published results of EvacuatioNZ v2.3 [Spearpoint 2012, ref. 8], drawn
@@ -929,11 +932,38 @@ def station_route_links():
     return s0, first
 
 
+# Node positions in m on the NIST floor plan (Grosshandler et al. 2005,
+# NCSTAR 2, floor plan p. xviii, public domain), origin at the front-left
+# corner of the building. Read from the labelled rooms and doors, except
+# dart, hallway, platform, stage, stageside and entrance, which are placed
+# from the room sizes of Fig. 1(b) of Spearpoint 2012.
+STATION_PLAN_XY = {
+    "kitchen": (4.2, 9.3),
+    "bar": (4.3, 5.6),
+    "dance": (18.5, 8.0),
+    "sunroom": (17.0, 3.0),
+    "front": (9.4, -0.8),
+    "side": (-0.3, 4.2),
+    "kitchen_exit": (-0.8, 9.4),
+    "platform_exit": (24.7, 4.9),
+    "stage": (21.8, 9.6),
+    "stageside": (23.4, 7.1),
+    "platform": (19.1, 15.7),
+    "hallway": (10.8, 16.8),
+    "dart": (3.9, 12.6),
+    "entrance": (10.0, 1.2),
+}
+# Extent of the plan image in m: x0, x1, y0, y1.
+STATION_PLAN_EXTENT = (-6.82, 30.03, -4.91, 21.93)
+
+
 def station_network(out):
     s0, front = station_route_links()
     links = [(s, t) for s, t, _, _ in station.LINKS]
     links.append(("stageside", "dance"))
-    fig, ax = plt.subplots(figsize=(9, 5.6))
+    fig, ax = plt.subplots(figsize=(10, 8.5))
+    plan = plt.imread(Path(__file__).parent / "station_nist_plan.png")
+    ax.imshow(plan, extent=STATION_PLAN_EXTENT, alpha=0.3)
     for source, target in links:
         name = f"{source}->{target}"
         color, ls, lw = "lightgrey", "--", 1.0
@@ -944,8 +974,8 @@ def station_network(out):
         rad = 0.25 if {source, target} == {"dance", "stageside"} else 0.0
         ax.add_patch(
             FancyArrowPatch(
-                STATION_XY[source],
-                STATION_XY[target],
+                STATION_PLAN_XY[source],
+                STATION_PLAN_XY[target],
                 arrowstyle="-|>",
                 mutation_scale=12,
                 color=color,
@@ -956,22 +986,33 @@ def station_network(out):
                 shrinkB=14,
             )
         )
-    for name, (x, y) in STATION_XY.items():
+    for name, (x, y) in STATION_PLAN_XY.items():
         safe = name in station.SAFE
         ax.add_patch(
-            Circle((x, y), 0.32, fc="white" if safe else PAL[0], ec=PAL[4])
+            Circle(
+                (x, y), 0.6, fc="white" if safe else PAL[0], ec=PAL[4], zorder=3
+            )
         )
         count = station.OCCUPANTS.get(name)
         label = name if count is None else f"{name}\n{count}"
         dx, dy, ha, va = STATION_LABEL.get(name, (0.0, -0.5, "center", "top"))
-        ax.text(x + dx, y + dy, label, ha=ha, va=va, fontsize=9)
+        ax.text(
+            x + dx,
+            y + dy,
+            label,
+            ha=ha,
+            va=va,
+            fontsize=9,
+            zorder=4,
+            bbox=dict(fc="white", ec="none", alpha=0.75, pad=0.5),
+        )
     ax.plot([], [], color=PAL[3], lw=2.4, label="S0 routes")
     ax.plot([], [], color=ORANGE, lw=1.8, label="S3 routes to the front door")
     ax.plot([], [], color="lightgrey", ls="--", label="other links")
     ax.legend(loc="upper right", fontsize=9)
-    ax.set(xlim=(-1, 11), ylim=(-0.8, 8.2), aspect="equal")
+    ax.set(xlim=(-7, 30), ylim=(-5, 22), aspect="equal")
     ax.axis("off")
-    fig.savefig(out / "station_network.png")
+    fig.savefig(out / "station_network.png", bbox_inches="tight")
     plt.close(fig)
 
 

@@ -3,7 +3,7 @@ title: jupedsim-network
 layout: hextra-home
 ---
 
-<img src="images/jupedsim-network-logo.png" alt="JuPedSim Network logo" width="384" height="256" style="max-width: 100%; height: auto;" class="hx-mb-6" />
+<img src="images/jupedsim-network-logo.png" alt="JuPedSim Network logo" width="160" height="107" style="max-width: 100%; height: auto;" class="hx-mb-6" />
 
 {{< hextra/hero-badge link="https://pypi.org/project/jupedsim-network/" >}}
   <span>Version {{< param "version" >}} · prototype · LGPL-3.0 licence</span>
