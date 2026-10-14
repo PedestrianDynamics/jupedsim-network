@@ -14,3 +14,4 @@ site/static/images/network/
 .hypothesis/
 fuzz-failures/
 site/static/images/tui/
+.gstack/
