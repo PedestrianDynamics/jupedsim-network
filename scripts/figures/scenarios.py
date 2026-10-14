@@ -5,7 +5,10 @@ The runs behind the figures are computed here, with NumPy only, so that
 them without matplotlib.
 """
 
+import functools
+import sys
 import warnings
+from pathlib import Path
 
 import numpy as np
 
@@ -19,6 +22,9 @@ from jupedsim_network import (
 )
 from jupedsim_network.hydraulic import stair_speed_constant
 from jupedsim_network.simulation import _SAFE, _Run
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "examples"))
+import station  # noqa: E402
 
 #: max_density values of the density sweep, in 1/m².
 DENSITY_LIMITS = np.array([2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.7])
@@ -222,3 +228,111 @@ def trace(sim, seed):
         t = round(t + sim.dt, 9)
     snapshot()
     return run, frames
+
+
+# The Station nightclub (examples/station.py) --------------------------------
+
+#: Cases of the baseline table: label -> keyword arguments of
+#: ``station.simulation``.
+STATION_CASES = {
+    "S0": {},
+    "S0 dt 0.1": {"dt": 0.1},
+    "S0 dt 1.0": {"dt": 1.0},
+    "S0s": {"supply_reduction": False},
+    "S1": {"boundary_layer": 0.0},
+    "S1 dt 0.1": {"boundary_layer": 0.0, "dt": 0.1},
+    "S1s": {"boundary_layer": 0.0, "supply_reduction": False},
+    "S2": {"case": "table5", "boundary_layer": 0.0},
+    "S2b": {"case": "table5"},
+    "S3": {"case": "preferred"},
+    "S3 dt 0.1": {"case": "preferred", "dt": 0.1},
+    "S3n": {"case": "preferred", "boundary_layer": 0.0},
+}
+
+#: Factors of the length of dance->entrance in the S4a sweep. 0.875 is the
+#: exact tie: 0.875 * 9.6 + 2.3 = 8.9 + 1.8.
+STATION_FACTORS = np.unique(np.append(np.arange(80, 121) / 100, 0.875))
+#: Specific flows (persons/s/m) and boundary layers (m) of the S4b grid.
+STATION_FLOWS = (1.21, 1.25, 1.30, 1.33)
+STATION_LAYERS = (0.0, 0.05, 0.10, 0.15)
+#: max_density values (1/m²) of the S4c sweep. The dance floor starts at
+#: 2.30 per m², so smaller limits are rejected.
+STATION_DENSITIES = (2.5, 2.75, 3.0, 3.25, 3.5)
+
+
+@functools.cache
+def station_runs():
+    """Seed 1 of every case in ``STATION_CASES``."""
+    return {
+        label: station.simulation(**options).run(seed=1)
+        for label, options in STATION_CASES.items()
+    }
+
+
+@functools.cache
+def station_start_spread(seeds=100):
+    """Evacuation times and exit counts of S0 with random start distances.
+
+    The start distance is Uniform(0, R) with R the diagonal of the start
+    node; run ``i`` uses child ``i`` of ``SeedSequence(1)``.
+    """
+    sim = station.simulation(random_start=True)
+    runs = [sim.run(child) for child in np.random.SeedSequence(1).spawn(seeds)]
+    times = np.array([r.evacuation_time for r in runs])
+    splits = np.array([station.exit_counts(r) for r in runs])
+    return times, splits
+
+
+@functools.cache
+def station_length_sweep():
+    """S0 with the length of dance->entrance scaled by each factor.
+
+    Returns the evacuation times (one row per routing policy, shortest
+    distance first) and the front-door counts of the first row.
+    """
+    policies = ("shortest_distance", "shortest_free_flow_time")
+    times = np.empty((2, STATION_FACTORS.size))
+    front = np.empty(STATION_FACTORS.size, dtype=int)
+    for j, f in enumerate(STATION_FACTORS):
+        for i, policy in enumerate(policies):
+            sim = station.simulation(
+                routing_policy=policy, dance_entrance_factor=float(f)
+            )
+            result = sim.run(seed=1)
+            times[i, j] = result.evacuation_time
+            if i == 0:
+                front[j] = station.exit_counts(result)[3]
+    return times, front
+
+
+@functools.cache
+def station_door_sweep():
+    """S0 for each specific flow and boundary layer of the door grid.
+
+    Returns evacuation times, the capacity of the 0.91 m door and the time
+    of the fifth passage through the platform door, each of shape
+    (flows, layers).
+    """
+    shape = (len(STATION_FLOWS), len(STATION_LAYERS))
+    times, capacity, fifth = np.empty(shape), np.empty(shape), np.empty(shape)
+    for i, flow in enumerate(STATION_FLOWS):
+        for j, layer in enumerate(STATION_LAYERS):
+            sim = station.simulation(specific_flow=flow, boundary_layer=layer)
+            result = sim.run(seed=1)
+            times[i, j] = result.evacuation_time
+            capacity[i, j] = flow * (0.91 - 2 * layer)
+            fifth[i, j] = station.passage_time(
+                result, "stageside->platform_exit", 5
+            )
+    return times, capacity, fifth
+
+
+@functools.cache
+def station_density_sweep():
+    """Evacuation times of S0 per ``max_density``; rows: supply on, off."""
+    times = np.empty((2, len(STATION_DENSITIES)))
+    for i, supply in enumerate((True, False)):
+        for j, limit in enumerate(STATION_DENSITIES):
+            sim = station.simulation(max_density=limit, supply_reduction=supply)
+            times[i, j] = sim.run(seed=1).evacuation_time
+    return times

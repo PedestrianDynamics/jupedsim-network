@@ -21,6 +21,7 @@ and the snippets that call ``run_many(500)``) run in their own CI job;
 import contextlib
 import functools
 import html
+import inspect
 import io
 import json
 import math
@@ -2242,4 +2243,855 @@ BOUNDS_REGISTRY = [
 
 @pytest.mark.parametrize("number", [_param(n) for n in BOUNDS_REGISTRY])
 def test_bounds_and_prefix_claims(number):
+    test_page_shows_the_number_the_code_produces(number)
+
+
+# The Station nightclub (examples/station.md) ----------------------------------
+
+STATION_PAGE = "examples/station.md"
+station = scenarios.station
+PLATFORM_DOOR = "stageside->platform_exit"
+# Published values of EvacuatioNZ v2.3 [8] and NIST [38]: source numbers,
+# used here only to derive the differences the page prints.
+PUBLISHED = {"S0": 493, "S1": 345, "S2": 195, "S2b": 272, "S3n": 201}
+PUBLISHED_HAND = 428  # N/C of the paper, p. 169
+STAGE_WORDS = {4: "four"}
+
+
+def _st_run(label):
+    return scenarios.station_runs()[label]
+
+
+def _st_time(label):
+    return f"{_st_run(label).evacuation_time:.1f}"
+
+
+def _st_split(label):
+    platform, side, kitchen, front = station.exit_counts(_st_run(label))
+    return (
+        f"{platform} through the platform door, {side} through the side "
+        f"door, {kitchen} through the kitchen door and "
+        f"{front or 'none'} through the front door"
+    )
+
+
+def _st_minus(value):
+    return value.replace("-", "−")
+
+
+def _st_percent(label, published=None):
+    published = published or PUBLISHED[label]
+    run = _st_run(label.split()[0]).evacuation_time
+    return _st_minus(f"{(run / published - 1) * 100:+.0f} %")
+
+
+def _st_signed(value):
+    return "0.0" if abs(value) < 0.05 else _st_minus(f"{value:+.1f}")
+
+
+def _st_capacity(name):
+    net = station.build_network()
+    return next(link.capacity for link in net.links if link.name == name)
+
+
+def _st_last(label, link):
+    result = _st_run(label)
+    flow = result.link_flow[:, result.link_names.index(link)]
+    return float(result.times[flow > 0][-1])
+
+
+def _st_t5(label, link=PLATFORM_DOOR):
+    return station.passage_time(_st_run(label), link, 5)
+
+
+def station_intro():
+    words = {4: "four", 10: "ten"}
+    return (
+        f"The nightclub has {words[len(station.ROOMS)]} spaces and "
+        f"{words[len(station.SAFE)]} exits",
+        f"it holds {sum(station.OCCUPANTS.values())} people",
+    )
+
+
+def station_tables():
+    rows = []
+    for name, (length, width) in station.ROOMS.items():
+        area = length * width
+        count = station.OCCUPANTS.get(name, 0)
+        rows.append(
+            f"| {name} | {length} × {width} | {area:.1f} | {count} | "
+            f"{count / area:.2f} |"
+        )
+    net = station.build_network()
+    capacity = {link.name: link.capacity for link in net.links}
+    for source, target, width, length in station.LINKS:
+        cap = capacity[f"{source}->{target}"]
+        rows.append(f"| {source} → {target} | {width} | {length} | {cap:.3f} |")
+    return tuple(rows)
+
+
+def station_dance_floor():
+    """Initial density of the dance floor and the limit below which it fails."""
+    length, width = station.ROOMS["dance"]
+    density = station.OCCUPANTS["dance"] / (length * width)
+    slope = hydraulic.HydraulicParameters().speed_density_slope
+    for limit, raises in ((density - 0.001, True), (density + 0.001, False)):
+        sim = station.simulation(max_density=limit)
+        try:
+            sim.run(seed=1)
+        except ValueError:
+            assert raises
+        else:
+            assert not raises
+    return (
+        f"The dance floor starts at {density:.2f} m⁻², above the "
+        f"{1 / (2 * slope):.2f} m⁻² where the supply reduction begins and "
+        "below the default `max_density` of "
+        f"{station.simulation().max_density} m⁻². The model refuses a limit "
+        f"below {density:.3f} m⁻² for this start.",
+    )
+
+
+def station_door_flow_limit():
+    """1.33 persons/s/m is above k/(4a), so it is set on each link."""
+    p = hydraulic.HydraulicParameters()
+    limit = 1.4 / (4 * p.speed_density_slope)
+    with pytest.raises(ValueError):
+        hydraulic.HydraulicParameters(door_specific_flow=station.SPECIFIC_FLOW)
+    assert station.SPECIFIC_FLOW > limit
+    return (
+        f"A 0.91 m door passes {_st_capacity('kitchen->kitchen_exit'):.3f} "
+        "persons/s.",
+        f"1.33 persons/s/m is above the maximum flow k/(4a) = {limit:.3f} "
+        "persons/s/m",
+        f"which is {station.SPECIFIC_FLOW} × 0.91 to within rounding",
+    )
+
+
+def _st_length(source, target):
+    return next(
+        length
+        for s, t, _, length in station.LINKS
+        if (s, t) == (source, target)
+    )
+
+
+def station_routes():
+    dart = _st_length("dart", "kitchen") + _st_length("kitchen", "kitchen_exit")
+    dart_dance = (
+        _st_length("dart", "dance")
+        + _st_length("dance", "stageside")
+        + _st_length("stageside", "platform_exit")
+    )
+    bar = _st_length("bar", "side")
+    bar_front = _st_length("bar", "entrance") + _st_length("entrance", "front")
+    platform = _st_length("dance", "stageside") + _st_length(
+        "stageside", "platform_exit"
+    )
+    front = _st_length("dance", "entrance") + _st_length("entrance", "front")
+    routes = station.build_network().route_table()
+    net = station.build_network()
+    first = {
+        n: net.links[routes[net.node(n).index]].name for n in station.OCCUPANTS
+    }
+    assert first["dart"] == "dart->kitchen" and first["bar"] == "bar->side"
+    assert first["dance"] == "dance->stageside"
+    return (
+        f"the dart room goes to the kitchen door ({_st_length('dart', 'kitchen')}"
+        f" + {_st_length('kitchen', 'kitchen_exit')} = {dart:.1f} m against "
+        f"{dart_dance:.1f} m by the dance floor), the main bar to its side "
+        f"door ({bar} m against {bar_front:.1f} m through the entrance)",
+        f"the platform door is {_st_length('dance', 'stageside')} + "
+        f"{_st_length('stageside', 'platform_exit')} = {platform:.1f} m away "
+        f"and the front door {_st_length('dance', 'entrance')} + "
+        f"{_st_length('entrance', 'front')} = {front:.1f} m",
+        f"The split is {_st_split('S0')}",
+    )
+
+
+def station_occupants():
+    front = sum(
+        p.count for p in station.populations("preferred") if p.target == "front"
+    )
+    sim = station.simulation()
+    return (
+        f"That gives {front} of the {sum(station.OCCUPANTS.values())} to the "
+        f"front door, {front / sum(station.OCCUPANTS.values()) * 100:.1f} %.",
+        f"{station.PREFERRED_SHARE * 100:.0f} % of each space, rounded",
+        f"`t_max={sim.t_max}`",
+        f"`max_density={sim.max_density}`",
+    )
+
+
+def station_baseline():
+    inside = station.agents_inside(_st_run("S0"), 90.0)
+    return (
+        f"The model evacuates the {sum(station.OCCUPANTS.values())} people "
+        f"in {_st_time('S0')} s: {_st_split('S0')}. {inside} are still "
+        "inside at 90 s.",
+    )
+
+
+def _st_speed(density):
+    p = hydraulic.HydraulicParameters()
+    a, k = p.speed_density_slope, 84 / 60
+    return min(station.SPEED, k * (1 - a * max(density, 0.54)))
+
+
+def _st_hand_inside():
+    """Agents left inside at 90 s by the hand sum of the three doors."""
+    result = _st_run("S0")
+    walk = _st_length("kitchen", "kitchen_exit") / station.SPEED
+    dart = _st_t5("S0", "dart->kitchen")
+    out = (
+        31
+        + 3
+        + 5
+        + _st_capacity("dart->kitchen") * (90 - walk - dart)
+        + 5
+        + _st_capacity(PLATFORM_DOOR) * (90 - _st_t5("S0"))
+    )
+    assert abs(station.agents_inside(result, 90.0) - (420 - out)) <= 8
+    return 420 - out
+
+
+def station_hand():
+    result = _st_run("S0")
+    cap = _st_capacity(PLATFORM_DOOR)
+    t5 = _st_t5("S0")
+    dance = station.OCCUPANTS["dance"] / math.prod(station.ROOMS["dance"])
+    stage_side = _st_length("stageside", "platform_exit")
+    walk = _st_length("dance", "stageside")
+    low = walk / _st_speed(dance) + stage_side / _st_speed(0)
+    high = walk / _st_speed(2.75) + stage_side / _st_speed(0)
+    drain = (347 - 5) / cap
+    evac = result.evacuation_time
+    return (
+        f"with $C$ = {cap:.4f} persons/s",
+        f"The {STAGE_WORDS[station.OCCUPANTS['stage']]} occupants of the "
+        "stage pass the platform",
+        f"The side door has passed its 31 agents after "
+        f"{_st_last('S0', 'bar->side'):.1f} s and the kitchen door its 42 "
+        f"after {_st_last('S0', 'kitchen->kitchen_exit'):.1f} s, limited by "
+        f"the 0.6 m door of the dart room ({_st_capacity('dart->kitchen'):.3f} "
+        "persons/s)",
+        f"door first, from {station.passage_time(result, PLATFORM_DOOR):.1f} "
+        f"s. The fifth passage is the first agent of the dance floor, at "
+        f"{t5:.1f} s",
+        f"for $D$ between {dance:.2f} and 2.75 m⁻², then {stage_side} m in "
+        f"the stage side: between {low:.1f} s and {high:.1f} s",
+        f"342/{cap:.4f} = {drain:.1f} s, so $T = t_5 + 342/C$ = {t5:.1f} + "
+        f"{drain:.1f} = {t5 + drain:.1f} s, the model's value",
+        f"$N/C$ = 347/{cap:.3f} = {347 / cap:.0f} s",
+        f"The model's {evac:.1f} s lies {evac - PUBLISHED_HAND:.0f} s above "
+        f"it, less than the {t5:.1f} s of the first arrival",
+        f"the dart door {_st_capacity('dart->kitchen'):.3f} persons/s from "
+        f"{_st_t5('S0', 'dart->kitchen'):.1f} s (the kitchen door follows "
+        f"{_st_length('kitchen', 'kitchen_exit') / station.SPEED:.0f} s "
+        f"later, the walk of {_st_length('kitchen', 'kitchen_exit')} m)",
+        f"then {cap:.3f} persons/s from {t5:.1f} s",
+        f"That leaves {_st_hand_inside():.1f} inside, to within 8 agents",
+        f"The model has {station.agents_inside(result, 90.0)} and "
+        "EvacuatioNZ 291",
+    )
+
+
+def station_gap():
+    evac = _st_run("S0").evacuation_time
+    steps = [
+        _st_run(label).evacuation_time for label in ("S0 dt 0.1", "S0 dt 1.0")
+    ]
+    cap = _st_capacity(PLATFORM_DOOR)
+    supply = _st_run("S0s").evacuation_time - evac
+    return (
+        f"gives {PUBLISHED['S0']} s, {PUBLISHED['S0'] - evac:.0f} s more "
+        f"than the model ({_st_percent('S0')} for the model)",
+        f"so v2.3 lies {PUBLISHED['S0'] - PUBLISHED_HAND} s above its hand "
+        f"value and this model {evac - PUBLISHED_HAND:.0f} s",
+        f"({PUBLISHED['S0']} s against {evac:.0f} s)",
+        f"do not account for {PUBLISHED['S0'] - evac:.0f} s",
+        f"**Supply reduction** changes the result by {supply:.1f} s",
+        f"moves it by at most {max(abs(t - evac) for t in steps):.1f} s",
+        f"is at most {1 / cap:.1f} s per door",
+    )
+
+
+def station_variants():
+    evac = _st_run("S0").evacuation_time
+    rows = []
+    for label, change, key in (
+        ("S0s", "`supply_reduction=False`", "S0s"),
+        ("S0, `dt=0.1`", "time step 0.1 s", "S0 dt 0.1"),
+        ("S0, `dt=1.0`", "time step 1.0 s", "S0 dt 1.0"),
+    ):
+        t = _st_run(key).evacuation_time
+        rows.append(
+            f"| {label} | {change} | {t:.1f} | {_st_signed(t - evac)} |"
+        )
+    split = station.exit_counts(_st_run("S0"))
+    for key in ("S0 dt 0.1", "S0 dt 1.0", "S0s"):
+        assert station.exit_counts(_st_run(key)) == split
+    return (
+        *rows,
+        f"Supply reduction changes the result by "
+        f"{_st_run('S0s').evacuation_time - evac:.1f} s here",
+        "while the dance floor is above "
+        f"{1 / (2 * hydraulic.HydraulicParameters().speed_density_slope):.2f}"
+        " m⁻²",
+        f"The split is {', '.join(map(str, split[:3]))} and {split[3]} at "
+        "every time step",
+    )
+
+
+def station_start_spread():
+    times, splits = scenarios.station_start_spread()
+    split = station.exit_counts(_st_run("S0"))
+    assert np.all(splits == split)
+    diagonal = max(math.hypot(*station.ROOMS[n]) for n in station.OCCUPANTS)
+    net = station.build_network()
+    routes = net.route_table()
+    first = {
+        n: net.links[routes[net.node(n).index]].length
+        for n in station.OCCUPANTS
+    }
+    assert all(first[n] - math.hypot(*station.ROOMS[n]) < 0 for n in first)
+    return (
+        f"in {times.size} runs with seeds from `SeedSequence(1).spawn`",
+        f"negative lower end for all {words_of(len(first))} occupied nodes",
+        f"All {times.size} runs give the split "
+        f"{', '.join(map(str, split[:3]))} and {split[3]}, and times from "
+        f"{times.min():.1f} s to {times.max():.1f} s: a start spread of up "
+        f"to {diagonal:.0f} m",
+    )
+
+
+def words_of(n):
+    return {8: "eight"}[n]
+
+
+def station_s1():
+    cap = station.SPECIFIC_FLOW * 0.91
+    t5 = _st_t5("S1")
+    bound = 342 / cap
+    r = _st_run("S1")
+    return (
+        f"$C$ = 1.33 × 0.91 = {cap:.3f} persons/s. The model evacuates in "
+        f"{_st_time('S1')} s with the same split, and "
+        f"{station.agents_inside(r, 90.0)} inside at 90 s",
+        f"$t_5 + 342/C$ = {t5:.1f} + {bound:.1f} = {t5 + bound:.1f} s",
+        f"gives {PUBLISHED['S1']} s",
+        f"(the model is {_st_percent('S1')} below)",
+        f"347/{cap:.3f} = {347 / cap:.0f} s (the model is "
+        f"{_st_minus(f'{(r.evacuation_time / (347 / cap) - 1) * 100:+.0f} %')}"
+        " above)",
+        f"takes {_st_time('S1s')} s, and S1 at `dt=0.1` takes "
+        f"{_st_time('S1 dt 0.1')} s",
+    )
+
+
+def _st_door_agents(case):
+    """Agents through dance->entrance in a case of Table 5."""
+    table = station.TABLE_5
+    return sum(
+        table[n].get("front", 0)
+        for n in ("dance", "sunroom", "dart", "platform")
+    )
+
+
+def _st_width(source, target):
+    return next(w for s, t, w, _ in station.LINKS if (s, t) == (source, target))
+
+
+def station_s2():
+    walk = _st_length("entrance", "front") / station.SPEED
+    n = _st_door_agents("table5")
+    rows = []
+    for label, layer, published in (
+        ("S2", 0.0, "195; NIST 188 and 202; hand 177"),
+        ("S2b", 0.15, "272 ± 2; hand 261"),
+    ):
+        cap = station.SPECIFIC_FLOW * (0.91 - 2 * layer)
+        t5 = _st_t5(label, "dance->entrance")
+        bound = t5 + (n - 5) / cap + walk
+        rows.append(
+            f"| {label} | {_st_time(label)} | {t5:.1f} | {bound:.1f} | "
+            f"{published} |"
+        )
+    platform, side, kitchen, front = station.exit_counts(_st_run("S2"))
+    assert station.exit_counts(_st_run("S2b")) == [
+        platform,
+        side,
+        kitchen,
+        front,
+    ]
+    return (
+        f"{front} to the front door, {platform} to the platform door, {side} "
+        f"to the side door and {kitchen} to the kitchen door",
+        f"controlling link is dance → entrance ({_st_width('dance', 'entrance')} m)",
+        f"which {n} agents of the dance floor",
+        f"the {station.TABLE_5['bar']['front']} of the main bar",
+        f"$t_5 + ({n} - 5)/C$ + walk (s)",
+        *rows,
+        f"The walk is {_st_length('entrance', 'front')} m from the entrance "
+        f"to the front door at {station.SPEED} m/s, {walk:.1f} s",
+        f"S2 is {_st_percent('S2')} from the published {PUBLISHED['S2']} s "
+        f"and S2b {_st_percent('S2b')}, "
+        f"{PUBLISHED['S2b'] - 2 - _st_run('S2b').evacuation_time:.0f} s below "
+        "the spread",
+    )
+
+
+def station_s3():
+    platform, side, kitchen, front = station.exit_counts(_st_run("S3"))
+    share = [f"{x / 420 * 100:.1f} %" for x in (front, platform, kitchen, side)]
+    n = sum(
+        p.count
+        for p in station.populations("preferred")
+        if p.target == "front" and p.node != "bar"
+    )
+    t = _st_run("S3n").evacuation_time
+    return (
+        f"The split is {front} through the front door, {platform} through "
+        f"the platform door, {kitchen} through the kitchen door and {side} "
+        f"through the side door: {share[0]}, {share[1]}, {share[2]} and "
+        f"{share[3]}",
+        f"which {n} agents pass",
+        f"| S3 | {_st_time('S3')} | "
+        f"{station.agents_inside(_st_run('S3'), 90.0)} | – |",
+        f"| S3n | {_st_time('S3n')} | "
+        f"{station.agents_inside(_st_run('S3n'), 90.0)} | 201 ± 8 s, about "
+        "163 inside at 90 s |",
+        f"S3n is {_st_percent('S3n')} above the published "
+        f"{PUBLISHED['S3n']} s and {t - (PUBLISHED['S3n'] + 8):.0f} s above "
+        "the upper end of its spread",
+        f"S3n has {station.agents_inside(_st_run('S3n'), 90.0)} agents "
+        "inside at 90 s",
+    )
+
+
+def station_s4a():
+    times, front = scenarios.station_length_sweep()
+    factors = scenarios.STATION_FACTORS
+    assert np.array_equal(times[0], times[1])
+    tie = int(np.flatnonzero(np.isclose(factors, 0.875))[0])
+    low = int(np.flatnonzero(np.isclose(factors, 0.80))[0])
+    high = int(np.flatnonzero(np.isclose(factors, 0.87))[0])
+    above = int(np.flatnonzero(np.isclose(factors, 0.88))[0])
+    length = _st_length("dance", "entrance")
+    assert math.isclose(
+        0.875 * length + _st_length("entrance", "front"),
+        _st_length("dance", "stageside")
+        + _st_length("stageside", "platform_exit"),
+        abs_tol=1e-9,
+    )
+    assert np.all(times[0, above:] == times[0, above])
+    entrance = _st_length("entrance", "front")
+    platform = _st_length("dance", "stageside") + _st_length(
+        "stageside", "platform_exit"
+    )
+    return (
+        f"in {factors.size} values: {factors.min():.2f} to {factors.max():.2f}"
+        f" in steps of {np.diff(factors[:3])[0]:.2f} and the tie at 0.875",
+        f"if ${length} f + {entrance} < {_st_length('dance', 'stageside')} + "
+        f"{_st_length('stageside', 'platform_exit')}$, that is for "
+        f"$f < {(platform - entrance) / length:.3f}$",
+        f"$0.875 \\times {length} + {entrance} = "
+        f"{_st_length('dance', 'stageside')} + "
+        f"{_st_length('stageside', 'platform_exit')}$ exactly",
+        f"which is $0.875 \\times {length}$",
+        f"{front[low]} agents leave through the front door",
+        f"the time rises from {times[0, low]:.1f} s at $f$ = 0.80 to "
+        f"{times[0, high]:.1f} s at $f$ = 0.87",
+        f"the time is {times[0, above]:.1f} s from $f$ = 0.88",
+        f"{front[tie]} go to the front door and "
+        f"{front[low] - front[tie] + 4} to the platform door",
+        f"the shortest time of the sweep, {times[0, tie]:.1f} s",
+        f"the same time in all {factors.size} values",
+        f"the flip is at {0.875 * length:.1f} m",
+    )
+
+
+def station_s4b():
+    times, capacity, fifth = scenarios.station_door_sweep()
+    rows = [
+        f"| {flow} | " + " | ".join(f"{t:.1f}" for t in times[i]) + " |"
+        for i, flow in enumerate(scenarios.STATION_FLOWS)
+    ]
+    gap = times - (fifth + 342 / capacity)
+    flow, layer = scenarios.STATION_FLOWS[-1], scenarios.STATION_LAYERS[-1]
+    assert times[-1, -1] == _st_run("S0").evacuation_time
+    return (
+        *rows,
+        f"$F_s$ = {flow} and $b$ = {layer}, is S0",
+        f"In all {times.size} cases $T$ lies between {-gap.min():.2f} s and "
+        f"{-gap.max():.2f} s below $t_5 + 342/C$",
+    )
+
+
+def station_s4c():
+    times = scenarios.station_density_sweep()
+    rows = [
+        f"| {limit} | {times[0, j]:.1f} | {times[1, j]:.1f} |"
+        for j, limit in enumerate(scenarios.STATION_DENSITIES)
+    ]
+    limits = scenarios.STATION_DENSITIES
+
+    def fifth(limit, supply):
+        sim = station.simulation(max_density=limit, supply_reduction=supply)
+        return station.passage_time(sim.run(seed=1), PLATFORM_DOOR, 5)
+
+    assert np.all(times[0] <= times[1])
+    return (
+        *rows,
+        f"`max_density` from {limits[0]} to {limits[-1]} m⁻²",
+        f"beyond {station.simulation().max_density} m⁻²",
+        f"the fifth passage is later ({fifth(limits[0], True):.1f} s at "
+        f"{limits[0]} m⁻², {fifth(limits[-1], True):.1f} s at {limits[-1]} "
+        f"m⁻² with supply reduction, {fifth(limits[-1], False):.1f} s "
+        "without)",
+        f"differ by {(times[1] - times[0]).max():.1f} s at most",
+    )
+
+
+def _st_band(run, published):
+    """Reporting band of a difference: up to 5 %, up to 15 %, above."""
+    difference = abs(run / published - 1) * 100
+    if difference <= 5:
+        return "agrees"
+    return "differs, model difference" if difference <= 15 else "differs"
+
+
+def station_comparison():
+    inside = station.agents_inside(_st_run("S0"), 90.0)
+    rows = [
+        f"| S0, inside at 90 s | {inside} | 291 | "
+        f"{(inside / 291 - 1) * 100:.0f} % | {_st_band(inside, 291)} |"
+    ]
+    for label, published, text in (
+        ("S0", 493, "493 s"),
+        ("S1", 345, "345 s"),
+        ("S2", 195, "195 s"),
+        ("S2b", 272, "272 ± 2 s"),
+        ("S3n", 201, "201 ± 8 s"),
+        ("S3", 201, "201 ± 8 s"),
+    ):
+        run = _st_run(label).evacuation_time
+        rows.append(
+            f"| {label} | {_st_time(label)} s | {text} | "
+            f"{_st_minus(f'{(run / published - 1) * 100:+.0f} %')} | "
+            f"{_st_band(run, published)} |"
+        )
+    return tuple(rows)
+
+
+def station_limits():
+    length = _st_length("dance", "entrance")
+    tie = 0.875 * length
+    return (
+        f"The length of dance → entrance is {(length - tie) / length * 100:.1f}"
+        " % from the tie of the routes",
+        f"effect is {_st_run('S0s').evacuation_time - _st_run('S0').evacuation_time:.1f} s here",
+        f"The dance floor starts above {1 / (2 * hydraulic.HydraulicParameters().speed_density_slope):.2f} m⁻²",
+    )
+
+
+def station_settings():
+    sim = station.simulation()
+    steps = [
+        scenarios.STATION_CASES[label]["dt"]
+        for label in ("S0 dt 0.1", "S0 dt 1.0")
+    ]
+    layer = inspect.signature(station.build_network).parameters[
+        "boundary_layer"
+    ]
+    return (
+        f"`dt={sim.dt}`, repeated at {steps[0]} and {steps[1]}",
+        f"`speed={station.SPEED}`, level $k$ = "
+        f"{hydraulic.HydraulicParameters().level_speed_constant:.1f}"
+        f" m/s, floor $D$ = {hydraulic.MIN_DENSITY} m⁻²",
+        f"`specific_flow={station.SPECIFIC_FLOW}` on each link",
+        f"`boundary_layer={layer.default}` everywhere",
+        f"`max_density={sim.max_density}`, supply reduction on (S0) and off "
+        "(S0s)",
+    )
+
+
+def station_next():
+    group = sum(
+        n
+        for exit in ("front", "platform_exit")
+        for node in station.TABLE_5.values()
+        for e, n in node.items()
+        if e == exit
+    )
+    return (
+        f"5.5 % of the {group} agents of the front door and platform group "
+        f"opt for the platform door, {0.055 * group:.0f} agents",
+    )
+
+
+STATION_REGISTRY = [
+    Number(
+        STATION_PAGE,
+        (
+            "The nightclub has ten spaces and four exits",
+            "it holds 420 people",
+        ),
+        station_intro,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "| dart | 7.2 × 5.4 | 38.9 | 39 | 1.00 |",
+            "| kitchen | 7.2 × 2.2 | 15.8 | 3 | 0.19 |",
+            "| bar | 8.5 × 7.6 | 64.6 | 31 | 0.48 |",
+            "| dance | 13.2 × 7.8 | 103.0 | 237 | 2.30 |",
+            "| entrance | 2.0 × 4.6 | 9.2 | 0 | 0.00 |",
+            "| sunroom | 10.9 × 4.6 | 50.1 | 76 | 1.52 |",
+            "| hallway | 4.8 × 8.2 | 39.4 | 12 | 0.30 |",
+            "| platform | 12.2 × 2.2 | 26.8 | 18 | 0.67 |",
+            "| stage | 5.2 × 3.6 | 18.7 | 4 | 0.21 |",
+            "| stageside | 2.4 × 3.6 | 8.6 | 0 | 0.00 |",
+            "| dart → kitchen | 0.6 | 3.7 | 0.399 |",
+            "| dart → dance | 2.5 | 10.4 | 2.926 |",
+            "| kitchen → dance | 0.91 | 10.4 | 0.811 |",
+            "| kitchen → kitchen_exit | 0.91 | 3.6 | 0.811 |",
+            "| bar → side | 0.91 | 3.8 | 0.811 |",
+            "| bar → dance | 1.2 | 11.6 | 1.197 |",
+            "| bar → entrance | 0.91 | 5.2 | 0.811 |",
+            "| dance → entrance | 0.91 | 9.6 | 0.811 |",
+            "| sunroom → dance | 9.2 | 6.1 | 11.837 |",
+            "| entrance → front | 1.83 | 2.3 | 2.035 |",
+            "| hallway → dance | 1.6 | 8.0 | 1.729 |",
+            "| platform → dance | 1.4 | 10.0 | 1.463 |",
+            "| stage → stageside | 1.4 | 3.8 | 1.463 |",
+            "| dance → stageside | 2.4 | 8.9 | 2.793 |",
+            "| stageside → platform_exit | 0.91 | 1.8 | 0.811 |",
+        ),
+        station_tables,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "The dance floor starts at 2.30 m⁻², above the 1.88 m⁻² where the supply reduction begins and below the default `max_density` of 2.75 m⁻². The model refuses a limit below 2.302 m⁻² for this start.",
+        ),
+        station_dance_floor,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "A 0.91 m door passes 0.811 persons/s.",
+            "1.33 persons/s/m is above the maximum flow k/(4a) = 1.316 persons/s/m",
+            "which is 1.33 × 0.91 to within rounding",
+        ),
+        station_door_flow_limit,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "the dart room goes to the kitchen door (3.7 + 3.6 = 7.3 m against 21.1 m by the dance floor), the main bar to its side door (3.8 m against 7.5 m through the entrance)",
+            "the platform door is 8.9 + 1.8 = 10.7 m away and the front door 9.6 + 2.3 = 11.9 m",
+            "The split is 347 through the platform door, 31 through the side door, 42 through the kitchen door and none through the front door",
+        ),
+        station_routes,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "That gives 252 of the 420 to the front door, 60.0 %.",
+            "60 % of each space, rounded",
+            "`t_max=1800.0`",
+            "`max_density=2.75`",
+        ),
+        station_occupants,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "The model evacuates the 420 people in 442.0 s: 347 through the platform door, 31 through the side door, 42 through the kitchen door and none through the front door. 291 are still inside at 90 s.",
+        ),
+        station_baseline,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "with $C$ = 0.8113 persons/s",
+            "The four occupants of the stage pass the platform",
+            "The side door has passed its 31 agents after 40.0 s and the kitchen door its 42 after 102.5 s, limited by the 0.6 m door of the dart room (0.399 persons/s)",
+            "door first, from 5.5 s. The fifth passage is the first agent of the dance floor, at 20.5 s",
+            "for $D$ between 2.30 and 2.75 m⁻², then 1.8 m in the stage side: between 17.9 s and 25.2 s",
+            "342/0.8113 = 421.5 s, so $T = t_5 + 342/C$ = 20.5 + 421.5 = 442.0 s, the model's value",
+            "$N/C$ = 347/0.811 = 428 s",
+            "The model's 442.0 s lies 14 s above it, less than the 20.5 s of the first arrival",
+            "the dart door 0.399 persons/s from 14.0 s (the kitchen door follows 3 s later, the walk of 3.6 m)",
+            "then 0.811 persons/s from 20.5 s",
+            "That leaves 290.5 inside, to within 8 agents",
+            "The model has 291 and EvacuatioNZ 291",
+        ),
+        station_hand,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "gives 493 s, 51 s more than the model (−10 % for the model)",
+            "so v2.3 lies 65 s above its hand value and this model 14 s",
+            "(493 s against 442 s)",
+            "do not account for 51 s",
+            "**Supply reduction** changes the result by 1.5 s",
+            "moves it by at most 0.7 s",
+            "is at most 1.2 s per door",
+        ),
+        station_gap,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "| S0s | `supply_reduction=False` | 443.5 | +1.5 |",
+            "| S0, `dt=0.1` | time step 0.1 s | 441.3 | −0.7 |",
+            "| S0, `dt=1.0` | time step 1.0 s | 442.0 | 0.0 |",
+            "Supply reduction changes the result by 1.5 s here",
+            "while the dance floor is above 1.88 m⁻²",
+            "The split is 347, 31, 42 and 0 at every time step",
+        ),
+        station_variants,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "in 100 runs with seeds from `SeedSequence(1).spawn`",
+            "negative lower end for all eight occupied nodes",
+            "All 100 runs give the split 347, 31, 42 and 0, and times from 441.5 s to 442.5 s: a start spread of up to 15 m",
+        ),
+        station_start_spread,
+        slow=True,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "$C$ = 1.33 × 0.91 = 1.210 persons/s. The model evacuates in 303.0 s with the same split, and 258 inside at 90 s",
+            "$t_5 + 342/C$ = 20.5 + 282.6 = 303.1 s",
+            "gives 345 s",
+            "(the model is −12 % below)",
+            "347/1.210 = 287 s (the model is +6 % above)",
+            "takes 304.5 s, and S1 at `dt=0.1` takes 302.4 s",
+        ),
+        station_s1,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "212 to the front door, 185 to the platform door, 20 to the side door and 3 to the kitchen door",
+            "controlling link is dance → entrance (0.91 m)",
+            "which 201 agents of the dance floor",
+            "the 11 of the main bar",
+            "$t_5 + (201 - 5)/C$ + walk (s)",
+            "| S2 | 187.5 | 23.5 | 187.4 | 195; NIST 188 and 202; hand 177 |",
+            "| S2b | 269.0 | 25.0 | 268.5 | 272 ± 2; hand 261 |",
+            "The walk is 2.3 m from the entrance to the front door at 1.2 m/s, 1.9 s",
+            "S2 is −4 % from the published 195 s and S2b −1 %, 1 s below the spread",
+        ),
+        station_s2,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "The split is 252 through the front door, 139 through the platform door, 17 through the kitchen door and 12 through the side door: 60.0 %, 33.1 %, 4.0 % and 2.9 %",
+            "which 233 agents pass",
+            "| S3 | 308.0 | 257 | – |",
+            "| S3n | 214.0 | 202 | 201 ± 8 s, about 163 inside at 90 s |",
+            "S3n is +6 % above the published 201 s and 5 s above the upper end of its spread",
+            "S3n has 202 agents inside at 90 s",
+        ),
+        station_s3,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "in 42 values: 0.80 to 1.20 in steps of 0.01 and the tie at 0.875",
+            "if $9.6 f + 2.3 < 8.9 + 1.8$, that is for $f < 0.875$",
+            "$0.875 \\times 9.6 + 2.3 = 8.9 + 1.8$ exactly",
+            "which is $0.875 \\times 9.6$",
+            "343 agents leave through the front door",
+            "the time rises from 439.0 s at $f$ = 0.80 to 440.5 s at $f$ = 0.87",
+            "the time is 442.0 s from $f$ = 0.88",
+            "172 go to the front door and 175 to the platform door",
+            "the shortest time of the sweep, 230.0 s",
+            "the same time in all 42 values",
+            "the flip is at 8.4 m",
+        ),
+        station_s4a,
+        slow=True,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "| 1.21 | 331.0 | 369.0 | 418.5 | 483.5 |",
+            "| 1.25 | 321.0 | 358.0 | 405.5 | 469.0 |",
+            "| 1.3 | 309.5 | 345.0 | 391.0 | 451.5 |",
+            "| 1.33 | 303.0 | 337.5 | 382.5 | 442.0 |",
+            "$F_s$ = 1.33 and $b$ = 0.15, is S0",
+            "In all 16 cases $T$ lies between 0.46 s and 0.02 s below $t_5 + 342/C$",
+        ),
+        station_s4b,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "| 2.5 | 441.0 | 441.5 |",
+            "| 2.75 | 442.0 | 443.5 |",
+            "| 3.0 | 443.0 | 446.0 |",
+            "| 3.25 | 444.0 | 451.0 |",
+            "| 3.5 | 445.0 | 453.0 |",
+            "`max_density` from 2.5 to 3.5 m⁻²",
+            "beyond 2.75 m⁻²",
+            "the fifth passage is later (19.5 s at 2.5 m⁻², 23.5 s at 3.5 m⁻² with supply reduction, 31.5 s without)",
+            "differ by 8.0 s at most",
+        ),
+        station_s4c,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "| S0, inside at 90 s | 291 | 291 | 0 % | agrees |",
+            "| S0 | 442.0 s | 493 s | −10 % | differs, model difference |",
+            "| S1 | 303.0 s | 345 s | −12 % | differs, model difference |",
+            "| S2 | 187.5 s | 195 s | −4 % | agrees |",
+            "| S2b | 269.0 s | 272 ± 2 s | −1 % | agrees |",
+            "| S3n | 214.0 s | 201 ± 8 s | +6 % | differs, model difference |",
+            "| S3 | 308.0 s | 201 ± 8 s | +53 % | differs |",
+        ),
+        station_comparison,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "The length of dance → entrance is 12.5 % from the tie of the routes",
+            "effect is 1.5 s here",
+            "The dance floor starts above 1.88 m⁻²",
+        ),
+        station_limits,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "5.5 % of the 397 agents of the front door and platform group opt for the platform door, 22 agents",
+        ),
+        station_next,
+    ),
+    Number(
+        STATION_PAGE,
+        (
+            "`dt=0.5`, repeated at 0.1 and 1.0",
+            "`speed=1.2`, level $k$ = 1.4 m/s, floor $D$ = 0.54 m⁻²",
+            "`specific_flow=1.33` on each link",
+            "`boundary_layer=0.15` everywhere",
+            "`max_density=2.75`, supply reduction on (S0) and off (S0s)",
+        ),
+        station_settings,
+    ),
+]
+
+
+@pytest.mark.parametrize("number", [_param(n) for n in STATION_REGISTRY])
+def test_station_page_numbers(number):
     test_page_shows_the_number_the_code_produces(number)

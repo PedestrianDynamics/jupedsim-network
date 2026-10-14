@@ -22,7 +22,10 @@ from docpages import blocks as _blocks
 from docpages import quoted as _quoted
 from docpages import text as _page_text
 
-PAGES = {"office_wing.py": "examples/office-wing.md"}
+PAGES = {
+    "office_wing.py": "examples/office-wing.md",
+    "station.py": "examples/station.md",
+}
 
 
 @pytest.fixture(scope="module")

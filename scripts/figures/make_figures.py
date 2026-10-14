@@ -15,6 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import scenarios
 from matplotlib.patches import (
     Circle,
     ConnectionPatch,
@@ -32,6 +33,10 @@ from scenarios import (
     route_tie_runs,
     rset_quantiles,
     stair_capacity_bound,
+    station_density_sweep,
+    station_door_sweep,
+    station_length_sweep,
+    station_runs,
 )
 
 from jupedsim_network import hydraulic
@@ -39,6 +44,7 @@ from jupedsim_network import hydraulic
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "examples"))
 import office_wing  # noqa: E402
+import station  # noqa: E402
 
 DEFAULT_OUT = ROOT / "site" / "static" / "images" / "network"
 PAL = ["#90c1c6", "#72a5b4", "#58849f", "#446485", "#324465", "#1f253f"]
@@ -874,6 +880,218 @@ def office_occupancy(out):
     plt.close(fig)
 
 
+# Layout of the Station network in the plan of Fig. 1(b), schematic: the
+# nodes are drawn at these points, not to scale.
+STATION_XY = {
+    "kitchen_exit": (0.0, 7.0),
+    "kitchen": (0.0, 5.5),
+    "dart": (2.0, 5.5),
+    "bar": (5.0, 6.0),
+    "side": (5.0, 7.5),
+    "sunroom": (2.0, 3.0),
+    "dance": (5.0, 3.2),
+    "hallway": (3.5, 0.5),
+    "platform": (6.0, 0.5),
+    "entrance": (8.0, 4.8),
+    "front": (10.0, 4.8),
+    "stage": (8.0, 0.5),
+    "stageside": (8.0, 2.2),
+    "platform_exit": (10.0, 2.2),
+}
+
+# Offset and alignment of a node label; the default is below the node.
+STATION_LABEL = {
+    "side": (0.42, 0.0, "left", "center"),
+    "kitchen_exit": (0.42, 0.0, "left", "center"),
+    "bar": (0.42, 0.0, "left", "center"),
+    "kitchen": (-0.42, 0.0, "right", "center"),
+    "dance": (0.0, 0.5, "center", "bottom"),
+}
+
+# Published results of EvacuatioNZ v2.3 [Spearpoint 2012, ref. 8], drawn
+# for comparison only: evacuation time (s) and agents inside at 90 s.
+STATION_PUBLISHED = {
+    "S0": (493.0, 291),
+    "S1": (345.0, None),
+    "S3": (201.0, 163),
+}
+
+
+def station_route_links():
+    """Link names on the S0 routes and on the S3 routes to the front door."""
+    plain = station.build_network()
+    both = station.build_network(stageside_link=True)
+    first = {
+        both.links[i].name for i in both.route_table("front") if i is not None
+    }
+    s0 = {plain.links[i].name for i in plain.route_table() if i is not None}
+    return s0, first
+
+
+def station_network(out):
+    s0, front = station_route_links()
+    links = [(s, t) for s, t, _, _ in station.LINKS]
+    links.append(("stageside", "dance"))
+    fig, ax = plt.subplots(figsize=(9, 5.6))
+    for source, target in links:
+        name = f"{source}->{target}"
+        color, ls, lw = "lightgrey", "--", 1.0
+        if name in front:
+            color, ls, lw = ORANGE, "-", 1.8
+        if name in s0:
+            color, ls, lw = PAL[3], "-", 2.4
+        rad = 0.25 if {source, target} == {"dance", "stageside"} else 0.0
+        ax.add_patch(
+            FancyArrowPatch(
+                STATION_XY[source],
+                STATION_XY[target],
+                arrowstyle="-|>",
+                mutation_scale=12,
+                color=color,
+                ls=ls,
+                lw=lw,
+                connectionstyle=f"arc3,rad={rad}",
+                shrinkA=14,
+                shrinkB=14,
+            )
+        )
+    for name, (x, y) in STATION_XY.items():
+        safe = name in station.SAFE
+        ax.add_patch(
+            Circle((x, y), 0.32, fc="white" if safe else PAL[0], ec=PAL[4])
+        )
+        count = station.OCCUPANTS.get(name)
+        label = name if count is None else f"{name}\n{count}"
+        dx, dy, ha, va = STATION_LABEL.get(name, (0.0, -0.5, "center", "top"))
+        ax.text(x + dx, y + dy, label, ha=ha, va=va, fontsize=8)
+    ax.plot([], [], color=PAL[3], lw=2.4, label="S0 routes")
+    ax.plot([], [], color=ORANGE, lw=1.8, label="S3 routes to the front door")
+    ax.plot([], [], color="lightgrey", ls="--", label="other links")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.set(xlim=(-1, 11), ylim=(-0.8, 8.2), aspect="equal")
+    ax.axis("off")
+    fig.savefig(out / "station_network.png")
+    plt.close(fig)
+
+
+def station_exits(out):
+    runs = station_runs()
+    fig, ax = plt.subplots(figsize=(7, 4.4))
+    for label, color, ls in [
+        ("S0", PAL[4], "-"),
+        ("S0s", PAL[1], ":"),
+        ("S1", RED, "--"),
+        ("S3", ORANGE, "-."),
+    ]:
+        r = runs[label]
+        names = station.exit_links(r)
+        out_flow = r.link_flow[:, [r.link_names.index(n) for n in names]]
+        ax.step(
+            r.times,
+            out_flow.sum(axis=1).cumsum(),
+            where="post",
+            color=color,
+            ls=ls,
+            lw=2,
+            label=f"{label} ({r.evacuation_time:.1f} s)",
+        )
+        published = STATION_PUBLISHED.get(label)
+        if published is None:
+            continue
+        end, inside = published
+        ax.plot(end, 420, marker="x", color=color, ms=8, mew=2)
+        if inside is not None:
+            ax.plot(90, 420 - inside, marker="x", color=color, ms=8, mew=2)
+    ax.plot([], [], "x", color=GREY, label="EvacuatioNZ v2.3, published")
+    ax.set(
+        xlabel="time (s)",
+        ylabel="agents safe",
+        title="The Station, agents safe over time, seed 1",
+        xlim=(0, None),
+        ylim=(0, 430),
+    )
+    ax.legend(loc="lower right", fontsize=8)
+    frame(ax)
+    fig.savefig(out / "station_exits.png")
+    plt.close(fig)
+
+
+def station_length(out):
+    times, front = station_length_sweep()
+    factors = scenarios.STATION_FACTORS
+    fig, (top, bottom) = plt.subplots(2, 1, figsize=(7, 5.4), sharex=True)
+    top.plot(factors, times[0], color=PAL[4], marker="o", ms=4, lw=1.5)
+    bottom.plot(factors, front, color=ORANGE, marker="s", ms=4, lw=1.5)
+    for ax in (top, bottom):
+        ax.axvline(0.875, color=GREY, ls="--", lw=1.0)
+        frame(ax)
+    top.set(ylabel="evacuation time (s)", title="Length of dance->entrance")
+    top.annotate(
+        "tie at 0.875:\nthe agents alternate",
+        (0.875, times[0].min()),
+        (0.9, times[0].min() + 40),
+        fontsize=9,
+        color=GREY,
+        arrowprops=dict(arrowstyle="-", color=GREY, lw=0.8),
+    )
+    bottom.set(
+        xlabel="factor on the length 9.6 m", ylabel="agents via the front door"
+    )
+    fig.savefig(out / "station_length.png")
+    plt.close(fig)
+
+
+def station_doors(out):
+    times, capacity, fifth = station_door_sweep()
+    fig, ax = plt.subplots(figsize=(7, 4.4))
+    layers = scenarios.STATION_LAYERS
+    for i, flow in enumerate(scenarios.STATION_FLOWS):
+        color = PAL[i + 1]
+        ax.plot(
+            layers,
+            times[i],
+            color=color,
+            marker="o",
+            lw=2,
+            label=f"Fs = {flow} persons/s/m",
+        )
+        ax.plot(
+            layers, fifth[i] + 342 / capacity[i], color=color, ls="--", lw=1
+        )
+    ax.plot([], [], color=GREY, ls="--", lw=1, label="t₅ + 342/C")
+    ax.set(
+        xlabel="boundary layer b (m)",
+        ylabel="evacuation time (s)",
+        title="The 0.91 m platform door sets the time",
+    )
+    ax.legend(loc="upper left", fontsize=8)
+    frame(ax)
+    fig.savefig(out / "station_doors.png")
+    plt.close(fig)
+
+
+def station_density(out):
+    times = station_density_sweep()
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    limits = scenarios.STATION_DENSITIES
+    for row, color, marker, label in [
+        (0, PAL[3], "o", "supply reduction on"),
+        (1, RED, "s", "hard limit only"),
+    ]:
+        ax.plot(
+            limits, times[row], color=color, marker=marker, lw=2, label=label
+        )
+    ax.set(
+        xlabel="max_density (1/m²)",
+        ylabel="evacuation time (s)",
+        title="The Station, seed 1",
+    )
+    ax.legend(loc="upper left", fontsize=8)
+    frame(ax)
+    fig.savefig(out / "station_density.png")
+    plt.close(fig)
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     out.mkdir(parents=True, exist_ok=True)
@@ -888,6 +1106,11 @@ def main():
     office_plan(out)
     office_evacuated(out)
     office_occupancy(out)
+    station_network(out)
+    station_exits(out)
+    station_length(out)
+    station_doors(out)
+    station_density(out)
 
 
 if __name__ == "__main__":

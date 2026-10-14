@@ -13,6 +13,8 @@ and 'enz_stairs' a stair node whose Fs = k/(4a) follows the steps.
 """
 
 import math
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -27,6 +29,12 @@ from jupedsim_network import (
     Triangular,
     Uniform,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "examples"))
+sys.path.insert(0, str(ROOT / "scripts" / "figures"))
+import scenarios  # noqa: E402
+import station  # noqa: E402
 
 DT = 0.5
 FS = 1.33
@@ -48,7 +56,7 @@ def stair_fs(k):
     return k / (4 * A)
 
 
-def assert_invariants(result, net, n, max_density=2.75):
+def assert_invariants(result, net, n, max_density=2.75, dt=DT):
     """No agent lost, no node above max_density, exits on the time grid."""
     safe = [i for i, node in enumerate(net.nodes) if node.kind == "safe"]
     to_safe = [lk.index for lk in net.links if lk.target in safe]
@@ -60,7 +68,7 @@ def assert_invariants(result, net, n, max_density=2.75):
             continue
         limit = math.floor(max_density * node.area + 1e-9)
         assert result.node_occupancy[:, node.index].max() <= limit
-    steps = result.exit_times / DT
+    steps = result.exit_times / dt
     np.testing.assert_allclose(steps, np.round(steps), atol=1e-9)
 
 
@@ -579,3 +587,273 @@ def test_required_connection_is_not_modelled():
     assert flow["Room_3->Exit"] == 10
     assert flow["Room_1->Exit"] == 0
     assert_invariants(result, net, 10)
+
+
+# Spearpoint (2012), The Station nightclub, NIST Scenario #1 (ref. 8). The
+# network is Fig. 1(b) and the occupants Table 1. The evacuation is a
+# door-flow calculation. The published EvacuatioNZ and NIST results (493 s,
+# 345 s, 195 s, 272 s, 201 s, 291 inside at 90 s) are quoted on the page
+# examples/station.md and never asserted. Each expectation below is a hand
+# value from the route table and the door capacities.
+#
+# A door of capacity C passes at most 1 + C t agents in any interval t
+# (the carry of the link state), so the last of n agents passes after the
+# k-th at t_k + (n - k - 1)/C at the earliest; a door that stays busy
+# passes them by t_k + (n - k)/C, and the model adds at most two steps
+# for the exit and the carry. The k-th passage is the fifth, after the
+# four occupants of the stage that pass before the dance floor arrives.
+#
+# The contract of the study declared the band [t_5 + (n - 5)/C, that + 2 dt].
+# The measured times fall up to 0.46 s below its lower end (S0 by 0.05 s,
+# the 16 cells of the door grid by 0.02 to 0.46 s), because t_5 is rounded up
+# to the time grid. The lower end here is the 1 + C t bound of the carry, one
+# headway 1/C lower; [bound - dt, bound + 2 dt] would also hold in every case.
+# Where a 0.91 m door is followed by the 2.3 m walk to the front door (S2,
+# S2b, S3, S3n), that walk at the walking speed is added to both ends.
+
+FRONT_WALK = 2.3 / 1.2  # entrance->front: 2.3 m at the walking speed
+STATION_SPLIT = [347, 31, 42, 0]  # platform, side, kitchen, front
+
+
+def station_run(label):
+    return scenarios.station_runs()[label]
+
+
+def station_check(label):
+    """Network and time step of a case in ``scenarios.STATION_CASES``."""
+    sim = station.simulation(**scenarios.STATION_CASES[label])
+    return sim.network, sim.dt
+
+
+def drain_bounds(result, link, capacity, n, dt, walk=0.0):
+    """Earliest and latest time at which the n agents of ``link`` are out.
+
+    ``walk`` is the time to cross the node behind the link to its exit.
+    """
+    flow = int(result.link_flow[:, result.link_names.index(link)].sum())
+    assert flow == n
+    t5 = station.passage_time(result, link, 5)
+    return (
+        t5 + (n - 5 - 1) / capacity + walk,
+        t5 + (n - 5) / capacity + walk + 2 * dt,
+    )
+
+
+@pytest.mark.parametrize("label", scenarios.STATION_CASES)
+def test_station_invariants(label):
+    net, dt = station_check(label)
+    assert_invariants(station_run(label), net, 420, dt=dt)
+
+
+def test_station_routes_and_split():
+    # Hand routes, shortest distance: dart room to the kitchen door
+    # (3.7 + 3.6 = 7.3 m against 10.4 + 10.7 = 21.1 m), main bar to its side
+    # door (3.8 m against 5.2 + 2.3 = 7.5 m), kitchen to the kitchen door,
+    # all other spaces to the platform door (dance floor: 8.9 + 1.8 = 10.7 m
+    # against 9.6 + 2.3 = 11.9 m). 39 + 3 leave by the kitchen, 31 by the
+    # side door, the remaining 347 by the platform door.
+    net = station.build_network()
+    routes = net.route_table()
+    first = {
+        name: net.links[routes[net.node(name).index]].name
+        for name in station.OCCUPANTS
+    }
+    assert first == {
+        "dart": "dart->kitchen",
+        "kitchen": "kitchen->kitchen_exit",
+        "bar": "bar->side",
+        "dance": "dance->stageside",
+        "sunroom": "sunroom->dance",
+        "hallway": "hallway->dance",
+        "platform": "platform->dance",
+        "stage": "stage->stageside",
+    }
+    assert sum(station.OCCUPANTS.values()) == 420
+    assert station.exit_counts(station_run("S0")) == STATION_SPLIT
+
+
+@pytest.mark.parametrize("source, target, width, length", station.LINKS)
+def test_station_capacities(source, target, width, length):
+    # C = 1.33 (w - 2 * 0.15); the 0.91 m doors pass 0.811 persons/s.
+    net = station.build_network()
+    (link,) = [lk for lk in net.links if lk.name == f"{source}->{target}"]
+    assert link.capacity == pytest.approx(1.33 * (width - 0.3))
+
+
+def test_station_boundary_layer_off_is_the_widened_door():
+    # "All constrictions widened by 0.30 m, no boundary layer" gives the
+    # capacity 1.33 (w + 0.30 - 2 * 0.15) = 1.33 w of the unchanged width.
+    for source, target, width, _ in station.LINKS:
+        net = station.build_network(boundary_layer=0.0)
+        (link,) = [lk for lk in net.links if lk.name == f"{source}->{target}"]
+        assert link.capacity == pytest.approx(1.33 * width)
+
+
+def test_station_first_arrival_at_the_platform_door():
+    # The dance floor starts at 237 / 102.96 = 2.30 per m2 and cannot exceed
+    # 2.75. The first agent walks 8.9 m at S(D) with S = 1.4 (1 - 0.266 D)
+    # for D between those, then 1.8 m in the stage side at the walking
+    # speed 1.2 m/s (1.199 with the floor of 0.54): 17.9 s to 25.2 s.
+    def speed(density):
+        return min(1.2, 1.4 * (1 - 0.266 * density))
+
+    low = 8.9 / speed(237 / (13.2 * 7.8)) + 1.8 / 1.199
+    high = 8.9 / speed(2.75) + 1.8 / 1.199
+    assert (low, high) == pytest.approx((17.9, 25.2), abs=0.1)
+    t5 = station.passage_time(station_run("S0"), "stageside->platform_exit", 5)
+    assert low - DT <= t5 <= high + DT
+
+
+def test_station_s0_evacuation_time():
+    # 342 further agents follow the fifth through the 0.91 m platform door
+    # at 1.33 * 0.61 = 0.811 persons/s.
+    result = station_run("S0")
+    low, high = drain_bounds(
+        result,
+        "stageside->platform_exit",
+        1.33 * (0.91 - 0.3),
+        347,
+        DT,
+    )
+    assert low <= result.evacuation_time <= high
+
+
+def test_station_s0_agents_inside_at_90_s():
+    # By 90 s the side door has passed all 31. The kitchen door has passed
+    # the 3 kitchen occupants and the agents of the 0.6 m dart door (0.399
+    # persons/s after its fifth passage, 3.6 m / 1.2 = 3 s earlier than the
+    # kitchen door). The platform door passes 0.811 persons/s after its
+    # fifth. Sum of the three, 1 agent each for the carry and the arrival
+    # spread of the dance floor (+-4 s at 0.811 persons/s): 8 agents.
+    result = station_run("S0")
+    dart = station.passage_time(result, "dart->kitchen", 5)
+    platform = station.passage_time(result, "stageside->platform_exit", 5)
+    out = 31 + 3 + 5 + 0.399 * (90 - 3.0 - dart) + 5 + 0.811 * (90 - platform)
+    assert abs(station.agents_inside(result, 90.0) - (420 - out)) <= 8
+
+
+def test_station_supply_reduction_delays_by_a_few_steps():
+    # Supply reduction acts only while the dance floor is above 1.88 per m2,
+    # that is on the first arrival: 1-2 s; at most 4 steps.
+    plain, reduced = station_run("S0"), station_run("S0s")
+    assert station.exit_counts(reduced) == STATION_SPLIT
+    assert 0 <= reduced.evacuation_time - plain.evacuation_time <= 4 * DT
+
+
+@pytest.mark.parametrize("label", ["S0 dt 0.1", "S0 dt 1.0"])
+def test_station_time_step_moves_the_result_by_one_step(label):
+    # Quantisation: the same split, within 2 steps of the longer step.
+    result = station_run(label)
+    dt = scenarios.STATION_CASES[label]["dt"]
+    assert station.exit_counts(result) == STATION_SPLIT
+    assert abs(result.evacuation_time - station_run("S0").evacuation_time) <= (
+        2 * max(dt, DT)
+    )
+
+
+@pytest.mark.slow
+def test_station_random_start_distances():
+    # Start distances up to 15 m at 0.38 m/s or faster are absorbed in the
+    # queue at the door: every seed has the split and the time of S0 to
+    # within 2 steps.
+    times, splits = scenarios.station_start_spread()
+    t0 = station_run("S0").evacuation_time
+    assert np.all(splits == STATION_SPLIT)
+    assert np.all(np.abs(times - t0) <= 2 * DT)
+
+
+def test_station_without_boundary_layer():
+    # C = 1.33 * 0.91 = 1.210 persons/s for the 0.91 m doors.
+    result = station_run("S1")
+    low, high = drain_bounds(
+        result, "stageside->platform_exit", 1.33 * 0.91, 347, DT
+    )
+    assert low <= result.evacuation_time <= high
+    assert station.exit_counts(result) == STATION_SPLIT
+    assert (
+        abs(station_run("S1 dt 0.1").evacuation_time - result.evacuation_time)
+        <= 1.0
+    )
+    assert (
+        0
+        <= station_run("S1s").evacuation_time - result.evacuation_time
+        <= 4 * DT
+    )
+
+
+def front_door_bounds(label, front_door_agents, layer):
+    """Bounds of a case that the 0.91 m door dance->entrance controls."""
+    result = station_run(label)
+    return result, drain_bounds(
+        result,
+        "dance->entrance",
+        station.SPECIFIC_FLOW * (0.91 - 2 * layer),
+        front_door_agents,
+        DT,
+        walk=FRONT_WALK,
+    )
+
+
+@pytest.mark.parametrize("label, layer", [("S2", 0.0), ("S2b", 0.15)])
+def test_station_prescribed_exits(label, layer):
+    # Table 5: 212 front, 185 platform, 20 side, 3 kitchen. The front door
+    # is reached through dance->entrance (0.91 m) by 118 + 38 + 39 + 6 = 201
+    # agents of the dance floor, sunroom, dart room and back platform; the
+    # 11 of the main bar use bar->entrance. That door controls (201 / C
+    # against 185 / C at the platform door, which starts earlier).
+    result, (low, high) = front_door_bounds(label, 201, layer)
+    assert station.exit_counts(result) == [185, 20, 3, 212]
+    assert low <= result.evacuation_time <= high
+
+
+def test_station_preferred_exits():
+    # 60 % of each space by round(0.6 n): 23 + 2 + 19 + 142 + 46 + 7 + 11 + 2
+    # = 252 front. The platform, side and kitchen doors take 139, 12 and 17.
+    # dance->entrance passes 23 + 2 + 142 + 46 + 7 + 11 + 2 = 233; the
+    # 19 of the main bar use bar->entrance.
+    for label, layer in (("S3", 0.15), ("S3n", 0.0)):
+        result, (low, high) = front_door_bounds(label, 233, layer)
+        assert station.exit_counts(result) == [139, 12, 17, 252]
+        assert low <= result.evacuation_time <= high
+    assert station_run("S3 dt 0.1").evacuation_time == pytest.approx(
+        station_run("S3").evacuation_time, abs=2 * DT
+    )
+
+
+@pytest.mark.slow
+def test_station_tie_in_the_connection_length():
+    # The dance floor chooses the front door if f * 9.6 + 2.3 < 8.9 + 1.8,
+    # that is f < 0.875, and the platform door above. At f = 0.875 the two
+    # routes tie exactly (8.4 + 2.3 = 10.7) and the agents alternate: of the
+    # 343 who leave through the dance floor (237 + 76 + 12 + 18) 172 go to
+    # the front. Both routing policies agree (no stairs).
+    times, front = scenarios.station_length_sweep()
+    factors = scenarios.STATION_FACTORS
+    assert np.array_equal(times[0], times[1])
+    assert np.all(front[factors < 0.875] == 343)
+    assert np.all(front[factors > 0.875] == 0)
+    (tie,) = np.flatnonzero(np.isclose(factors, 0.875))
+    assert front[tie] == 172
+    assert times[0, tie] == times[0].min()
+    below, above = times[0, factors < 0.875], times[0, factors > 0.875]
+    assert np.all(np.diff(below) >= 0) and np.all(above == above[0])
+
+
+def test_station_door_flow_in_the_grid_of_flows_and_layers():
+    # T = t5 + 342 / C for every specific flow and boundary layer, with
+    # C = Fs (0.91 - 2b) and the fifth passage t5 of the run.
+    times, capacity, fifth = scenarios.station_door_sweep()
+    assert np.all(times >= fifth + (342 - 1) / capacity)
+    assert np.all(times <= fifth + 342 / capacity + 2 * DT)
+
+
+def test_station_density_limit_sweep():
+    # A higher limit lets the dance floor fill beyond 2.75 per m2 and
+    # walk slower to the platform door: later first arrival, same door
+    # flow. With the supply reduction the dance floor cannot be pressed
+    # above 1.88 as easily, so it is never slower than without.
+    times = scenarios.station_density_sweep()
+    t0 = station_run("S0").evacuation_time
+    assert np.all(times[0] <= times[1])
+    assert np.all(times >= t0 - 2 * DT)
+    assert np.all(times <= t0 + 12.0)
