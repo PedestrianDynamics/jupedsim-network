@@ -2009,7 +2009,7 @@ def test_freed_space_through_counterflow_waits_a_step():
     net.add_room("X", area=100.0)
     net.add_safe("eX")
     net.add_safe("eC")
-    net.connect("R", "C", bidirectional=False, **OPENING)
+    net.connect("R", "C", bidirectional=False, merge_weight=1.3, **OPENING)
     net.connect("C", "X", **OPENING)
     net.connect("X", "eX", bidirectional=False, **OPENING)
     net.connect("C", "eC", bidirectional=False, **OPENING)
@@ -2017,6 +2017,8 @@ def test_freed_space_through_counterflow_waits_a_step():
     sim = NetworkSimulation(
         net, pops, dt=0.5, max_density=1.5, supply_reduction=False
     )
-    exits = sim.run(seed=1).exit_times
-    np.testing.assert_allclose(exits[:4], [2.0, 3.5, 5.0, 6.5])
-    np.testing.assert_allclose(exits[4:], [1.0, 2.5, 4.0, 5.5])
+    # merge_weight 1.3 on R-C leaves no tie at C, so every seed agrees.
+    for seed in (1, 2, 3):
+        exits = sim.run(seed=seed).exit_times
+        np.testing.assert_allclose(exits[:4], [1.5, 3.0, 4.5, 6.0])
+        np.testing.assert_allclose(exits[4:], [2.0, 3.5, 5.0, 6.5])
