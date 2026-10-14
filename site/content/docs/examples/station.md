@@ -36,10 +36,6 @@ This page builds the network of Spearpoint's study, runs the cases of
 that study and compares each result with its published value or with a
 hand calculation. The page names every difference.
 
-![The Station network: ten spaces and four exits, with the routes of the baseline case in blue and the routes to the front door of the 60/40 case in orange](/images/network/station_network.png)
-
-[Open the network at full size](../../../images/network/station_network.png).
-
 The drawing is a schematic. Circles are spaces with their number of
 occupants, the empty circles are the exits, and every arrow is one link
 in the direction of egress.
