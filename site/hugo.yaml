@@ -45,7 +45,7 @@ params:
 
   navbar:
     displayTitle: true
-    displayLogo: false
+    displayLogo: true
     logo:
       path: images/jupedsim-network-logo.png
       width: 66
